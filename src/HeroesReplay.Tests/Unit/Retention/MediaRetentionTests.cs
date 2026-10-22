@@ -687,6 +687,43 @@ public class MediaRetentionTests
         Assert.Contains(sweep.Warnings, warning => warning.Contains("reason: contexts-root"));
     }
 
+    /// <summary>
+    /// #491: once the video is on YouTube the end capture has no further use, so it goes with the
+    /// mp4 (the legacy end-HH-MM-SS.png copy too), not days later with the folder.
+    /// </summary>
+    [Fact]
+    public void Sweep_DropsTheEndCaptureWithAnUploadedRecording()
+    {
+        using TempLibrary library = new TempLibrary();
+        DateTimeOffset now = FixedNow();
+        string uploaded = library.AddContext("uploaded");
+        string waiting = library.AddContext("waiting");
+        string live = library.AddContext("live");
+        TempLibrary.WriteText(uploaded, "youtube-entry.json", "{\"VideoId\":\"abc\"}");
+        TempLibrary.WriteText(waiting, "youtube-entry.json", "{\"ReplayId\":2}");
+        foreach (string folder in new[] { uploaded, waiting })
+        {
+            TempLibrary.WriteFile(folder, "match.mp4", 32, now.AddHours(-2));
+            TempLibrary.WriteFile(folder, "end.png", 8, now.AddHours(-2));
+            TempLibrary.WriteFile(folder, "end-00-21-14.png", 8, now.AddHours(-2));
+            TempLibrary.WriteFile(folder, "2_x.StormReplay", 16, now.AddHours(-2));
+        }
+
+        TempLibrary.WriteFile(live, "current.mp4", 4, now);
+        TempLibrary.SetDirectoryTime(uploaded, now.AddHours(-2));
+        TempLibrary.SetDirectoryTime(waiting, now.AddHours(-2));
+        TempLibrary.SetDirectoryTime(live, now);
+
+        MediaRetention.Sweep(Settings(library.Root), now);
+
+        Assert.Equal(
+            new[] { "2_x.StormReplay", "youtube-entry.json" },
+            Directory.GetFiles(uploaded).Select(Path.GetFileName).Order()
+        );
+        Assert.True(File.Exists(Path.Combine(waiting, "end.png")));
+        Assert.True(File.Exists(Path.Combine(waiting, "match.mp4")));
+    }
+
     private static DateTimeOffset FixedNow() => new(2026, 6, 15, 12, 0, 0, TimeSpan.Zero);
 
     private sealed class TempLibrary : IDisposable

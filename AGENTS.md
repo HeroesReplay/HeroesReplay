@@ -186,7 +186,7 @@ Ingest also needs a machine-local arm, `%LOCALAPPDATA%\HeroesReplay\stream-armed
 | Upgrades | Safe to stop spectate, rebuild, reboot the guest (not Unraid/Tower). | Schedule **downtime** before pull, rebuild, client/OBS upgrades, or reboots. |
 | Spectator engine | **Normal** to kill `heroesreplay`, quit HotS, rebuild Release, and relaunch only long enough to prove a change. Stop when the proof is done. | Do **not** kill/rebuild/restart the spectator as a routine. This is the production spectate. |
 
-On **ASA-SERVER**, prove a change with a short run, then read `%LOCALAPPDATA%\HeroesReplay\status.json` and `Data\Contexts\<id>\end.png` if the client was closed. Do not keep spectating after that. On **DESKTOP-8SJEK72**, ask before stopping anything.
+On **ASA-SERVER**, prove a change with a short run, then read `%LOCALAPPDATA%\HeroesReplay\status.json` and `Data\Contexts\<id>\end.png` (the one end-of-game capture, #491; retention drops it with the mp4 once the video is uploaded) if the client was closed. Do not keep spectating after that. On **DESKTOP-8SJEK72**, ask before stopping anything.
 
 ### Maps, modes, client
 
