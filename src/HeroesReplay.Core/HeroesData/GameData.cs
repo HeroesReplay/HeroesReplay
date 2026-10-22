@@ -325,7 +325,7 @@ public class GameData : IGameData
             )
         )
         {
-            if (IsHeroesData2Document(file))
+            if (!InStaging(file) && IsHeroesData2Document(file))
             {
                 return true;
             }
@@ -378,7 +378,7 @@ public class GameData : IGameData
                 continue;
             }
 
-            if (!IsHeroesData2Document(file))
+            if (InStaging(file) || !IsHeroesData2Document(file))
             {
                 continue;
             }
@@ -444,22 +444,183 @@ public class GameData : IGameData
         );
     }
 
-    private async Task DownloadIfEmptyAsync()
-    {
-        logger.LogInformation("Downloading heroes-data2 if needed.");
+    /// <summary>The file whose write time is the last check for a newer heroes-data2 release (#493).</summary>
+    public const string RefreshStampFileName = "refresh-checked.txt";
 
-        if (HasHeroesData2(settings.HeroesDataPath))
+    /// <summary>
+    /// Held with no sharing while a process refreshes or loads heroes-data2 (#493): the handle is
+    /// the process's own, so a crash releases it.
+    /// </summary>
+    public const string LockFileName = ".heroes-data.lock";
+
+    /// <summary>A download is fetched and extracted under one of these; no reader looks inside.</summary>
+    public const string StagingPrefix = ".staging-";
+
+    /// <summary>Each downloaded build is moved in whole, by one rename, to <c>builds\&lt;build&gt;</c>.</summary>
+    public const string BuildsFolderName = "builds";
+
+    private static readonly TimeSpan LockWait = TimeSpan.FromMinutes(5);
+
+    /// <summary>
+    /// The heroes-data2 lock, waiting up to <paramref name="wait"/>. Null when another process
+    /// still holds it then.
+    /// </summary>
+    internal static async Task<FileStream> LockAsync(string path, TimeSpan wait)
+    {
+        Directory.CreateDirectory(path);
+        string lockPath = Path.Combine(path, LockFileName);
+        DateTimeOffset until = DateTimeOffset.UtcNow + wait;
+        while (true)
+        {
+            FileStream held = DurableFile.TryLock(lockPath);
+            if (held != null || DateTimeOffset.UtcNow >= until)
+            {
+                return held;
+            }
+
+            await Task.Delay(TimeSpan.FromSeconds(1)).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// True while a process refreshes or loads heroes-data2 in <paramref name="path"/>. The
+    /// housekeeping pass leaves the folder alone then.
+    /// </summary>
+    public static bool IsBusy(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !Directory.Exists(path))
+        {
+            return false;
+        }
+
+        using FileStream probe = DurableFile.TryLock(Path.Combine(path, LockFileName));
+        return probe == null;
+    }
+
+    /// <summary>
+    /// Downloads heroes-data2 when the folder has none. With data present, at most once per
+    /// <c>HeroesToolChest:RefreshInterval</c> (off when zero) it asks for the latest release and
+    /// downloads it when it is a newer live build than the local data (#493): the cache was never
+    /// refreshed, so the stream PC still read 2.57.0.98304 data for 98348 replays, and a patch
+    /// that adds a hero would leave it out. The caller holds the lock; a failed refresh keeps the
+    /// data there is.
+    /// </summary>
+    private async Task RefreshAsync()
+    {
+        string path = settings.HeroesDataPath;
+        bool present = HasHeroesData2(path);
+        TimeSpan interval = settings.HeroesToolChest?.RefreshInterval ?? TimeSpan.Zero;
+        if (present && !RefreshDue(path, interval, DateTimeOffset.UtcNow))
         {
             logger.LogDebug("heroes-data2 is already present. No download needed.");
             return;
         }
 
-        logger.LogInformation(
-            "heroes-data2 is not in {Path}. Downloading the latest HeroesToolChest/heroes-data2 release.",
-            settings.HeroesDataPath
-        );
-        Directory.CreateDirectory(settings.HeroesDataPath);
+        if (!present)
+        {
+            logger.LogInformation(
+                "heroes-data2 is not in {Path}. Downloading the latest HeroesToolChest/heroes-data2 release.",
+                path
+            );
+            await DownloadLatestAsync(onlyNewerThan: null).ConfigureAwait(false);
+            return;
+        }
 
+        try
+        {
+            int local = BuildNumber(NewestDocument(path, "herodata_*.json", false) ?? string.Empty);
+            await DownloadLatestAsync(local).ConfigureAwait(false);
+            File.WriteAllText(
+                Path.Combine(path, RefreshStampFileName),
+                DateTimeOffset.UtcNow.ToString("o", CultureInfo.InvariantCulture)
+            );
+        }
+        catch (Exception e)
+            when (e
+                    is HttpRequestException
+                        or IOException
+                        or UnauthorizedAccessException
+                        or InvalidOperationException
+                        or JsonException
+                        or TaskCanceledException
+                        or InvalidDataException
+            )
+        {
+            logger.LogWarning(
+                e,
+                "Could not check for a newer heroes-data2 release. The data in {Path} stays in use.",
+                path
+            );
+        }
+    }
+
+    /// <summary>True when the last refresh check is older than <paramref name="interval"/>; never while it is zero.</summary>
+    internal static bool RefreshDue(string path, TimeSpan interval, DateTimeOffset utcNow)
+    {
+        if (interval <= TimeSpan.Zero)
+        {
+            return false;
+        }
+
+        var stamp = new FileInfo(Path.Combine(path, RefreshStampFileName));
+        return !stamp.Exists || utcNow - stamp.LastWriteTimeUtc >= interval;
+    }
+
+    /// <summary>
+    /// The build of a heroes-data2 release tag (<c>v2.57.0.98348</c> is 98348), or -1 for a PTR
+    /// build or a tag that is not one: only a live build replaces the local data.
+    /// </summary>
+    internal static int ReleaseBuild(string tag)
+    {
+        if (
+            string.IsNullOrWhiteSpace(tag)
+            || tag.Contains("ptr", StringComparison.OrdinalIgnoreCase)
+        )
+        {
+            return -1;
+        }
+
+        string last = tag.Trim().Split('.')[^1];
+        return int.TryParse(last, NumberStyles.None, CultureInfo.InvariantCulture, out int build)
+            ? build
+            : -1;
+    }
+
+    /// <summary>
+    /// Moves an extracted build into <c>builds\&lt;build&gt;</c> by one rename, so a reader sees
+    /// all of its files or none (#493). A build already there is kept as it is.
+    /// </summary>
+    internal static string Publish(string path, string extracted, int build)
+    {
+        string builds = Path.Combine(path, BuildsFolderName);
+        Directory.CreateDirectory(builds);
+        string target = Path.Combine(
+            builds,
+            build > 0
+                ? build.ToString(CultureInfo.InvariantCulture)
+                : "unknown-" + Guid.NewGuid().ToString("N")
+        );
+        if (!Directory.Exists(target))
+        {
+            Directory.Move(extracted, target);
+        }
+
+        return target;
+    }
+
+    private static bool InStaging(string file) =>
+        file.Contains(
+            Path.DirectorySeparatorChar + StagingPrefix,
+            StringComparison.OrdinalIgnoreCase
+        );
+
+    /// <summary>
+    /// Downloads and extracts the latest release, or with <paramref name="onlyNewerThan"/> only a
+    /// live build newer than that one. The zip is fetched and extracted under a staging folder,
+    /// then the build is published in whole (<see cref="Publish"/>) and the staging folder goes.
+    /// </summary>
+    private async Task DownloadLatestAsync(int? onlyNewerThan)
+    {
         using (var client = new HttpClient())
         {
             client.DefaultRequestHeaders.UserAgent.Add(
@@ -490,6 +651,31 @@ public class GameData : IGameData
                 string json = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
                 using (JsonDocument document = JsonDocument.Parse(json))
                 {
+                    if (onlyNewerThan is int local)
+                    {
+                        string tag =
+                            document.RootElement.TryGetProperty("tag_name", out JsonElement name)
+                            && name.ValueKind == JsonValueKind.String
+                                ? name.GetString()
+                                : null;
+                        int remote = ReleaseBuild(tag);
+                        if (remote <= local)
+                        {
+                            logger.LogDebug(
+                                "heroes-data2 {Tag} is not a newer live build than the local {Local}.",
+                                tag,
+                                local
+                            );
+                            return;
+                        }
+
+                        logger.LogInformation(
+                            "heroes-data2 {Tag} is newer than the local data ({Local}). Downloading it; the housekeeping pass removes the older build's files.",
+                            tag,
+                            local
+                        );
+                    }
+
                     if (!TrySelectArchive(document.RootElement, out HeroesDataArchive archive))
                     {
                         throw new InvalidOperationException(
@@ -497,21 +683,57 @@ public class GameData : IGameData
                         );
                     }
 
-                    string zipPath = Path.Combine(settings.HeroesDataPath, archive.FileName);
-                    using (
-                        Stream data = await client.GetStreamAsync(archive.Uri).ConfigureAwait(false)
-                    )
-                    using (FileStream write = File.Create(zipPath))
+                    string staging = Path.Combine(
+                        settings.HeroesDataPath,
+                        StagingPrefix + Guid.NewGuid().ToString("N")
+                    );
+                    try
                     {
-                        await data.CopyToAsync(write).ConfigureAwait(false);
-                        logger.LogInformation("Saving heroes-data2 {File}.", archive.FileName);
-                    }
+                        Directory.CreateDirectory(staging);
+                        string zipPath = Path.Combine(staging, archive.FileName);
+                        using (
+                            Stream data = await client
+                                .GetStreamAsync(archive.Uri)
+                                .ConfigureAwait(false)
+                        )
+                        using (FileStream write = File.Create(zipPath))
+                        {
+                            await data.CopyToAsync(write).ConfigureAwait(false);
+                            logger.LogInformation("Saving heroes-data2 {File}.", archive.FileName);
+                        }
 
-                    using (FileStream reader = File.OpenRead(zipPath))
-                    using (ZipArchive zip = new ZipArchive(reader))
+                        string extracted = Path.Combine(staging, "build");
+                        using (FileStream reader = File.OpenRead(zipPath))
+                        using (ZipArchive zip = new ZipArchive(reader))
+                        {
+                            logger.LogInformation("Extracting heroes-data2...");
+                            zip.ExtractToDirectory(extracted, true);
+                        }
+
+                        string published = Publish(
+                            settings.HeroesDataPath,
+                            extracted,
+                            BuildNumber(archive.FileName)
+                        );
+                        logger.LogInformation("heroes-data2 is in {Path}.", published);
+                    }
+                    finally
                     {
-                        logger.LogInformation("Extracting heroes-data2...");
-                        zip.ExtractToDirectory(settings.HeroesDataPath, true);
+                        try
+                        {
+                            if (Directory.Exists(staging))
+                            {
+                                Directory.Delete(staging, recursive: true);
+                            }
+                        }
+                        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+                        {
+                            logger.LogWarning(
+                                "Could not remove {Staging}: {Message} The housekeeping pass removes it.",
+                                staging,
+                                e.Message
+                            );
+                        }
                     }
                 }
             }
@@ -811,13 +1033,38 @@ public class GameData : IGameData
         return false;
     }
 
+    /// <summary>
+    /// Refreshes heroes-data2 when due, then loads it into memory, holding the heroes-data2 lock
+    /// throughout (#493). Only one process downloads at a time, so spectate, download and youtube
+    /// never fetch the same release together (the new-patch race), and no process loads while
+    /// another moves a build in. A role keeps what it loaded until it restarts: nothing reads the
+    /// files again.
+    /// </summary>
     public async Task LoadDataAsync()
     {
         using Activity activity = HeroesReplayTelemetry.StartSpan("heroesreplay.data.load");
-        await DownloadIfEmptyAsync().ConfigureAwait(false);
-        await LoadUnitsAsync().ConfigureAwait(false);
-        await LoadMapsAsync().ConfigureAwait(false);
-        await LoadHeroesAsync().ConfigureAwait(false);
+        using (
+            FileStream held = await LockAsync(settings.HeroesDataPath, LockWait)
+                .ConfigureAwait(false)
+        )
+        {
+            if (held == null)
+            {
+                logger.LogWarning(
+                    "Another process held heroes-data2 for {Wait}. This one loads the data there is and does not refresh it.",
+                    LockWait
+                );
+            }
+            else
+            {
+                await RefreshAsync().ConfigureAwait(false);
+            }
+
+            await LoadUnitsAsync().ConfigureAwait(false);
+            await LoadMapsAsync().ConfigureAwait(false);
+            await LoadHeroesAsync().ConfigureAwait(false);
+        }
+
         activity?.SetTag("data.heroes", Heroes?.Count ?? 0);
         activity?.SetTag("data.maps", Maps?.Count ?? 0);
     }

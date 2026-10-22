@@ -64,6 +64,24 @@ public class RetentionSettings
 
     public int CorruptKeepCount { get; set; } = 3;
 
+    /// <summary>
+    /// A cached replay that will never play goes after this many days (#493): quarantined, below
+    /// the patch floor, or an ordinary replay that was downloaded and never played (ordinary
+    /// replays play newest first). A viewer request that waits is never removed.
+    /// </summary>
+    public int UnplayedReplayKeepDays { get; set; } = 14;
+
+    /// <summary>
+    /// A retained client build (<c>Data\Clients\Base*</c>) below the <c>Spectate:MinimumGameVersion</c>
+    /// patch line goes once its folder is this old (#493). No replay below the line can be played
+    /// or requested, and the live build is never removed.
+    /// </summary>
+    public int ClientBuildKeepDays { get; set; } = 7;
+
+    public int EffectiveUnplayedReplayKeepDays =>
+        UnplayedReplayKeepDays > 0 ? UnplayedReplayKeepDays : 14;
+    public int EffectiveClientBuildKeepDays => ClientBuildKeepDays > 0 ? ClientBuildKeepDays : 7;
+
     public int EffectiveAttemptKeepDays => AttemptKeepDays > 0 ? AttemptKeepDays : 14;
     public int EffectiveLeaseKeepDays => LeaseKeepDays > 0 ? LeaseKeepDays : 2;
     public int EffectiveLedgerKeepDays => LedgerKeepDays > 0 ? LedgerKeepDays : 30;

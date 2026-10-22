@@ -3,7 +3,10 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using HeroesReplay.Core.Configuration;
+using HeroesReplay.Core.GameClient;
+using HeroesReplay.Core.HeroesData;
 using HeroesReplay.Core.HeroesProfile;
+using HeroesReplay.Core.Replays;
 using HeroesReplay.Core.Requests;
 using HeroesReplay.Core.SelfUpdate;
 using HeroesReplay.Core.ServiceHost;
@@ -34,6 +37,9 @@ public static class Housekeeping
             ReplayLease.Pruner(settings),
             PlayerHeroStatsStore.Pruner(settings),
             CorruptFiles.Pruner(settings),
+            ReplayCacheCleanup.Pruner(settings),
+            ClientBuildArchive.Pruner(settings),
+            HeroesDataCleanup.Pruner(settings),
         ];
 
     public static HousekeepingPass CreatePass(AppSettings settings, ILogger logger) =>
