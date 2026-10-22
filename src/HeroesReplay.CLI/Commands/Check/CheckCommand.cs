@@ -24,6 +24,7 @@ using HeroesReplay.Core.Shared;
 using HeroesReplay.Core.Telemetry;
 using HeroesReplay.Core.Twitch;
 using HeroesReplay.Core.TwitchExtension;
+using HeroesReplay.Core.YouTube;
 using Microsoft.Extensions.DependencyInjection;
 using OBSWebsocketDotNet;
 using TwitchLib.Api.Interfaces;
@@ -861,7 +862,9 @@ public class CheckCommand : Command
                             HousekeepingFile.PathIn(Housekeeping.StateDirectory(settings))
                         ),
                         settings.Housekeeping,
-                        now
+                        now,
+                        ParkedRecordings.Summarize(settings),
+                        (settings.Retention ?? new RetentionSettings()).EffectiveParkedKeepDays
                     )
                 )
             );

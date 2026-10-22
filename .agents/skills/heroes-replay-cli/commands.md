@@ -233,7 +233,7 @@ Measure Location:DataDirectory and %LOCALAPPDATA%\HeroesReplay (total, largest c
 - **Before:** None. Reads no secret.
 - **Changes:** Nothing. Measures `Location:DataDirectory` and `%LOCALAPPDATA%\HeroesReplay` and reads `housekeeping.json`.
 - **Exit:** 0 always unless the read throws (a pass that never ran, ran more than 3 `Housekeeping:Interval` ago, or failed is a warning), 1 on a parse error or an unexpected error.
-- **Codes:** `check.storage.ok`, `check.storage.never_ran`, `check.storage.stale`, `check.storage.last_failed`, `check.storage.error`
+- **Codes:** `check.storage.ok`, `check.storage.never_ran`, `check.storage.stale`, `check.storage.last_failed`, `check.storage.parked_request`, `check.storage.error`
 
 ## `client configure`
 

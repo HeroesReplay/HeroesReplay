@@ -29,6 +29,15 @@ public class RetentionSettings
     public TimeSpan UnpublishedGrace { get; set; } = TimeSpan.FromHours(1);
 
     /// <summary>
+    /// A recording the uploader parked (its retries used, or its upload session gone) keeps its
+    /// mp4 this long, then the mp4 goes and its entry is marked expired (#490). One whose replay is
+    /// already on the channel goes at once. A viewer's request is never removed.
+    /// </summary>
+    public int ParkedKeepDays { get; set; } = 7;
+
+    public int EffectiveParkedKeepDays => ParkedKeepDays > 0 ? ParkedKeepDays : 7;
+
+    /// <summary>
     /// With <c>YouTube:DryRun</c> on, a recording is never sent. Once the uploader has written its
     /// dry-run plan (<c>youtube-dry-run.json</c>) and the mp4 is older than this, the youtube role
     /// deletes the mp4. Clips, <c>end.png</c>, and the json files stay. Zero turns it off: the

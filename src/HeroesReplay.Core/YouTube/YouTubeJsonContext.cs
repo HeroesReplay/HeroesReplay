@@ -20,6 +20,7 @@ namespace HeroesReplay.Core.YouTube;
 [JsonSerializable(typeof(PublicationLedger))]
 [JsonSerializable(typeof(YouTubeQuotaDay))]
 [JsonSerializable(typeof(YouTubeDryRunReceipt))]
+[JsonSerializable(typeof(ParkedRecording))]
 internal sealed partial class YouTubeJsonContext : JsonSerializerContext
 {
     /// <summary>Most YouTube files: indented, with the default names. Reads use <see cref="JsonSerializerContext"/>'s <c>Default</c>.</summary>
