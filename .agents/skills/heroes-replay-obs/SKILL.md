@@ -61,7 +61,7 @@ ASA-SERVER streams only for a stream proof, and only to the developer Twitch acc
 
 ## Reading the live box
 
-Over `ssh streampc`, run the installed exe from `C:\SaltySadism\app`, with `HEROES_REPLAY_ENV=prod` already set for the user:
+Ask the Claude Code session on the stream PC (a Remote Control session) to run the installed exe from `C:\SaltySadism\app`, with `HEROES_REPLAY_ENV=prod` already set for the user. ASA-SERVER has had no SSH access to the stream PC since 2026-10-22:
 
 ```powershell
 heroesreplay obs validate --output json
@@ -69,7 +69,7 @@ heroesreplay obs inspect --output json
 ```
 
 - Both are read-only.
-- Over SSH, `C:\heroesreplay` is a junction to `C:\SaltySadism` that a network logon cannot traverse ("untrusted mount point"). Since #335, `obs validate` reads the junction itself without following it and checks the same file under its target, so the collection assets and data files that exist pass, and `obs.file_missing` or `obs.runtime_file_missing` there means the file is missing at the target too (the message names the path it checked). A build before #335 reports every one of them as missing; check such a path through `C:\SaltySadism\...` before believing it.
+- From a network logon (such as SSH), `C:\heroesreplay` is a junction to `C:\SaltySadism` that a network logon cannot traverse ("untrusted mount point"). Since #335, `obs validate` reads the junction itself without following it and checks the same file under its target, so the collection assets and data files that exist pass, and `obs.file_missing` or `obs.runtime_file_missing` there means the file is missing at the target too (the message names the path it checked). A build before #335 reports every one of them as missing; check such a path through `C:\SaltySadism\...` before believing it.
 - `obs.file_unverifiable` (a warning) means this session could not check the path at all: a junction or symbolic link on the way that it can neither traverse nor read, named in the message. OBS, in the desktop session, may still load the file. Check it from the desktop session or through the link's target.
 - Every other finding is real.
 
