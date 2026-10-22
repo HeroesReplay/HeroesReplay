@@ -87,10 +87,13 @@ public static class PendingUploadSize
             try
             {
                 var info = new FileInfo(path);
+                // A parked recording waits for an operator, not the uploader (#490): it holds no
+                // new recording back.
                 if (
                     !info.Exists
                     || info.Length <= 0
                     || IsInserted(info.DirectoryName, entryFileName)
+                    || ParkedRecordings.IsParked(info.DirectoryName)
                 )
                 {
                     continue;

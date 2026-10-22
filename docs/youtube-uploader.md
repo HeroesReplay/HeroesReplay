@@ -427,6 +427,13 @@ A recording retired before upload (#489) is handled like this:
 - **Dry runs.** While `YouTube:DryRun` is on, a dry-run context's recording goes after `VideoMaxAgeDays` (7), then its folder.
 - **The Contexts root.** OBS writes an mp4 into the Contexts root itself when the replay's record directory could not be set. Such a file goes once quiet for `Retention:UnpublishedGrace`, with a `contexts-root` warning. The spectator no longer starts a recording when that directory fails.
 
+A parked recording (#490) is an interrupted upload the uploader will not send again on its own. That happens when its automatic retries are used (`operator-retry`), when YouTube no longer knows its upload session (`session-gone`), or when its replay is already on the channel (`on-channel`).
+- **The mark.** The uploader writes `youtube-parked.json` beside the recording, with the reason and when it was first parked. It removes the file as soon as the upload goes on, for example when an operator allows more retries.
+- **The pending-bytes gate.** A parked recording is no longer counted towards it, because it waits for an operator, not the uploader.
+- **How long it stays.** The housekeeping pass (`parked-recordings`) removes an `on-channel` recording at once, as a duplicate. Others go after `Retention:ParkedKeepDays` (7). Each removal marks the entry expired and keeps the attempt for the record.
+- **Viewer requests.** A request is never removed. Past `ParkedKeepDays` it waits for an operator, and `check storage` warns `check.storage.parked_request` with the replay, requester and reward.
+- **Where to see them.** `check storage` lists every parked recording: count, size, oldest, and reasons. A send in progress (`UploadPending`, `Uploading`) is never touched, whatever the mark says.
+
 ## The library record
 
 Every successful `videos.insert`, full match or clip, appends one line to `Data\youtube-library.jsonl`: the video id, the replay id, `full` or `clip`, the English map, the mode, the rank, the build, the privacy, and the upload time. A full match also keeps `Draft`, the description's `Draft:` note with its composition labels (`Blue no tank, Red double healer, Red dive`), and `FocusHero`, the description's `Featured:` hero. Only a viewer request that named a player (`{replayId},{BattleTag}` on the ReplayId reward, or `spectate file --player Name#1234`) writes `Featured:`. Both keys are left out of the line when the video has neither. The file sits in `Data`, not in a context folder, so retention never deletes it. A later line for the same video wins. A clip is recorded without a mode, a build, a draft note, or a named player.

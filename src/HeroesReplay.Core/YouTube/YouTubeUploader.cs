@@ -373,9 +373,16 @@ public class YouTubeUploader : IYouTubeUploader
                     .ConfigureAwait(false);
                 if (recovered.Outcome is UploadOutcome done)
                 {
+                    if (done != UploadOutcome.Parked)
+                    {
+                        ParkedRecordings.Clear(recording.FullName);
+                    }
+
                     return done;
                 }
 
+                // The upload goes on (an operator allowed more retries, or a session resumes).
+                ParkedRecordings.Clear(recording.FullName);
                 recovery = recovered.How;
                 interrupted = recovered.Manifest;
             }
@@ -998,6 +1005,7 @@ public class YouTubeUploader : IYouTubeUploader
                     attemptId,
                     InterruptedUploadRetries.FileName
                 );
+                Park(path, ParkedRecordings.OperatorRetry, attemptId, entry, now);
                 return new RecoveryResult(UploadOutcome.Parked, Recovery.None, manifest);
             case InterruptedUploadAction.AlreadyOnYouTube:
                 LogWait(
@@ -1008,6 +1016,7 @@ public class YouTubeUploader : IYouTubeUploader
                     entry.ReplayId,
                     YouTubeReplayCatalog.FileName
                 );
+                Park(path, ParkedRecordings.OnChannel, attemptId, entry, now);
                 return new RecoveryResult(UploadOutcome.Parked, Recovery.None, manifest);
             case InterruptedUploadAction.Restart:
                 return new RecoveryResult(null, Recovery.Restart, manifest);
@@ -1063,6 +1072,7 @@ public class YouTubeUploader : IYouTubeUploader
                     path,
                     status.HttpStatus
                 );
+                Park(path, ParkedRecordings.SessionGone, attemptId, entry, now);
                 return new RecoveryResult(UploadOutcome.Parked, Recovery.None, manifest);
             case InterruptedUploadAction.Resume:
                 incompleteSessions[attemptId] = 0;
@@ -1412,6 +1422,28 @@ public class YouTubeUploader : IYouTubeUploader
         else
         {
             logger.LogInformation("New uploads may start again.");
+        }
+    }
+
+    /// <summary>
+    /// Marks a parked recording (#490), so retention gives it a lifetime and <c>check storage</c>
+    /// shows it. A mark that cannot be written leaves the recording parked as before.
+    /// </summary>
+    private void Park(
+        string path,
+        string reason,
+        string attemptId,
+        YouTubeEntry entry,
+        DateTimeOffset now
+    )
+    {
+        try
+        {
+            ParkedRecordings.Mark(path, reason, attemptId, entry, now);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            logger.LogWarning(e, "Could not mark {Path} parked.", path);
         }
     }
 

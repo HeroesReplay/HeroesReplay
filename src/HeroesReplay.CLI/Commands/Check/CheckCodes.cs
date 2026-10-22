@@ -124,6 +124,9 @@ public static class CheckCodes
 
     /// <summary>A pruner failed in the last pass. A warning.</summary>
     public const string StorageLastFailed = "check.storage." + HousekeepingCheck.LastFailed;
+
+    /// <summary>A parked viewer request has waited past Retention:ParkedKeepDays (#490). A warning.</summary>
+    public const string StorageParkedRequest = "check.storage." + HousekeepingCheck.ParkedRequest;
     public const string StorageError = "check.storage.error";
 
     /// <summary>Every code above, for the docs and their tests.</summary>

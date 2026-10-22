@@ -1,5 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
+using HeroesReplay.Core.YouTube;
 
 namespace HeroesReplay.Core.Retention;
 
@@ -18,15 +21,20 @@ public static class HousekeepingCheck
     /// <summary>A pass older than this many intervals means no supervisor runs them.</summary>
     public const int StaleAfterIntervals = 3;
 
+    /// <summary>A parked viewer request has waited longer than Retention:ParkedKeepDays (#490).</summary>
+    public const string ParkedRequest = "parked_request";
+
     public static HousekeepingCheckReport Evaluate(
         StorageSummary disk,
         HousekeepingState state,
         HousekeepingSettings settings,
-        DateTimeOffset utcNow
+        DateTimeOffset utcNow,
+        IReadOnlyList<ParkedRecordingView> parked = null,
+        int parkedKeepDays = 7
     )
     {
         settings ??= new HousekeepingSettings();
-        string storage = Describe(disk);
+        string storage = Describe(disk) + DescribeParked(parked);
         HousekeepingRun last = state?.LastRun;
         if (last == null)
         {
@@ -66,7 +74,50 @@ public static class HousekeepingCheck
             );
         }
 
+        List<ParkedRecordingView> waiting = (parked ?? Array.Empty<ParkedRecordingView>())
+            .Where(view =>
+                view.Requested
+                && utcNow - view.Since >= TimeSpan.FromDays(Math.Max(1, parkedKeepDays))
+            )
+            .ToList();
+        if (waiting.Count > 0)
+        {
+            return new(
+                true,
+                ParkedRequest,
+                storage
+                    + lastLine
+                    + " Parked viewer request(s) wait for an operator: "
+                    + string.Join(
+                        "; ",
+                        waiting.Select(view =>
+                            $"replay {view.ReplayId} ({view.Reason} since {view.Since.ToString("u", CultureInfo.InvariantCulture)}, requested by {view.Requester ?? "unknown"} with {view.Reward ?? "an unknown reward"})"
+                        )
+                    )
+                    + ". A request is never removed: retry it (InterruptedUploadRetries) or resolve the redemption."
+            );
+        }
+
         return new(false, null, storage + lastLine);
+    }
+
+    /// <summary>The parked recordings in one clause, or nothing when there are none (#490).</summary>
+    public static string DescribeParked(IReadOnlyList<ParkedRecordingView> parked)
+    {
+        if (parked == null || parked.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        DateTimeOffset oldest = parked.Min(view => view.Since);
+        string reasons = string.Join(
+            ", ",
+            parked
+                .GroupBy(view => view.Reason)
+                .OrderBy(group => group.Key, StringComparer.Ordinal)
+                .Select(group => $"{group.Key} {group.Count()}")
+        );
+        return $" Parked recordings: {parked.Count} ({Size.Describe(parked.Sum(view => view.Bytes))}), oldest since {oldest.ToString("u", CultureInfo.InvariantCulture)} ({reasons}).";
     }
 
     public static string Describe(StorageSummary disk)

@@ -148,6 +148,7 @@ Role logs do not need Aspire. Each role that `services start` launches writes `%
     - **`client-builds`** removes `Data\Clients\Base*` copies below the `Spectate:MinimumGameVersion` patch line after `ClientBuildKeepDays` (7), never an installed build. Every build on the line stays, because a viewer can request any of them.
     - **`heroes-data`** removes older builds' heroes-data2 files and the downloaded zips.
     - Played replays stay `ReplayKeepDays` (30). The Storm League map pool reads the newest 300 cached Storm League replays.
+  - **Parked recordings (#490).** The uploader marks one with `youtube-parked.json` (its reason and since when), and parked recordings no longer count as pending bytes. `parked-recordings` removes an on-channel duplicate at once and others after `Retention:ParkedKeepDays` (7), each with its entry expired. A viewer request is never removed; `check storage` names it for an operator (`check.storage.parked_request`). Details: `docs/youtube-uploader.md`.
   - **Kept on purpose:**
     - `spectated-ids.txt`, `quarantine-ids.txt`, `youtube-replay-ids.txt` and `redemption-*.txt` are dedupe keys with no timestamps. They grow by about 10 bytes per replay, so about 200 KB a year at 55 replays a day.
     - The zero-byte `Data\*.lock` files are named cross-process locks.

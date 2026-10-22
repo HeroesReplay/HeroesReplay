@@ -10,6 +10,7 @@ using HeroesReplay.Core.Replays;
 using HeroesReplay.Core.Requests;
 using HeroesReplay.Core.SelfUpdate;
 using HeroesReplay.Core.ServiceHost;
+using HeroesReplay.Core.YouTube;
 using HeroesReplay.Core.YouTube.Outbox;
 using Microsoft.Extensions.Logging;
 
@@ -40,6 +41,7 @@ public static class Housekeeping
             ReplayCacheCleanup.Pruner(settings),
             ClientBuildArchive.Pruner(settings),
             HeroesDataCleanup.Pruner(settings),
+            ParkedRecordings.Pruner(settings),
         ];
 
     public static HousekeepingPass CreatePass(AppSettings settings, ILogger logger) =>
