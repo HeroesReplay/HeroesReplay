@@ -17,6 +17,28 @@ public sealed class ServiceHealthSettings
     /// <summary>A live role whose heartbeat is older than this many intervals is stale.</summary>
     public int StaleAfterIntervals { get; set; } = DefaultStaleAfterIntervals;
 
+    public static readonly TimeSpan DefaultReadyFileGoneGrace = TimeSpan.FromMinutes(10);
+    public static readonly TimeSpan DefaultReadyFileMaxAge = TimeSpan.FromDays(1);
+
+    /// <summary>
+    /// The housekeeping pass removes the ready file of a process that is gone once its last
+    /// heartbeat is this old (#494). The supervisor reads a dead role's last heartbeat for a few
+    /// passes after it exits, so it is not removed at once.
+    /// </summary>
+    public TimeSpan ReadyFileGoneGrace { get; set; } = DefaultReadyFileGoneGrace;
+
+    /// <summary>
+    /// A ready file whose heartbeat is this old is removed even when its pid runs: that pid is
+    /// another process by now (#494). A role <c>services.json</c> tracks is never touched.
+    /// </summary>
+    public TimeSpan ReadyFileMaxAge { get; set; } = DefaultReadyFileMaxAge;
+
+    public TimeSpan EffectiveReadyFileGoneGrace =>
+        ReadyFileGoneGrace > TimeSpan.Zero ? ReadyFileGoneGrace : DefaultReadyFileGoneGrace;
+
+    public TimeSpan EffectiveReadyFileMaxAge =>
+        ReadyFileMaxAge > TimeSpan.Zero ? ReadyFileMaxAge : DefaultReadyFileMaxAge;
+
     /// <summary>
     /// Match progress: the match clock advanced, or a replay session reached the clock or the
     /// award screen. A deferred, held, timed-out, or failed session, an idle wait, and an outage
