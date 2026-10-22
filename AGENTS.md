@@ -241,7 +241,7 @@ Both are Windows 11. Use the **same directory tree** so spectate, downloads, and
 | `C:\heroesreplay\Data\Standard` | Heroes Profile downloaded `.StormReplay` files |
 | `C:\heroesreplay\Data\Requests` | Twitch-requested downloads |
 | `C:\heroesreplay\Data\Contexts` | Per-replay context + OBS recordings (`RecFilePath`) |
-| `C:\heroesreplay\Data\HeroesData` | heroes-data2 JSON cache (Heroes.Element). Downloaded from HeroesToolChest/heroes-data2 when that cache is missing, and once per `HeroesToolChest:RefreshInterval` (1 day) a role that loads game data downloads a newer live build when one is released (#493); housekeeping keeps the newest `RetainedVersions` (2) builds |
+| `C:\heroesreplay\Data\HeroesData` | heroes-data2 JSON cache (Heroes.Element). Downloaded from HeroesToolChest/heroes-data2 when that cache is missing, and once per `HeroesToolChest:RefreshInterval` (1 day) a role that loads game data downloads a newer live build when one is released (#493). One process at a time refreshes or loads it (`.heroes-data.lock`, held across both). A build is fetched and extracted under `.staging-*`, then published whole by one rename as `builds\<build>`, so a reader never sees half of one. Housekeeping keeps the newest `RetainedVersions` (2) builds and plans nothing while the lock is held |
 | `C:\heroesreplay\secrets` | Local backup of gitignored `appsettings.secrets.json` |
 | `C:\heroesreplay\tools\ffmpeg` | `ffmpeg.exe` and `ffprobe.exe` for clips, from `heroesreplay deps install` (`Dependencies:Directory`). `apply-release.ps1` runs it after every install. Never set up by hand |
 | `%USERPROFILE%\Documents\Heroes of the Storm\Interfaces` | AhliObs (`client configure`) |

@@ -153,6 +153,109 @@ public sealed class ReplayCacheCleanupTests : IDisposable
         Assert.DoesNotContain(plan.Items, item => item.Path == downloading);
     }
 
+    /// <summary>
+    /// The layout after #493: the first download flat, each refresh published whole under
+    /// builds\, and a crashed download's staging folder. The newest two builds stay, an old
+    /// published build goes as one folder, and an old staging folder goes.
+    /// </summary>
+    [Fact]
+    public void HeroesData_RemovesOldPublishedBuildsWhole_AndStaleStaging()
+    {
+        string data = Path.Combine(root, "HeroesData");
+        Write(Path.Combine(data, "data"), "herodata_98285.json", Old, HeroDocument);
+        string builds = Path.Combine(data, GameData.BuildsFolderName);
+        Write(Path.Combine(builds, "98304", "data"), "herodata_98304.json", Old, HeroDocument);
+        Write(
+            Path.Combine(builds, "98304", "gamestrings"),
+            "gamestrings_98304_enus.json",
+            Old,
+            "{}"
+        );
+        Write(Path.Combine(builds, "98348", "data"), "herodata_98348.json", Old, HeroDocument);
+        string stale = Path.Combine(data, GameData.StagingPrefix + "old");
+        Write(Path.Combine(stale, "build", "data"), "herodata_99999.json", Old, HeroDocument);
+        Directory.SetLastWriteTimeUtc(stale, Old.UtcDateTime);
+        string fresh = Path.Combine(data, GameData.StagingPrefix + "now");
+        Write(Path.Combine(fresh, "build", "data"), "herodata_99999.json", Now, HeroDocument);
+        Directory.SetLastWriteTimeUtc(fresh, Now.UtcDateTime);
+
+        PrunePlan plan = HeroesDataCleanup.Plan(data, retainedVersions: 2, Now);
+
+        // A staging folder is never a build: 99999 does not count against the newest two.
+        Assert.Equal(
+            new[] { stale, Path.Combine(data, "data", "herodata_98285.json") }.Order(),
+            plan.Items.Select(item => item.Path).Order()
+        );
+
+        PrunePlan one = HeroesDataCleanup.Plan(data, retainedVersions: 1, Now);
+
+        Assert.Contains(
+            one.Items,
+            item => item.Path == Path.Combine(builds, "98304") && item.IsDirectory
+        );
+        Assert.DoesNotContain(
+            one.Items,
+            item => item.Path.StartsWith(Path.Combine(builds, "98348"))
+        );
+    }
+
+    /// <summary>
+    /// The new-patch race: while any process refreshes or loads heroes-data2 (it holds the lock),
+    /// the pruner removes nothing, so it never takes a build out from under a role.
+    /// </summary>
+    [Fact]
+    public void HeroesData_NothingIsRemovedWhileARoleHoldsTheLock()
+    {
+        string data = Path.Combine(root, "HeroesData");
+        foreach (int build in new[] { 98285, 98304, 98348 })
+        {
+            Write(Path.Combine(data, "data"), $"herodata_{build}.json", Old, HeroDocument);
+        }
+
+        using (
+            FileStream held = Core.Shared.DurableFile.TryLock(
+                Path.Combine(data, GameData.LockFileName)
+            )
+        )
+        {
+            Assert.NotNull(held);
+            Assert.True(GameData.IsBusy(data));
+            Assert.Empty(HeroesDataCleanup.Plan(data, retainedVersions: 1, Now).Items);
+        }
+
+        Assert.False(GameData.IsBusy(data));
+        Assert.Equal(2, HeroesDataCleanup.Plan(data, retainedVersions: 1, Now).Items.Count);
+    }
+
+    [Fact]
+    public void HeroesData_PublishMovesAWholeBuildInByOneRename_AndKeepsOneAlreadyThere()
+    {
+        string data = Path.Combine(root, "HeroesData");
+        string extracted = Path.Combine(data, GameData.StagingPrefix + "a", "build");
+        Write(Path.Combine(extracted, "data"), "herodata_98348.json", Now, HeroDocument);
+        Write(Path.Combine(extracted, "gamestrings"), "gamestrings_98348_enus.json", Now, "{}");
+
+        string published = GameData.Publish(data, extracted, 98348);
+
+        Assert.Equal(Path.Combine(data, GameData.BuildsFolderName, "98348"), published);
+        Assert.True(File.Exists(Path.Combine(published, "data", "herodata_98348.json")));
+        Assert.True(
+            File.Exists(Path.Combine(published, "gamestrings", "gamestrings_98348_enus.json"))
+        );
+        Assert.False(Directory.Exists(extracted));
+
+        string again = Path.Combine(data, GameData.StagingPrefix + "b", "build");
+        Write(Path.Combine(again, "data"), "herodata_98348.json", Now, "{}");
+
+        Assert.Equal(published, GameData.Publish(data, again, 98348));
+        Assert.Equal(
+            HeroDocument,
+            File.ReadAllText(Path.Combine(published, "data", "herodata_98348.json"))
+        );
+    }
+
+    private const string HeroDocument = "{\"meta\":{},\"itemsType\":\"hero\"}";
+
     [Theory]
     [InlineData("v2.57.0.98348", 98348)]
     [InlineData("v2.57.0.98217_ptr", -1)]
