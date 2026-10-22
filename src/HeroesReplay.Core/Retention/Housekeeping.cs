@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.SelfUpdate;
+using HeroesReplay.Core.ServiceHost;
 using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay.Core.Retention;
@@ -24,6 +25,8 @@ public static class Housekeeping
             DryRunRecordings.Pruner(settings),
             ReleaseCache.Pruner(settings, StateDirectory(settings)),
             ReleaseCache.LogsPruner(settings, StateDirectory(settings)),
+            ServiceStatePruners.LogsPruner(settings, StateDirectory(settings)),
+            ServiceStatePruners.ReadyPruner(settings, StateDirectory(settings)),
         ];
 
     public static HousekeepingPass CreatePass(AppSettings settings, ILogger logger) =>
