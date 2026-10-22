@@ -421,6 +421,12 @@ Clips are individual pentakills only (#369): one full-frame cut per pentakill un
 
 After a successful upload, retention deletes the mp4 on the next sweep, which the uploader runs right after the insert. The video may still be waiting for its `publishAt`. The context folder itself lasts `VideoKeepDays` (3 in production), and an entry that waits for `publishAt` no longer keeps it.
 
+A recording retired before upload (#489) is handled like this:
+- **Retiring it.** The uploader deletes a recording past the publication window (a Terminal slot), and the spectator's pending-bytes gate clears one the uploader would delete. Either way the entry is renamed `youtube-entry-expired.json`. A recording that delete missed goes on the next sweep. The folder then lasts `VideoKeepDays` from the rename, like an upload.
+- **Entries with no recording.** An entry with no video id and no recording left in the folder can never upload, for example from before entries were marked expired. Its folder goes once it has been untouched for `VideoKeepDays`. A recording that still waits for its insert is never removed for its age.
+- **Dry runs.** While `YouTube:DryRun` is on, a dry-run context's recording goes after `VideoMaxAgeDays` (7), then its folder.
+- **The Contexts root.** OBS writes an mp4 into the Contexts root itself when the replay's record directory could not be set. Such a file goes once quiet for `Retention:UnpublishedGrace`, with a `contexts-root` warning. The spectator no longer starts a recording when that directory fails.
+
 ## The library record
 
 Every successful `videos.insert`, full match or clip, appends one line to `Data\youtube-library.jsonl`: the video id, the replay id, `full` or `clip`, the English map, the mode, the rank, the build, the privacy, and the upload time. A full match also keeps `Draft`, the description's `Draft:` note with its composition labels (`Blue no tank, Red double healer, Red dive`), and `FocusHero`, the description's `Featured:` hero. Only a viewer request that named a player (`{replayId},{BattleTag}` on the ReplayId reward, or `spectate file --player Name#1234`) writes `Featured:`. Both keys are left out of the line when the video has neither. The file sits in `Data`, not in a context folder, so retention never deletes it. A later line for the same video wins. A clip is recorded without a mode, a build, a draft note, or a named player.

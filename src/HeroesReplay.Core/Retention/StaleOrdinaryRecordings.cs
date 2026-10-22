@@ -67,6 +67,8 @@ public static class StaleOrdinaryRecordings
             }
 
             MediaRetention.DeleteFile(recording, result, StaleWarning(recording, entry, media));
+            // Retired: the folder then ages out instead of waiting for an insert forever (#489).
+            RetiredRecordings.MarkExpired(recording, youtube.EntryFileName);
         }
 
         return result;

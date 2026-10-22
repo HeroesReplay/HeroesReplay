@@ -327,7 +327,9 @@ public class ObsController : IObsController
 
     /// <summary>
     /// Right before StartRecord, while no recording is active: the replay's context folder and
-    /// the recording format (#310). Either one that fails is logged, and the recording starts.
+    /// the recording format (#310). A format that fails is logged, and the recording starts. A
+    /// folder that fails stops the start (#489): OBS would record into its last directory, the
+    /// Contexts root at worst, where no entry names the file and it can never be uploaded.
     /// </summary>
     private void PrepareRecordingOutput()
     {
@@ -365,8 +367,12 @@ public class ObsController : IObsController
         {
             logger.LogWarning(
                 e,
-                "Could not set the OBS record directory for replay {ReplayId}.",
+                "Could not set the OBS record directory for replay {ReplayId}, so the recording does not start: OBS would write it outside the replay's folder, where it can never be uploaded.",
                 CurrentReplayId
+            );
+            throw new InvalidOperationException(
+                $"The OBS record directory {directory} could not be set: {e.Message}",
+                e
             );
         }
     }

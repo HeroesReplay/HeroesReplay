@@ -1569,6 +1569,8 @@ public class YouTubeUploader : IYouTubeUploader
                 settings.ReplayMedia?.OrdinaryCandidateMaxAge
             );
             DeleteRecording(path);
+            // Retired: the folder then ages out instead of waiting for an insert forever (#489).
+            RetiredRecordings.MarkExpired(path, settings.YouTube?.EntryFileName, logger);
             return reserved;
         }
 

@@ -242,6 +242,38 @@ public class ObsRecordingFormatTests
         return obs;
     }
 
+    [Fact]
+    public void AnOutputPreparationThatThrows_SendsNoStartRecord()
+    {
+        // #489: OBS refused the replay's record directory, so the file would land in the Contexts
+        // root, where no entry names it and nothing can upload it. The spectator throws instead.
+        FakeObs obs = Idle("Simple", current: ObsRecordingFormat.FragmentedMp4);
+        var session = new RecordingSession(
+            NullLogger.Instance,
+            obs.RecordSocket(),
+            new ObsRecordingBudget
+            {
+                RetryCount = 0,
+                RetryDelay = TimeSpan.Zero,
+                StartTimeout = TimeSpan.FromMilliseconds(40),
+                StopTimeout = TimeSpan.FromMilliseconds(40),
+                PollInterval = TimeSpan.FromMilliseconds(5),
+            }
+        );
+
+        ObsRecordingResult started = session.StartRecording(
+            () => true,
+            null,
+            ReplayId,
+            "unit",
+            () => throw new InvalidOperationException("The OBS record directory could not be set")
+        );
+
+        Assert.False(started.Succeeded);
+        Assert.Equal(ObsOutputFailure.RequestError, started.Failure);
+        Assert.DoesNotContain("StartRecord", obs.Requests);
+    }
+
     /// <summary>The recording start the spectator makes, with the format step as its output preparation.</summary>
     private (ObsRecordingResult Started, ObsRecordingFormatResult Format) StartRecording(
         FakeObs obs,
