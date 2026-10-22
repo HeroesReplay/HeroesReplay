@@ -13,6 +13,7 @@ using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.GameClient;
 using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.Obs.Collection;
+using HeroesReplay.Core.Retention;
 using HeroesReplay.Core.SelfUpdate;
 using HeroesReplay.Core.ServiceHost;
 using HeroesReplay.Core.ServiceHost.Logs;
@@ -455,7 +456,24 @@ public class ServicesCommand : Command
                 provider.GetRequiredService<ILogger<MachineHealthLog>>()
             ),
             Obs = CreateObsWatchdog(settings, provider.GetRequiredService<ILogger<ObsWatchdog>>()),
+            Housekeeping = CreateHousekeeping(
+                provider.GetRequiredService<ILogger<HousekeepingPass>>()
+            ),
         };
+
+    /// <summary>
+    /// The supervisor's housekeeping pass (#487) over the effective settings, without secrets.
+    /// Each pass writes <c>housekeeping.json</c> for <c>check storage</c>.
+    /// </summary>
+    private static HousekeepingSchedule CreateHousekeeping(ILogger logger)
+    {
+        AppSettings app = ServiceCollectionExtensions.LoadOfflineSettings();
+        return new HousekeepingSchedule(
+            app.Housekeeping,
+            now => Housekeeping.RunAndRecord(app, now, Housekeeping.SupervisorTrigger, logger),
+            logger
+        );
+    }
 
     /// <summary>
     /// The supervisor's OBS watchdog (#398) on the real process table, a short read-only

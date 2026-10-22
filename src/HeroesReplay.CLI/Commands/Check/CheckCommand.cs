@@ -18,6 +18,7 @@ using HeroesReplay.Core.GameClient;
 using HeroesReplay.Core.HeroesProfile;
 using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.Obs.Collection;
+using HeroesReplay.Core.Retention;
 using HeroesReplay.Core.SelfUpdate;
 using HeroesReplay.Core.Shared;
 using HeroesReplay.Core.Telemetry;
@@ -106,6 +107,12 @@ public class CheckCommand : Command
             CheckRuntimeAsync,
             InAll: false
         ),
+        new(
+            "storage",
+            "Measure Location:DataDirectory and %LOCALAPPDATA%\\HeroesReplay (total, largest category, free space) and report the last housekeeping pass (housekeeping.json). A pass that never ran, ran more than 3 Housekeeping:Interval ago, or failed is a warning.",
+            CheckStorageAsync,
+            InAll: true
+        ),
     ];
 
     /// <summary>What a bare <c>check</c> runs, in this order.</summary>
@@ -117,6 +124,7 @@ public class CheckCommand : Command
         "twitch",
         "client",
         "ffmpeg",
+        "storage",
         "battlenet",
         "connectivity",
     ];
@@ -833,6 +841,45 @@ public class CheckCommand : Command
             )
         );
     }
+
+    /// <summary>
+    /// The disk now and the last housekeeping pass (#487). Read only; a missing, old, or failed
+    /// pass is a warning.
+    /// </summary>
+    public static Task<CheckResult> CheckStorageAsync(CheckRun run)
+    {
+        _ = run;
+        try
+        {
+            AppSettings settings = ServiceCollectionExtensions.LoadOfflineSettings();
+            DateTimeOffset now = DateTimeOffset.UtcNow;
+            return Task.FromResult(
+                ToCheckResult(
+                    HousekeepingCheck.Evaluate(
+                        Housekeeping.Summarize(settings, now),
+                        HousekeepingFile.TryLoad(
+                            HousekeepingFile.PathIn(Housekeeping.StateDirectory(settings))
+                        ),
+                        settings.Housekeeping,
+                        now
+                    )
+                )
+            );
+        }
+        catch (Exception e)
+        {
+            return Task.FromResult(Fail("storage", e));
+        }
+    }
+
+    /// <summary>A warning passes (exit 0) and prints as <c>[WARN]</c>.</summary>
+    public static CheckResult ToCheckResult(HousekeepingCheckReport report) =>
+        new(
+            "storage",
+            true,
+            report.Warning ? WarningPrefix + report.Detail : report.Detail,
+            report.Reason == null ? CheckCodes.StorageOk : CheckCodes.For("storage", report.Reason)
+        );
 
     /// <summary>A runtime older than the release's is a warning: it passes (exit 0).</summary>
     public static CheckResult ToCheckResult(ReleaseRuntimeReport report) =>

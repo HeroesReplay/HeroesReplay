@@ -15,6 +15,7 @@ using HeroesReplay.Core.HeroesProfile;
 using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.Obs.Collection;
 using HeroesReplay.Core.Obs.Inspection;
+using HeroesReplay.Core.Retention;
 using HeroesReplay.Core.ServiceHost;
 using HeroesReplay.Core.Twitch;
 using HeroesReplay.Core.YouTube;
@@ -229,6 +230,13 @@ public static class CommandReference
             "Nothing. Reads `runtime.txt` beside the exe. `package-release.ps1` runs it on the packaged exe and writes the runtime into the zip's `runtime.txt` (#462).",
             CheckExit,
             CheckCodesFor("runtime")
+        ),
+        new(
+            "check storage",
+            "None. Reads no secret.",
+            "Nothing. Measures `Location:DataDirectory` and `%LOCALAPPDATA%\\HeroesReplay` and reads `housekeeping.json`.",
+            "0 always unless the read throws (a pass that never ran, ran more than 3 `Housekeeping:Interval` ago, or failed is a warning), 1 on a parse error or an unexpected error.",
+            CheckCodesFor("storage")
         ),
         new(
             "client configure",
@@ -598,6 +606,18 @@ public static class CommandReference
             "Downloads, checks, and installs `ffmpeg.exe` and `ffprobe.exe` into `<dir>\\ffmpeg` (staged, then moved into place); nothing when the pinned build is already there.",
             "0 when installed or already installed, 1 when the download, the hash, or the copy failed.",
             [DepsCommand.Installed, DepsCommand.AlreadyInstalled, DepsCommand.Failed]
+        ),
+        new(
+            "storage report",
+            "None. Reads no secret. Safe beside a running stack: without `--apply` it only reads.",
+            "Nothing without `--apply`. With `--apply` it runs the housekeeping pass now, as the supervisor does every `Housekeeping:Interval`: each enabled pruner removes what its plan names (nothing under `Housekeeping:DryRun`), and it writes `housekeeping.json`.",
+            "0 when the report is printed, 1 when a pruner failed under `--apply`, on a parse error, or on an unexpected error.",
+            [
+                StorageReport.ReportCode,
+                StorageReport.AppliedCode,
+                StorageReport.DryRunCode,
+                StorageReport.ApplyFailedCode,
+            ]
         ),
     ];
 

@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.Threading;
 using HeroesReplay.CLI.Commands.Services;
 using HeroesReplay.Core.Obs;
+using HeroesReplay.Core.Retention;
 using HeroesReplay.Core.ServiceHost;
 using HeroesReplay.Tests.Unit.Obs;
 using HeroesReplay.Tests.Unit.Support;
@@ -74,6 +75,31 @@ public class ServiceSupervisionTests
         Assert.False(report.Ok);
         Assert.Equal(1, report.ExitCode);
         Assert.Contains("Restart budget exhausted: download.", report.Message);
+    }
+
+    [Fact]
+    public void Housekeeping_RunsAtStartAndEveryInterval_WhileNoRoleDoesAnyWork()
+    {
+        // #487: the only sweep ran inside busy roles; idle or exhausted roles swept nothing.
+        using var stack = new FakeStack(("download", 100), ("youtube", 101));
+        var passes = new List<DateTimeOffset>();
+        var schedule = new HousekeepingSchedule(
+            new HousekeepingSettings { Interval = TimeSpan.FromHours(1) },
+            passes.Add,
+            NullLogger.Instance,
+            start: work => work()
+        );
+        ServiceSupervision supervision = stack.Supervision(housekeeping: schedule);
+        Assert.True(supervision.Begin());
+
+        Assert.True(supervision.Tick());
+        stack.Ticks(supervision, (int)TimeSpan.FromHours(3).TotalSeconds);
+
+        Assert.Equal(
+            new[] { Start, Start.AddHours(1), Start.AddHours(2), Start.AddHours(3) },
+            passes
+        );
+        Assert.Empty(stack.Launches);
     }
 
     [Fact]
@@ -1299,13 +1325,15 @@ public class ServiceSupervisionTests
             Func<bool> closeGame = null,
             Func<string> spectateDown = null,
             ObsWatchdog obs = null,
-            Func<IReadOnlyList<string>> resets = null
+            Func<IReadOnlyList<string>> resets = null,
+            HousekeepingSchedule housekeeping = null
         ) =>
             new()
             {
                 LockPath = LockPath,
                 StatePath = StatePath,
                 Obs = obs,
+                Housekeeping = housekeeping,
                 RuntimeServiced = () => SupervisorRuntime,
                 Time = Clock,
                 ProcessNameOrNull = pid => alive.Contains(pid) ? "heroesreplay" : null,

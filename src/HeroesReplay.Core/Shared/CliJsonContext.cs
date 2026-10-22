@@ -4,6 +4,7 @@ using HeroesReplay.Core.GameClient;
 using HeroesReplay.Core.HeroFocus.Ledger;
 using HeroesReplay.Core.Obs.Collection;
 using HeroesReplay.Core.Obs.Inspection;
+using HeroesReplay.Core.Retention;
 using HeroesReplay.Core.ServiceHost;
 
 namespace HeroesReplay.Core.Shared;
@@ -24,4 +25,5 @@ namespace HeroesReplay.Core.Shared;
 [JsonSerializable(typeof(ServiceStatusReport))]
 [JsonSerializable(typeof(CliResult<ClientStatusResult>))]
 [JsonSerializable(typeof(CliResult<FocusCoverageReport>))]
+[JsonSerializable(typeof(CliResult<StorageReportDetails>))]
 internal sealed partial class CliJsonContext : JsonSerializerContext;
