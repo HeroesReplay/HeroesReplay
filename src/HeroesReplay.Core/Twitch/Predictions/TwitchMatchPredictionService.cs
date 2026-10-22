@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Heroes.ReplayParser;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Replays;
+using HeroesReplay.Core.Retention;
 using HeroesReplay.Core.Shared;
 using HeroesReplay.Core.Spectating.Capture;
 using Microsoft.Extensions.Logging;
@@ -48,6 +50,33 @@ public class TwitchMatchPredictionService : IMatchPredictionService
         this.reports = reports ?? throw new ArgumentNullException(nameof(reports));
         this.chat = chat;
         ledger = PredictionLedger.Load(PredictionLedger.PathFor(settings.Location?.DataDirectory));
+        TrimLedger();
+    }
+
+    /// <summary>
+    /// Settled predictions older than <c>Retention:LedgerKeepDays</c> leave the ledger when it
+    /// loads (#492). This process owns the file, so no other writer can lose a prediction to the
+    /// trim; open and pending ones always stay.
+    /// </summary>
+    private void TrimLedger()
+    {
+        int days = (settings.Retention ?? new RetentionSettings()).EffectiveLedgerKeepDays;
+        try
+        {
+            int dropped = ledger.TrimSettled(DateTimeOffset.UtcNow.AddDays(-days));
+            if (dropped > 0)
+            {
+                logger.LogInformation(
+                    "Dropped {Count} settled predictions older than Retention:LedgerKeepDays ({Days}) from the prediction ledger.",
+                    dropped,
+                    days
+                );
+            }
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            logger.LogWarning(e, "Could not trim the prediction ledger. It keeps every entry.");
+        }
     }
 
     public Task StartAsync(LoadedReplay replay, CancellationToken cancellationToken) =>

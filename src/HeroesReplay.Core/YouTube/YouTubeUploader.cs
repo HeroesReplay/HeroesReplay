@@ -889,6 +889,41 @@ public class YouTubeUploader : IYouTubeUploader
     {
         MediaRetention.SweepAndLog(settings, logger);
         DryRunRecordings.SweepAndLog(settings, logger);
+        TrimReservations();
+    }
+
+    /// <summary>
+    /// Slots whose publish time is more than <c>Retention:LedgerKeepDays</c> past leave the
+    /// reservation ledger (#492). Only this role writes it, and the trim takes the same lock as
+    /// a reservation, so no slot is lost to it; terminal marks stay.
+    /// </summary>
+    private void TrimReservations()
+    {
+        int days = (settings.Retention ?? new RetentionSettings()).EffectiveLedgerKeepDays;
+        foreach (bool dryRun in new[] { false, true })
+        {
+            string path = PublicationReservation.PathFor(settings.Location?.DataDirectory, dryRun);
+            try
+            {
+                int dropped = PublicationReservation.Trim(
+                    path,
+                    DateTimeOffset.UtcNow.AddDays(-days)
+                );
+                if (dropped > 0)
+                {
+                    logger.LogInformation(
+                        "Dropped {Count} publication slots more than Retention:LedgerKeepDays ({Days}) past from {Path}.",
+                        dropped,
+                        days,
+                        path
+                    );
+                }
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                logger.LogWarning(e, "Could not trim {Path}. It keeps every slot.", path);
+            }
+        }
     }
 
     private enum Recovery

@@ -25,4 +25,10 @@ public sealed class PlayerStatsSettings
 
     /// <summary>How often the privacy feed is read. The terms ask for at least daily.</summary>
     public TimeSpan PrivacyInterval { get; set; } = TimeSpan.FromHours(12);
+
+    /// <summary>
+    /// How long the housekeeping pass keeps a player's private mark, which tells a focus card to
+    /// drop that player's numbers (#492). Other player files go once older than <see cref="MaxAge"/>.
+    /// </summary>
+    public TimeSpan PrivateKeep { get; set; } = TimeSpan.FromDays(30);
 }
