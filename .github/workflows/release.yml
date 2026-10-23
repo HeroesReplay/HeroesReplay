@@ -15,7 +15,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           # The SDK global.json pins (#462). Dependabot bumps it; package-release.ps1 writes
           # the .NET runtime the packaged exe runs on into runtime.txt.
