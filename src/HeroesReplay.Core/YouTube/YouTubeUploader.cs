@@ -1269,13 +1269,24 @@ public class YouTubeUploader : IYouTubeUploader
     internal async Task RunUploadPassAsync()
     {
         quotaHeld = false;
+        // Clips that had to wait when they were cut are tried again here too (#511).
         IReadOnlyList<string> pending = PendingYouTubeUpload.RequestsFirst(
-            PendingYouTubeUpload.Find(
-                settings.ContextsDirectory,
-                settings.YouTube.EntryFileName,
-                settings.YouTube.EntryFileNameUploaded,
-                PendingYouTubeUpload.AttemptsDirectory(settings.Location?.DataDirectory)
-            ),
+            PendingYouTubeUpload
+                .Find(
+                    settings.ContextsDirectory,
+                    settings.YouTube.EntryFileName,
+                    settings.YouTube.EntryFileNameUploaded,
+                    PendingYouTubeUpload.AttemptsDirectory(settings.Location?.DataDirectory)
+                )
+                .Concat(
+                    PendingYouTubeUpload.FindClips(
+                        settings.ContextsDirectory,
+                        settings.YouTube.EntryFileName,
+                        settings.YouTube.EntryFileNameUploaded
+                    )
+                )
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList(),
             settings.YouTube.EntryFileName
         );
         waits.Retain(pending);

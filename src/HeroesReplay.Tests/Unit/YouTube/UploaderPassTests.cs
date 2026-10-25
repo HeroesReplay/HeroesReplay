@@ -125,6 +125,64 @@ public sealed class UploaderPassTests : IDisposable
         Assert.DoesNotContain(log.Lines, line => line.Contains("dry-run recording"));
     }
 
+    /// <summary>
+    /// #511: a clip whose first try had to wait is picked up by the next pass. Before, the pass
+    /// looked only at each context's own folder, so prod's Malthael pentakill clip (65893649)
+    /// was never sent.
+    /// </summary>
+    [Fact]
+    public async Task APass_PicksUpAClipThatWaits()
+    {
+        AppSettings settings = Settings(live: true);
+        string match = await StageAsync(settings, 65893649, "Tomb of the Spider Queen");
+        string context = Path.GetDirectoryName(match);
+        // The full match went up already; only its clip waits.
+        File.Move(
+            Path.Combine(context, "youtube-entry.json"),
+            Path.Combine(context, "youtube-entry-uploaded.json")
+        );
+        File.Delete(match);
+        string clipFolder = Path.Combine(context, "clips", "pentakill-Malthael-755");
+        Directory.CreateDirectory(clipFolder);
+        string clip = Path.Combine(clipFolder, "clip.mp4");
+        await File.WriteAllBytesAsync(clip, new byte[] { 0, 0, 0, 24, 102, 116, 121, 112 });
+        await File.WriteAllTextAsync(
+            Path.Combine(clipFolder, "youtube-entry.json"),
+            TestJson.Entry(
+                new YouTubeEntry
+                {
+                    Title = "Malthael - pentakill - Tomb of the Spider Queen - 65893649",
+                    ReplayId = 65893649,
+                    Map = "Tomb of the Spider Queen",
+                    Hero = "Malthael",
+                    DescriptionLines = new[] { "clip:65893649:pentakill:Malthael" },
+                    PrivacyStatus = "public",
+                    CategoryId = "20",
+                }
+            )
+        );
+        // The insert cap holds the send, so the pass never reaches YouTube.
+        PublicationLedgerStore.Save(
+            root,
+            new PublicationLedger
+            {
+                InsertsThisQuotaDay = settings.ReplayMedia.MaxInsertsPerQuotaDay,
+                QuotaDay = PublicationSchedule.QuotaDayStart(DateTimeOffset.UtcNow),
+            }
+        );
+
+        await uploader(settings).RunUploadPassAsync();
+
+        Assert.True(File.Exists(clip));
+        // The clip is the only recording left, and the pass counts it as waiting for the cap.
+        Assert.Contains(
+            log.Lines,
+            line => line.StartsWith("1 recording(s) wait", StringComparison.Ordinal)
+        );
+
+        YouTubeUploader uploader(AppSettings s) => Uploader(s);
+    }
+
     [Fact]
     public async Task APassWithAnUnreadableEntry_IsNotWork()
     {

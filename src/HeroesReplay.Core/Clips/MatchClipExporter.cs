@@ -16,6 +16,12 @@ namespace HeroesReplay.Core.Clips;
 
 public static class MatchClipExporter
 {
+    /// <summary>The folder of a context that holds its clips, one folder per clip.</summary>
+    public const string FolderName = "clips";
+
+    /// <summary>The cut file in each clip's folder, next to that clip's own entry.</summary>
+    public const string ClipFileName = "clip.mp4";
+
     /// <summary><c>clips.json</c>: indented, and camelCase as its anonymous rows were before #454.</summary>
     internal static readonly ClipsJsonContext Index = new(
         new JsonSerializerOptions
@@ -136,7 +142,7 @@ public static class MatchClipExporter
             logger?.LogInformation("{OwnedDuration}", ownedDuration);
         }
 
-        string clipRoot = Path.Combine(contextDirectory, "clips");
+        string clipRoot = Path.Combine(contextDirectory, FolderName);
         Directory.CreateDirectory(clipRoot);
         var written = new List<ClipIndexRow>();
         foreach (TeamKillClip clip in clips)
@@ -175,7 +181,7 @@ public static class MatchClipExporter
             string folderName = SafeName($"{clip.Kind}-{clip.Hero}-{clip.HudStartSecond}");
             string folder = Path.Combine(clipRoot, folderName);
             Directory.CreateDirectory(folder);
-            string output = Path.Combine(folder, "clip.mp4");
+            string output = Path.Combine(folder, ClipFileName);
             if (File.Exists(output) && new FileInfo(output).Length > 10_000)
             {
                 written.Add(Row(clip, start, duration, output));

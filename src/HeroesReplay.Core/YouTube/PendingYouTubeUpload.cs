@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using HeroesReplay.Core.Clips;
 using HeroesReplay.Core.MediaPolicy;
 using HeroesReplay.Core.YouTube.Outbox;
 
@@ -83,6 +84,56 @@ public static class PendingYouTubeUpload
             if (!string.IsNullOrWhiteSpace(newest))
             {
                 found.Add(newest);
+            }
+        }
+
+        found.Sort(
+            (left, right) =>
+                File.GetLastWriteTimeUtc(left).CompareTo(File.GetLastWriteTimeUtc(right))
+        );
+        return found;
+    }
+
+    /// <summary>
+    /// Clips that still wait for their <c>videos.insert</c>: a <c>clip.mp4</c> in a context's
+    /// <c>clips\&lt;kind&gt;-&lt;hero&gt;-&lt;start&gt;</c> folder, next to that clip's own entry,
+    /// which is not marked uploaded. The file watcher sends a clip once, when it is cut. A clip
+    /// that had to wait then was never tried again (#511): the parent's decision not written yet,
+    /// the insert cap, or a full publication window. So the upload pass adds these to
+    /// <see cref="Find"/>'s recordings. They stay out of <see cref="Find"/> itself, whose other
+    /// callers count and expire full-match recordings. Oldest first.
+    /// </summary>
+    public static IReadOnlyList<string> FindClips(
+        string contextsDirectory,
+        string entryFileName,
+        string uploadedFileName
+    )
+    {
+        var found = new List<string>();
+        if (
+            string.IsNullOrWhiteSpace(contextsDirectory)
+            || string.IsNullOrWhiteSpace(entryFileName)
+            || !Directory.Exists(contextsDirectory)
+        )
+        {
+            return found;
+        }
+
+        foreach (string context in Directory.GetDirectories(contextsDirectory))
+        {
+            string clips = Path.Combine(context, MatchClipExporter.FolderName);
+            if (!Directory.Exists(clips))
+            {
+                continue;
+            }
+
+            foreach (string clip in Directory.GetDirectories(clips))
+            {
+                string media = Path.Combine(clip, MatchClipExporter.ClipFileName);
+                if (File.Exists(media) && AwaitingUpload(clip, entryFileName, uploadedFileName))
+                {
+                    found.Add(media);
+                }
             }
         }
 
