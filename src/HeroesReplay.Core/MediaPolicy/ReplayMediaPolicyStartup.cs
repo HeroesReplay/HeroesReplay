@@ -239,6 +239,30 @@ public static class ReplayMediaPolicyStartup
             value => settings.MaxInsertsPerQuotaDay = value,
             errors
         );
+        ApplyCount(
+            section,
+            nameof(ReplayMediaPolicySettings.MaxWaitingRecordings),
+            value => settings.MaxWaitingRecordings = value,
+            errors
+        );
+        ApplyAge(
+            section,
+            nameof(ReplayMediaPolicySettings.FocusCandidateMaxAge),
+            value => settings.FocusCandidateMaxAge = value,
+            errors
+        );
+        ApplyCount(
+            section,
+            nameof(ReplayMediaPolicySettings.FocusRecordingLane),
+            value => settings.FocusRecordingLane = value,
+            errors
+        );
+        ApplyShare(
+            section,
+            nameof(ReplayMediaPolicySettings.FocusCooldownShare),
+            value => settings.FocusCooldownShare = value,
+            errors
+        );
     }
 
     private static void ApplyBool(
@@ -281,6 +305,34 @@ public static class ReplayMediaPolicyStartup
                 CultureInfo.InvariantCulture,
                 out int value
             )
+        )
+        {
+            errors.Add(Unreadable + ":" + key);
+            return;
+        }
+
+        assign(value);
+    }
+
+    private static void ApplyShare(
+        IConfigurationSection section,
+        string key,
+        Action<double> assign,
+        List<string> errors
+    )
+    {
+        if (!Present(section, key))
+        {
+            return;
+        }
+
+        if (
+            !double.TryParse(
+                section[key],
+                NumberStyles.Float,
+                CultureInfo.InvariantCulture,
+                out double value
+            ) || !double.IsFinite(value)
         )
         {
             errors.Add(Unreadable + ":" + key);
