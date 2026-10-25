@@ -12,6 +12,7 @@ using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Connectivity;
 using HeroesReplay.Core.GameClient;
 using HeroesReplay.Core.HeroesProfile;
+using HeroesReplay.Core.HeroesProfile.Interest;
 using HeroesReplay.Core.HeroFocus.Picking;
 using HeroesReplay.Core.HeroFocus.Targeted;
 using HeroesReplay.Core.MediaPolicy;
@@ -38,6 +39,7 @@ public class HeroesProfileProvider : IReplayProvider
     private readonly IHeroesProfileService heroesProfileService;
     private readonly IRequestQueue requestQueue;
     private readonly IHeroesProfileResume heroesProfileResume;
+    private readonly IReplayDetailLookup detailLookup;
     private readonly ReplayListBackoff listBackoff;
     private LoadedReplay staged;
     private int? heldBackId;
@@ -112,9 +114,11 @@ public class HeroesProfileProvider : IReplayProvider
         IHeroesProfileService heroesProfileService,
         CancellationTokenProvider provider,
         AppSettings settings,
-        IHeroesProfileResume heroesProfileResume = null
+        IHeroesProfileResume heroesProfileResume = null,
+        IReplayDetailLookup detailLookup = null
     )
     {
+        this.detailLookup = detailLookup;
         this.provider = provider ?? throw new ArgumentNullException(nameof(provider));
         this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -1106,13 +1110,20 @@ public class HeroesProfileProvider : IReplayProvider
             );
             if (found != null)
             {
+                int cursor = found.Id;
+                if (InterestEnabled)
+                {
+                    (found, cursor) = await PickByInterestAsync(candidates, installed, found)
+                        .ConfigureAwait(false);
+                }
+
                 logger.LogInformation(
                     "Replay {ReplayId} on {GameVersion} found. MinReplayId = {MinReplayId}",
                     found.Id,
                     found.GameVersion,
                     currentMin
                 );
-                MinReplayId = found.Id;
+                MinReplayId = cursor;
                 return found;
             }
 
@@ -1145,6 +1156,102 @@ public class HeroesProfileProvider : IReplayProvider
         );
         MinReplayId = fallback.Id;
         return fallback;
+    }
+
+    private bool InterestEnabled =>
+        detailLookup != null && settings.HeroesProfileApi?.Interest?.Enabled == true;
+
+    /// <summary>
+    /// The most interesting of the page's first current-patch candidates inside their media
+    /// window (#510), scored from their Heroes Profile score screen (<see cref="ReplayInterest"/>),
+    /// and the cursor past all of them: the ones passed over are not listed again. A candidate
+    /// whose detail does not come back is not scored; with none scored, <paramref name="first"/>
+    /// is taken as before and the cursor stays on it.
+    /// </summary>
+    private async Task<(HeroesProfileReplay Pick, int Cursor)> PickByInterestAsync(
+        IReadOnlyList<HeroesProfileReplay> candidates,
+        IReadOnlyList<string> installed,
+        HeroesProfileReplay first
+    )
+    {
+        ReplayInterestSettings interest = settings.HeroesProfileApi.Interest;
+        List<HeroesProfileReplay> pool = candidates
+            .Where(replay =>
+                ReplayClientRoute.Classify(replay.GameVersion, installed)
+                    == ReplayClientPatch.Current
+                && !IsPastMediaWindow(replay)
+            )
+            .OrderBy(replay => replay.Id)
+            .Take(Math.Max(1, interest.Candidates))
+            .ToList();
+        if (pool.Count == 0)
+        {
+            return (first, first.Id);
+        }
+
+        var scored = new List<(HeroesProfileReplay Replay, ReplayInterestScore Score)>();
+        foreach (HeroesProfileReplay candidate in pool)
+        {
+            ReplayDetail detail = await DetailAsync(candidate.Id, interest.DetailTimeout)
+                .ConfigureAwait(false);
+            if (detail != null)
+            {
+                scored.Add((candidate, ReplayInterest.Score(detail, candidate.Rank, interest)));
+            }
+        }
+
+        if (scored.Count == 0)
+        {
+            logger.LogWarning(
+                "No score screen came back for the {Count} candidates from replay {ReplayId}. Taking it as before.",
+                pool.Count,
+                pool[0].Id
+            );
+            return (pool[0], pool[0].Id);
+        }
+
+        (HeroesProfileReplay Replay, ReplayInterestScore Score) best = scored
+            .OrderByDescending(pair => pair.Score.Total)
+            .ThenBy(pair => pair.Replay.Id)
+            .First();
+        logger.LogInformation(
+            "Replay {ReplayId} is the most interesting of {Scored} scored candidates ({Candidates} listed): {Interest}. Passed over: {Others}.",
+            best.Replay.Id,
+            scored.Count,
+            pool.Count,
+            best.Score.ToString(),
+            string.Join(
+                ", ",
+                scored
+                    .Where(pair => pair.Replay.Id != best.Replay.Id)
+                    .Select(pair => $"{pair.Replay.Id} ({pair.Score.Total})")
+            )
+        );
+        return (best.Replay, pool.Max(replay => replay.Id));
+    }
+
+    /// <summary>One candidate's detail, given up after <paramref name="timeout"/> so the download never stalls on it.</summary>
+    private async Task<ReplayDetail> DetailAsync(int replayId, TimeSpan timeout)
+    {
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(provider.Token);
+        if (timeout > TimeSpan.Zero)
+        {
+            linked.CancelAfter(timeout);
+        }
+
+        try
+        {
+            return await detailLookup.GetDetailAsync(replayId, linked.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!provider.Token.IsCancellationRequested)
+        {
+            logger.LogWarning(
+                "The detail of replay {ReplayId} took longer than {Timeout}. It is not scored.",
+                replayId,
+                timeout
+            );
+            return null;
+        }
     }
 
     /// <summary>

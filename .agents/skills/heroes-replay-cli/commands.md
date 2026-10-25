@@ -68,6 +68,15 @@ Read every .StormReplay in a folder, one file at a time, with units, events and 
 - **Changes:** Prints each replay's match insights and the frequency tables; writes `--output` (`.md`) when given. Read-only for the replays.
 - **Exit:** 0 when at least one replay was read. 1 for a missing folder, an `--output` that is not `.md`, or no replays in it. 2 when no replay parsed.
 
+## `calculators interest`
+
+Read every .StormReplay in a folder, one file at a time, with events and statistics, and score each from its score screen the way the download role scores Heroes Profile candidates before a download (HeroesProfileApi:Interest): deathless carry, kill leader, long takedown streak, time on fire, team wipe, game length and league. Then how often each signal fires and how the totals spread. A replay is counted once by its id. Reads the heroes-data2 catalog under Location:DataDirectory. Read-only.
+
+- **Options:** `--directory` (`-d`, required), `--recursive`, `--output` (`-o`)
+- **Before:** A folder of replays (`--directory`, `--recursive` for subfolders) and the heroes-data2 catalog under `Location:DataDirectory`. The points and thresholds are `HeroesProfileApi:Interest`.
+- **Changes:** Prints each replay's interest score and reasons, how often each signal fires and how the totals spread; writes `--output` (`.md`) when given. Each replay id counts once. Read-only for the replays; no Heroes Profile call.
+- **Exit:** 0 when at least one replay was read. 1 for a missing folder, an `--output` that is not `.md`, or no replays in it. 2 when no replay parsed.
+
 ## `builds import`
 
 Check the icy-veins-builds skill's extract (build names, tags, per-tier marks) against the heroes-data2 catalog's talents under Location:DataDirectory and write the talent-build reference JSON. Prints every warning (a stale tier, a renamed talent, a hero with no guide). Refuses to write when a guide names no catalog hero, a build lacks seven tiers, or a mark is not y, s, or n. Reads nothing from the web.

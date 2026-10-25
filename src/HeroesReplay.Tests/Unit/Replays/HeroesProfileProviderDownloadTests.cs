@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Connectivity;
 using HeroesReplay.Core.HeroesProfile;
+using HeroesReplay.Core.HeroesProfile.Interest;
 using HeroesReplay.Core.HeroFocus;
 using HeroesReplay.Core.HeroFocus.Targeted;
 using HeroesReplay.Core.MediaPolicy;
@@ -187,6 +188,76 @@ public class HeroesProfileProviderDownloadTests
             Assert.True(await provider.DownloadNextAsync());
 
             Assert.Equal(65580002, Assert.Single(service.Downloaded));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task DownloadNextAsync_TakesTheMostInterestingCandidate_AndListsPastTheOthers()
+    {
+        // #510: three current-patch candidates; 65580002 has a deathless carry.
+        string root = NewRoot();
+        var service = new ListedDownloads(
+            newest: 65580010,
+            listPage: minId =>
+                minId switch
+                {
+                    < 65580003 => Builds(
+                        (65580001, Current),
+                        (65580002, Current),
+                        (65580003, Current)
+                    ),
+                    < 65580004 => Builds((65580004, Current)),
+                    _ => ReplayListing.Empty,
+                }
+        );
+        var details = new Details(
+            Game(65580001, 11),
+            Game(65580002, 20, new ReplayScoreLine(0, "Valla", 12, 0, 9, 21, 21, 3, 240)),
+            Game(65580003, 20)
+        );
+
+        try
+        {
+            HeroesProfileProvider provider = Standard(root, service, details: details);
+
+            Assert.True(await provider.DownloadNextAsync());
+            Assert.True(await provider.DownloadNextAsync());
+
+            // The second listing starts past every scored candidate, not just past the one taken.
+            Assert.Equal(new[] { 65580002, 65580004 }, service.Downloaded);
+            Assert.Equal(new[] { 65580001, 65580002, 65580003, 65580004 }, details.Asked);
+            Assert.Equal(new[] { 65580000, 65580003 }, service.Listed);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task DownloadNextAsync_WithNoScoreScreen_TakesTheLowestIdAsBefore()
+    {
+        string root = NewRoot();
+        var service = new ListedDownloads(
+            newest: 65580010,
+            listPage: minId =>
+                minId < 65580003
+                    ? Builds((65580001, Current), (65580002, Current), (65580003, Current))
+                    : ReplayListing.Empty
+        );
+
+        try
+        {
+            HeroesProfileProvider provider = Standard(root, service, details: new Details());
+
+            Assert.True(await provider.DownloadNextAsync());
+            Assert.True(await provider.DownloadNextAsync());
+
+            Assert.Equal(new[] { 65580001, 65580002 }, service.Downloaded);
         }
         finally
         {
@@ -639,7 +710,8 @@ public class HeroesProfileProviderDownloadTests
         string root,
         IHeroesProfileService service,
         ILogger<HeroesProfileProvider> logger = null,
-        bool focus = false
+        bool focus = false,
+        IReplayDetailLookup details = null
     )
     {
         HeroesProfileProvider provider = Provider(
@@ -649,7 +721,8 @@ public class HeroesProfileProviderDownloadTests
             CancellationToken.None,
             enableRequests: false,
             logger: logger,
-            focus: focus
+            focus: focus,
+            details: details
         );
         provider.UseInstalledVersions(() => new[] { Previous, Current });
         return provider;
@@ -714,7 +787,8 @@ public class HeroesProfileProviderDownloadTests
         bool enableRequests = true,
         TimeSpan? maxReplayAge = null,
         ILogger<HeroesProfileProvider> logger = null,
-        bool focus = false
+        bool focus = false,
+        IReplayDetailLookup details = null
     )
     {
         var settings = new AppSettings
@@ -729,6 +803,7 @@ public class HeroesProfileProviderDownloadTests
                 GameTypes = new[] { "Storm League" },
                 StandardMaxReplayAge = maxReplayAge ?? TimeSpan.FromHours(12),
                 CachedReplayLimit = Limit,
+                Interest = new ReplayInterestSettings { Enabled = details != null, Candidates = 3 },
             },
             ReplayMedia = new ReplayMediaPolicySettings
             {
@@ -754,8 +829,49 @@ public class HeroesProfileProviderDownloadTests
             service,
             new CancellationTokenProvider(token),
             settings,
-            resume
+            resume,
+            details
         );
+    }
+
+    /// <summary>Each candidate's score screen by id; an id it does not know has none.</summary>
+    private sealed class Details : IReplayDetailLookup
+    {
+        private readonly Dictionary<int, ReplayDetail> details;
+
+        public Details(params ReplayDetail[] known)
+        {
+            details = new Dictionary<int, ReplayDetail>();
+            foreach (ReplayDetail detail in known)
+            {
+                details[detail.ReplayId] = detail;
+            }
+        }
+
+        public List<int> Asked { get; } = new();
+
+        public Task<ReplayDetail> GetDetailAsync(int replayId, CancellationToken cancellationToken)
+        {
+            Asked.Add(replayId);
+            return Task.FromResult(details.GetValueOrDefault(replayId));
+        }
+    }
+
+    /// <summary>Ten players with one plain line each, and <paramref name="star"/> as player 0.</summary>
+    private static ReplayDetail Game(int replayId, int minutes, ReplayScoreLine star = null)
+    {
+        var players = new List<ReplayScoreLine>
+        {
+            star ?? new ReplayScoreLine(0, "Hero0", 4, 4, 8, 12, 6, 2, 0),
+        };
+        for (int index = 1; index < 10; index++)
+        {
+            players.Add(
+                new ReplayScoreLine(index < 5 ? 0 : 1, "Hero" + index, 4, 4, 8, 12, 6, 2, 0)
+            );
+        }
+
+        return new ReplayDetail(replayId, minutes * 60, players);
     }
 
     private sealed class OneRequest : IRequestQueue

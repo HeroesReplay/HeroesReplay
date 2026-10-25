@@ -13,5 +13,6 @@ public class CalculatorsCommand : Command
         Subcommands.Add(new UnitsCommand());
         Subcommands.Add(new CompositionsCommand());
         Subcommands.Add(new InsightsCommand());
+        Subcommands.Add(new InterestCommand());
     }
 }
