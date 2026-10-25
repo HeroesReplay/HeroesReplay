@@ -66,7 +66,7 @@ public sealed class MatchInsightsRecorder : IMatchInsightsRecorder
         }
 
         logger.LogInformation(
-            "Match insights: solo laners {SoloLaners}, standouts {Standouts}, MVP {Mvp}, core race {CoreRace}, comeback {Comeback}, guide builds {Builds}, most followed {Followed}.",
+            "Match insights: solo laners {SoloLaners}, standouts {Standouts}, MVP {Mvp}, core race {CoreRace}, comeback {Comeback}, guide builds {Builds}, most followed {Followed}, triple kills {Bursts}, objective {Objective}, awards {Awards}.",
             string.Join(
                 ", ",
                 insights.Lanes.Teams.Select(team =>
@@ -78,7 +78,24 @@ public sealed class MatchInsightsRecorder : IMatchInsightsRecorder
             insights.Finish.CoreRace,
             insights.Comeback.Comeback,
             insights.Builds.Players.Count,
-            insights.Focus.Top?.Hero ?? "none"
+            insights.Focus.Top?.Hero ?? "none",
+            insights.Bursts.Players.Count == 0
+                ? "none"
+                : string.Join(
+                    ", ",
+                    insights.Bursts.Players.Select(player => $"{player.Hero} {player.Bursts.Count}")
+                ),
+            insights.Objectives.Leader == null
+                ? "none"
+                : $"{insights.Objectives.Leader.Hero} {insights.Objectives.Leader.Share:P0} of {insights.Objectives.Label}{(insights.Objectives.Standout ? " (standout)" : string.Empty)}",
+            insights.Awards.Awards.Count == 0
+                ? "none"
+                : string.Join(
+                    ", ",
+                    insights.Awards.Awards.Select(award =>
+                        $"{award.Kind} {award.Hero} {award.Value}"
+                    )
+                )
         );
 
         if (!string.IsNullOrWhiteSpace(directory))

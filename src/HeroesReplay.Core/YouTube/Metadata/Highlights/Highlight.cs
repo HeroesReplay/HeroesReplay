@@ -29,6 +29,18 @@ public enum HighlightKind
 
     /// <summary>The hero the spectator's camera followed most.</summary>
     MostFollowed,
+
+    /// <summary>
+    /// One hero's repeated triple kills (#512): at least <see cref="HighlightSettings.TripleKillMinBursts"/>
+    /// bursts in the game. A single triple kill is clipped (#511) but never titled.
+    /// </summary>
+    TripleKill,
+
+    /// <summary>The map objective's standout: a large share of it, a clear lead and the game's award (#512).</summary>
+    ObjectiveStandout,
+
+    /// <summary>A game award with a count past its threshold: clutch heals, vengeances, escapes (#512).</summary>
+    Award,
 }
 
 /// <summary>

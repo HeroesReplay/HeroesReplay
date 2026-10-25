@@ -1,9 +1,13 @@
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using HeroesReplay.Core.Analysis.Insights.Awards;
 using HeroesReplay.Core.Analysis.Insights.Builds;
+using HeroesReplay.Core.Analysis.Insights.Bursts;
 using HeroesReplay.Core.Analysis.Insights.Camps;
 using HeroesReplay.Core.Analysis.Insights.Lanes;
+using HeroesReplay.Core.Analysis.Insights.Objectives;
 using HeroesReplay.Core.Analysis.Insights.Players;
 using HeroesReplay.Core.Analysis.Insights.Snapshot;
 using HeroesReplay.Core.Builds.Import;
@@ -21,8 +25,9 @@ public static class HighlightLines
     public const int MaxHighlights = 8;
 
     /// <summary>
-    /// <c>Highlights:</c> with the pentakills first (as before), then the standouts, the MVP, a core
-    /// race and a comeback. Null when there is none.
+    /// <c>Highlights:</c> with the pentakills first (as before), then the standouts, the MVP, triple
+    /// kills, the objective standout and awards (#512), a core race and a comeback. Null when there
+    /// is none.
     /// </summary>
     public static string Highlights(
         HighlightContext context,
@@ -60,6 +65,33 @@ public static class HighlightLines
         if (mvp?.Hero != null && !mvpNamed)
         {
             parts.Add($"MVP {mvp.Hero} {mvp.Kda}");
+        }
+
+        // #512: triple kills (a hero with a pentakill already has it), the objective standout, awards.
+        foreach (PlayerBursts player in context.Insights.Bursts.Players)
+        {
+            bool pentakill = (pentakills ?? new List<TeamKillClip>()).Any(clip =>
+                string.Equals(clip.Hero, player.Hero, StringComparison.OrdinalIgnoreCase)
+            );
+            if (player.Hero != null && !pentakill)
+            {
+                parts.Add(player.Hero + " " + FeatHighlights.TripleKills(player.Bursts.Count));
+            }
+        }
+
+        ObjectiveInsights objective = context.Insights.Objectives;
+        if (objective.Standout && objective.Leader?.Hero != null && objective.Label != null)
+        {
+            parts.Add(
+                $"{objective.Leader.Hero} {FeatHighlights.Share(objective.Leader.Share)} of {objective.Label}"
+            );
+        }
+
+        foreach (
+            PlayerAward award in context.Insights.Awards.Awards.Where(award => award.Hero != null)
+        )
+        {
+            parts.Add(award.Hero + " " + FeatHighlights.Count(award));
         }
 
         if (context.Insights.Finish.CoreRace)

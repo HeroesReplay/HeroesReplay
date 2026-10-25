@@ -1,12 +1,15 @@
 using System;
 using System.Collections.Generic;
 using Heroes.ReplayParser;
+using HeroesReplay.Core.Analysis.Insights.Awards;
 using HeroesReplay.Core.Analysis.Insights.Builds;
+using HeroesReplay.Core.Analysis.Insights.Bursts;
 using HeroesReplay.Core.Analysis.Insights.Camps;
 using HeroesReplay.Core.Analysis.Insights.Comeback;
 using HeroesReplay.Core.Analysis.Insights.Finish;
 using HeroesReplay.Core.Analysis.Insights.Focused;
 using HeroesReplay.Core.Analysis.Insights.Lanes;
+using HeroesReplay.Core.Analysis.Insights.Objectives;
 using HeroesReplay.Core.Analysis.Insights.Players;
 using HeroesReplay.Core.Analysis.Insights.Snapshot;
 using HeroesReplay.Core.Analysis.Insights.Structures;
@@ -45,6 +48,9 @@ public sealed class MatchInsightsReader : IMatchInsightsReader
     private readonly IInsightAnalyzer<ComebackInsights> comeback;
     private readonly IInsightAnalyzer<BuildInsights> builds;
     private readonly FocusAnalyzer focusAnalyzer;
+    private readonly IInsightAnalyzer<BurstInsights> bursts;
+    private readonly IInsightAnalyzer<ObjectiveInsights> objectives;
+    private readonly IInsightAnalyzer<AwardInsights> awards;
 
     public MatchInsightsReader(
         InsightsSettings settings,
@@ -55,10 +61,16 @@ public sealed class MatchInsightsReader : IMatchInsightsReader
         IInsightAnalyzer<FinishInsights> finish,
         IInsightAnalyzer<ComebackInsights> comeback,
         IInsightAnalyzer<BuildInsights> builds,
-        FocusAnalyzer focus
+        FocusAnalyzer focus,
+        IInsightAnalyzer<BurstInsights> bursts,
+        IInsightAnalyzer<ObjectiveInsights> objectives,
+        IInsightAnalyzer<AwardInsights> awards
     )
     {
         this.settings = settings ?? new InsightsSettings();
+        this.bursts = bursts ?? throw new ArgumentNullException(nameof(bursts));
+        this.objectives = objectives ?? throw new ArgumentNullException(nameof(objectives));
+        this.awards = awards ?? throw new ArgumentNullException(nameof(awards));
         this.players = players ?? throw new ArgumentNullException(nameof(players));
         this.lanes = lanes ?? throw new ArgumentNullException(nameof(lanes));
         this.camps = camps ?? throw new ArgumentNullException(nameof(camps));
@@ -90,7 +102,10 @@ public sealed class MatchInsightsReader : IMatchInsightsReader
             new FinishAnalyzer(settings.Finish),
             new ComebackAnalyzer(settings.Comeback),
             new BuildAnalyzer(guides, matcher),
-            new FocusAnalyzer()
+            new FocusAnalyzer(),
+            new BurstAnalyzer(settings.Bursts),
+            new ObjectiveAnalyzer(settings.Objectives),
+            new AwardAnalyzer(settings.Awards)
         );
     }
 
@@ -111,6 +126,9 @@ public sealed class MatchInsightsReader : IMatchInsightsReader
             Comeback = comeback.Analyze(snapshot),
             Builds = builds.Analyze(snapshot),
             Focus = focusAnalyzer.Analyze(snapshot, focus),
+            Bursts = bursts.Analyze(snapshot),
+            Objectives = objectives.Analyze(snapshot),
+            Awards = awards.Analyze(snapshot),
         };
     }
 }

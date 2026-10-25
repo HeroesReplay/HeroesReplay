@@ -384,7 +384,7 @@ With `YouTube:Titles:Highlights:Enabled` (on in dev and prod, off in the base fi
 - **Named-player requests.** A request that named a player keeps its `X focus` lead, and takes only a highlight about no one hero.
 - **Featured hero.** A highlight about the featured new hero replaces its `Ft.` part.
 
-**What can lead.** The first kind in `Order` that the match has wins. The default order is `Pentakill`, `CoreRace`, `Comeback`, `DeathlessCarry`, `KillLeader`, `SoloLane`, `Mvp`, `MostFollowed`. A name in `Order` that is no kind is ignored, so an older config that still lists the removed `CampDrought` starts as before. Every kind is a positive call-out about a hero or the match; a team is never called out for what it did not do, so a team's camp count stays on the neutral `Camps:` line of the description:
+**What can lead.** The first kind in `Order` that the match has wins. The default order is `Pentakill`, `TripleKill`, `CoreRace`, `Comeback`, `Award`, `DeathlessCarry`, `KillLeader`, `ObjectiveStandout`, `SoloLane`, `Mvp`, `MostFollowed`: rarest first, with the objective standout after the kill standouts so it leads only when no kill feat does (#512). A name in `Order` that is no kind is ignored, so an older config that still lists the removed `CampDrought` starts as before. Every kind is a positive call-out about a hero or the match; a team is never called out for what it did not do, so a team's camp count stays on the neutral `Camps:` line of the description:
 
 | Kind | Title | When | Measured on 545 local games |
 | --- | --- | --- | --- |
@@ -396,6 +396,11 @@ With `YouTube:Titles:Highlights:Enabled` (on in dev and prod, off in the base fi
 | `SoloLane` | `Solo lane Chen vs Thrall` | Each team's one side-lane soaker from gates open to the first level 10, at High confidence only: the other team's soaker was in the same lane | 32% of teams |
 | `Mvp` | `MVP Orphea 7/1/5` | The game's MVP award | 100% |
 | `MostFollowed` | `Valla 3/4/10` | The hero the focus timeline followed most | |
+| `TripleKill` | `Kael'thas 2 triple kills` | One hero's triple kills (3 hero killing blows within 3 s, the clips' rule, #511), at least `TripleKillMinBursts` (2) of them. One triple kill is clipped but never titled | 2 of 1,975 SL games |
+| `ObjectiveStandout` | `Valla 52% of Immortal damage` | The map objective's leader (`Insights:Objectives`): at least 40% of every player's total, at least twice the next player, and the game's own objective award. Battlefield of Eternity, Braxis Holdout, Cursed Hollow, Dragon Shire, Haunted Mines, Infernal Shrines, Sky Temple, Tomb of the Spider Queen and Towers of Doom; Alterac Pass, Garden of Terror and Volskaya Foundry have no usable value | 6.0% of SL games |
+| `Award` | `Falstad hat trick`, `Rehgar 9 clutch heals` | The game's Hat Trick, or Clutch Healer with 8+ clutch heals, Avenger with 5+ vengeances, Escape Artist with 6+ escapes (`Insights:Awards`). The award alone is common: the game gives most players one | 2.2% of SL games |
+
+The last three rows (#512) were measured on 1,975 Storm League games from 2026-10-25 with `calculators insights`.
 
 **Builds in a title.** A player highlight names the hero's closest guide build only when all of these hold:
 
@@ -405,14 +410,14 @@ With `YouTube:Titles:Highlights:Enabled` (on in dev and prod, off in the base fi
 
 **Description lines.**
 
-- **`Highlights:`** keeps the pentakills first, then adds the standouts (`Li-Ming 12/0/9 with no deaths`), the MVP (merged into a standout of the same player), the core race, and the comeback.
+- **`Highlights:`** keeps the pentakills first, then adds the standouts (`Li-Ming 12/0/9 with no deaths`), the MVP (merged into a standout of the same player), each hero's triple kills (`Valla triple kill`, also a single one; not for a hero with a pentakill), the objective standout, the awards, the core race, and the comeback.
 - **`Solo lanes: Chen (Blue) vs Thrall (Red)`** names High confidence only.
 - **`Camps: Blue 9 (4 on Red's side), Red 3 (0 on Blue's side)`** counts each team's captures and those on the other team's side.
 - **The talent-build block** follows the roster lines. Its heading credits Icy Veins and links its hero guides, and each line names one player's closest guide build and links that guide. A player is listed when their talents score at least `DescriptionBuildMinScore` (0.70): about 57% of players in the corpus. Example: `Li-Ming (Blue): Teleport Build, 6 of 7 talents as recommended - https://www.icy-veins.com/heroes/li-ming-build-guide`.
 
 None of these lines starts with a label the library pass reads.
 
-**Tags.** The highlight's tag (`Deathless`, `Core race`, `Comeback`, `Solo lane`, `MVP`, `Pentakill`) and the build with the hero (`Teleport Li-Ming`) come after the composition labels.
+**Tags.** The highlight's tag (`Deathless`, `Core race`, `Comeback`, `Solo lane`, `MVP`, `Pentakill`, `Triple kill`, `Objective`, `Hat trick`, `Clutch healer`, `Avenger`, `Escape artist`) and the build with the hero (`Teleport Li-Ming`) come after the composition labels.
 
 **The build reference.**
 
@@ -426,7 +431,7 @@ None of these lines starts with a label the library pass reads.
 - `heroesreplay youtube preview --replay <file> [--insights]` prints the title, description and tags a replay would get, offline.
 - `heroesreplay calculators insights --directory <folder> --recursive --output report.md` measures how often each insight fires on a corpus. The thresholds are in `Insights`.
 
-The description starts with `Twitch: https://twitch.tv/saltysadism`, then the Heroes Profile attribution when a statistics hook was used, `Full match.` when the recording completed, the replay id, the Heroes Profile match link, date, build, map, mode, rank, the featured hero when one was named, the draft note with its composition labels, `Featuring:` when a new hero is in the title, the `Stats:` line of a hook, each pentakill as a highlight (`Highlights: Valla pentakill (team wipe)` when it wiped the team), and the requestor when it was a paid upload. The Blue and Red roster lines name each player without the BattleTag number, because YouTube turns `#1234` into a hashtag. Average MMR is not written. The winner is not included. Category id is `20`. Tags come from the map, mode, rank, hero, those events, and each composition label. The entry records `TemplateVersion` 8 (7 had no match highlights, 6 no statistics hook).
+The description starts with `Twitch: https://twitch.tv/saltysadism`, then the Heroes Profile attribution when a statistics hook was used, `Full match.` when the recording completed, the replay id, the Heroes Profile match link, date, build, map, mode, rank, the featured hero when one was named, the draft note with its composition labels, `Featuring:` when a new hero is in the title, the `Stats:` line of a hook, each pentakill as a highlight (`Highlights: Valla pentakill (team wipe)` when it wiped the team), and the requestor when it was a paid upload. The Blue and Red roster lines name each player without the BattleTag number, because YouTube turns `#1234` into a hashtag. Average MMR is not written. The winner is not included. Category id is `20`. Tags come from the map, mode, rank, hero, those events, and each composition label. The entry records `TemplateVersion` 10 (9 had no triple kill, objective or award highlights, 8 no focus-hero titles, 7 no match highlights, 6 no statistics hook).
 
 Every `videos.insert`, full match or clip, is built by `UploadBody` with the `snippet,status` parts:
 
