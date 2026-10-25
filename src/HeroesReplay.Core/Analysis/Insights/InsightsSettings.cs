@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 
 namespace HeroesReplay.Core.Analysis.Insights;
 
@@ -25,6 +26,12 @@ public class InsightsSettings
     public ComebackInsightSettings Comeback { get; set; } = new();
 
     public BuildInsightSettings Builds { get; set; } = new();
+
+    public BurstInsightSettings Bursts { get; set; } = new();
+
+    public ObjectiveInsightSettings Objectives { get; set; } = new();
+
+    public AwardInsightSettings Awards { get; set; } = new();
 }
 
 /// <summary>
@@ -130,4 +137,110 @@ public class BuildInsightSettings
     public double SituationalWeight { get; set; } = 0.5;
 
     public double AmbiguityMargin { get; set; } = 0.10;
+}
+
+/// <summary>A kill burst (#512): one player's hero killing blows, the clips' triple kill (#511).</summary>
+public class BurstInsightSettings
+{
+    public int MinimumKills { get; set; } = KillBursts.MinimumKills;
+
+    /// <summary>Every blow of a burst falls within this many seconds of its first.</summary>
+    public int SpanSeconds { get; set; } = KillBursts.SpanSeconds;
+}
+
+/// <summary>
+/// The map objective's leader (#512). Each map names its score-screen value, the game's award for
+/// it, and the title wording. Maps with no value in the Storm League corpus are left out: Alterac
+/// Pass (its cage interrupts are a few per game), Garden of Terror and Volskaya Foundry (their
+/// values are always zero).
+/// </summary>
+public class ObjectiveInsightSettings
+{
+    public static readonly ObjectiveMap[] DefaultMaps =
+    {
+        new(
+            "Battlefield of Eternity",
+            "DamageDoneToImmortal",
+            "MostImmortalDamage",
+            "Immortal damage"
+        ),
+        new("Braxis Holdout", "DamageDoneToZerg", "MostDamageDoneToZerg", "Zerg damage"),
+        new("Cursed Hollow", "CurseDamageDone", "MostCurseDamageDone", "curse damage"),
+        new(
+            "Dragon Shire",
+            "DragonShrinesCaptured",
+            "MostDragonShrinesCaptured",
+            "shrine captures"
+        ),
+        new("Haunted Mines", "MinesSkullsCollected", "MostSkullsCollected", "skulls"),
+        new(
+            "Infernal Shrines",
+            "DamageDoneToShrineMinions",
+            "MostDamageToMinions",
+            "shrine minion damage"
+        ),
+        new("Sky Temple", "TimeInTemple", "MostTimeInTemple", "temple time"),
+        new("Tomb of the Spider Queen", "GemsTurnedIn", "MostGemsTurnedIn", "gems"),
+        new("Towers of Doom", "AltarDamageDone", "MostAltarDamage", "altar damage"),
+    };
+
+    /// <summary>Null means <see cref="DefaultMaps"/>.</summary>
+    public ObjectiveMap[] Maps { get; set; }
+
+    /// <summary>A standout has at least this share of every player's total.</summary>
+    public double MinShare { get; set; } = 0.4;
+
+    /// <summary>And at least this many times the next player's value.</summary>
+    public double MinLead { get; set; } = 2;
+
+    /// <summary>And the game's own objective award.</summary>
+    public bool RequireAward { get; set; } = true;
+
+    public ObjectiveMap For(string map) =>
+        string.IsNullOrWhiteSpace(map)
+            ? null
+            : (Maps ?? DefaultMaps).FirstOrDefault(entry =>
+                string.Equals(entry.Map, map, StringComparison.OrdinalIgnoreCase)
+            );
+}
+
+/// <summary>A map's objective value: <c>Player.MiscellaneousScoreResultEventDictionary</c> key, award and title wording.</summary>
+public class ObjectiveMap
+{
+    public ObjectiveMap() { }
+
+    public ObjectiveMap(string map, string value, string award, string label)
+    {
+        Map = map;
+        Value = value;
+        Award = award;
+        Label = label;
+    }
+
+    public string Map { get; set; }
+
+    public string Value { get; set; }
+
+    public string Award { get; set; }
+
+    public string Label { get; set; }
+}
+
+/// <summary>
+/// An award stands out (#512) when the player has it and its count reaches the threshold; zero
+/// turns that kind off. The game gives most players one award, so the award alone is common.
+/// </summary>
+public class AwardInsightSettings
+{
+    /// <summary>The game's Hat Trick on its own: once in 1,975 Storm League games.</summary>
+    public bool HatTrick { get; set; } = true;
+
+    /// <summary>Clutch Healer with at least this many clutch heals: 32 of 1,975 Storm League games.</summary>
+    public int ClutchHeals { get; set; } = 8;
+
+    /// <summary>Avenger (most vengeances) with at least this many vengeances: 3 of 1,975.</summary>
+    public int Vengeances { get; set; } = 5;
+
+    /// <summary>Escape Artist (most escapes) with at least this many escapes: 7 of 1,975.</summary>
+    public int Escapes { get; set; } = 6;
 }

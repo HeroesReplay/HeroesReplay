@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Heroes.ReplayParser;
 using Heroes.ReplayParser.MPQFiles;
+using HeroesReplay.Core.Clips;
 using HeroesReplay.Core.HeroesData;
 using HeroesReplay.Core.Shared;
 
@@ -48,6 +49,7 @@ public static class ReplaySnapshotReader
         return new ReplaySnapshot
         {
             Aram = replay.GameMode == GameMode.ARAM,
+            Map = EnglishMapNames.Prefer(null, replay.Map, replay.MapAlternativeName),
             GatesOpen =
                 events.FirstOrDefault(stat => stat.Name == GatesOpen)?.Time ?? TimeSpan.Zero,
             End = fallen?.TimeSpanDied ?? replay.ReplayLength,
@@ -87,6 +89,7 @@ public static class ReplaySnapshotReader
                 ))
                 .ToArray(),
             TeamLevels = TeamLevels(replay),
+            KillingBlows = KillingBlows(replay, catalog),
             Positions = new HeroPositions(players, settings.MaxPositionAge),
         };
     }
@@ -130,9 +133,34 @@ public static class ReplaySnapshotReader
                         Experience = score.ExperienceContribution,
                         HighestKillStreak = score.HighestKillStreak,
                         Mvp = score.MatchAwards?.Contains(MatchAwardType.MVP) == true,
+                        Multikill = score.Multikill,
+                        ClutchHeals = score.ClutchHealsPerformed,
+                        Vengeances = score.VengeancesPerformed,
+                        Escapes = score.EscapesPerformed,
+                        TeamfightEscapes = score.TeamfightEscapesPerformed,
+                        OutnumberedDeaths = score.OutnumberedDeaths,
+                        Protection = score.ProtectionGivenToAllies,
+                        CrowdControl = score.TimeCCdEnemyHeroes ?? TimeSpan.Zero,
+                        OnFire = score.OnFireTimeonFire ?? TimeSpan.Zero,
+                        Awards = (score.MatchAwards ?? new List<MatchAwardType>())
+                            .Select(award => award.ToString())
+                            .ToArray(),
+                        MapValues =
+                            player.MiscellaneousScoreResultEventDictionary
+                            ?? new Dictionary<string, int>(),
                     },
         };
     }
+
+    /// <summary>Each player's hero killing blows, by the clips' <c>TeamKillDeaths</c> rule.</summary>
+    private static KillingBlow[] KillingBlows(Replay replay, IReadOnlyList<Hero> catalog) =>
+        TeamKillDeaths
+            .FromReplay(replay, catalog)
+            .Where(blow => blow.KillerKey >= 0)
+            .OrderBy(blow => blow.Second)
+            .ThenBy(blow => blow.KillerKey)
+            .Select(blow => new KillingBlow(blow.Second, blow.KillerKey))
+            .ToArray();
 
     private static Dictionary<int, Unit> Cores(Replay replay, InsightsSettings settings)
     {

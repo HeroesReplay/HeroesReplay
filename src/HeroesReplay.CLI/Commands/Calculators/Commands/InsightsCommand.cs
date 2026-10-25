@@ -9,8 +9,11 @@ using System.Threading;
 using System.Threading.Tasks;
 using Heroes.ReplayParser;
 using HeroesReplay.Core.Analysis.Insights;
+using HeroesReplay.Core.Analysis.Insights.Awards;
 using HeroesReplay.Core.Analysis.Insights.Builds;
+using HeroesReplay.Core.Analysis.Insights.Bursts;
 using HeroesReplay.Core.Analysis.Insights.Lanes;
+using HeroesReplay.Core.Analysis.Insights.Objectives;
 using HeroesReplay.Core.Analysis.Insights.Players;
 using HeroesReplay.Core.Builds.Reference;
 using HeroesReplay.Core.Configuration;
@@ -30,7 +33,7 @@ public class InsightsCommand : Command
     public InsightsCommand()
         : base(
             "insights",
-            "Read every .StormReplay in a folder, one file at a time, with units, events and statistics, and print each replay's match insights: each team's solo laner and its confidence, positive standouts, the MVP, camps (and how many on the enemy side), forts and keeps lost, a core race, a comeback, and each player's closest guide build. Then how often each appears per game, per team or per player, to tune the Insights thresholds. Reads the heroes-data2 catalog under Location:DataDirectory and the shipped talent-build reference. Read-only."
+            "Read every .StormReplay in a folder, one file at a time, with units, events and statistics, and print each replay's match insights: each team's solo laner and its confidence, positive standouts, the MVP, camps (and how many on the enemy side), forts and keeps lost, a core race, a comeback, each player's closest guide build, each hero's kill bursts (3 killing blows within 3 s), the map objective's leader with its share and award, and the standout awards (clutch heals, vengeances, escapes). Then how often each appears per game, per team or per player, to tune the Insights thresholds. Reads the heroes-data2 catalog under Location:DataDirectory and the shipped talent-build reference. Read-only."
         )
     {
         var directoryOption = new Option<string>("--directory")
@@ -288,6 +291,75 @@ public class InsightsCommand : Command
                 parts.Add($"most followed {insights.Focus.Top.Hero}");
             }
 
+            int mostBursts = insights
+                .Bursts.Players.Select(player => player.Bursts.Count)
+                .DefaultIfEmpty()
+                .Max();
+            for (int bursts = 1; bursts <= Math.Min(mostBursts, 3); bursts++)
+            {
+                Count(games, "bursts by one hero >= " + bursts);
+            }
+
+            foreach (PlayerBursts player in insights.Bursts.Players)
+            {
+                parts.Add(
+                    $"{player.Hero} bursts "
+                        + string.Join(
+                            ", ",
+                            player.Bursts.Select(burst => $"{Clock(burst.Second)} x{burst.Kills}")
+                        )
+                );
+            }
+
+            ObjectiveLeader leader = insights.Objectives.Leader;
+            if (leader != null)
+            {
+                Count(games, "objective leader");
+                if (leader.Award)
+                {
+                    Count(games, "objective leader has the award");
+                }
+
+                foreach (double share in new[] { 0.3, 0.4, 0.5 })
+                {
+                    if (leader.Share >= share)
+                    {
+                        Count(
+                            games,
+                            string.Create(
+                                CultureInfo.InvariantCulture,
+                                $"objective share >= {share:F1}"
+                            )
+                        );
+                    }
+                }
+
+                if (insights.Objectives.Standout)
+                {
+                    Count(games, "objective standout");
+                    Count(games, "objective standout " + insights.Objectives.Label);
+                }
+
+                parts.Add(
+                    string.Create(
+                        CultureInfo.InvariantCulture,
+                        $"objective {leader.Hero} {leader.Share:P0} of {insights.Objectives.Label} (next {leader.Next}, award {leader.Award}){(insights.Objectives.Standout ? " standout" : string.Empty)}"
+                    )
+                );
+            }
+
+            foreach (
+                AwardKind kind in insights.Awards.Awards.Select(award => award.Kind).Distinct()
+            )
+            {
+                Count(games, "award " + kind);
+            }
+
+            foreach (PlayerAward award in insights.Awards.Awards)
+            {
+                parts.Add($"{award.Kind} {award.Hero} {award.Value}");
+            }
+
             string row = string.Join(" | ", parts);
             rows.Add(row);
             return row;
@@ -360,6 +432,9 @@ public class InsightsCommand : Command
             : "off-guide (< 0.50)";
 
         private static string Team(int team) => team == 0 ? "Blue" : "Red";
+
+        private static string Clock(int second) =>
+            string.Create(CultureInfo.InvariantCulture, $"{second / 60}:{second % 60:D2}");
 
         private static void Count(Dictionary<string, int> counts, string key) =>
             counts[key] = counts.GetValueOrDefault(key) + 1;

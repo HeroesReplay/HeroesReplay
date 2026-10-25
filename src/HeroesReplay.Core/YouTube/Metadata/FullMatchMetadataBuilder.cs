@@ -110,7 +110,7 @@ public sealed class FullMatchMetadata
 
 public static class FullMatchMetadataBuilder
 {
-    public const string TemplateVersion = "9";
+    public const string TemplateVersion = "10";
     public const int TitleMaxCharacters = 100;
     public const int DescriptionMaxCharacters = 5000;
     public const int TagMaxCharacters = 30;

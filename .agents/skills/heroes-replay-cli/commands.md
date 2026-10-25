@@ -61,7 +61,7 @@ Count team-composition labels (split push, siege, dive, poke, and the rest) and 
 
 ## `calculators insights`
 
-Read every .StormReplay in a folder, one file at a time, with units, events and statistics, and print each replay's match insights: each team's solo laner and its confidence, positive standouts, the MVP, camps (and how many on the enemy side), forts and keeps lost, a core race, a comeback, and each player's closest guide build. Then how often each appears per game, per team or per player, to tune the Insights thresholds. Reads the heroes-data2 catalog under Location:DataDirectory and the shipped talent-build reference. Read-only.
+Read every .StormReplay in a folder, one file at a time, with units, events and statistics, and print each replay's match insights: each team's solo laner and its confidence, positive standouts, the MVP, camps (and how many on the enemy side), forts and keeps lost, a core race, a comeback, each player's closest guide build, each hero's kill bursts (3 killing blows within 3 s), the map objective's leader with its share and award, and the standout awards (clutch heals, vengeances, escapes). Then how often each appears per game, per team or per player, to tune the Insights thresholds. Reads the heroes-data2 catalog under Location:DataDirectory and the shipped talent-build reference. Read-only.
 
 - **Options:** `--directory` (`-d`, required), `--recursive`, `--output` (`-o`)
 - **Before:** A folder of replays (`--directory`, `--recursive` for subfolders), the heroes-data2 catalog under `Location:DataDirectory`, and the shipped talent-build reference.

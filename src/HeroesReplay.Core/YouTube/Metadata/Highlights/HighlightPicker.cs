@@ -17,7 +17,7 @@ public sealed class HighlightPicker
         this.sources = sources?.ToArray() ?? throw new ArgumentNullException(nameof(sources));
     }
 
-    /// <summary>The player, match and lane sources.</summary>
+    /// <summary>The player, match, lane and feat sources.</summary>
     public static HighlightPicker Default { get; } =
         new(
             new IHighlightSource[]
@@ -25,6 +25,7 @@ public sealed class HighlightPicker
                 new PlayerHighlights(),
                 new MatchHighlights(),
                 new LaneHighlights(),
+                new FeatHighlights(),
             }
         );
 

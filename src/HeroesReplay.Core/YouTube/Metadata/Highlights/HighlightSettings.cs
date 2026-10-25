@@ -10,13 +10,22 @@ namespace HeroesReplay.Core.YouTube.Metadata.Highlights;
 /// </summary>
 public class HighlightSettings
 {
+    /// <summary>
+    /// Rarest first (#512, 1,975 Storm League games): pentakill 0.25%, two triple kills by one hero
+    /// 0.1%, core race about 1%, comeback 4%, an award 2.2%, deathless carry 9%, kill leader 10%,
+    /// objective standout 6% (after the kill standouts, so it leads only when no kill feat does),
+    /// then the common solo lane and the MVP, which every game has.
+    /// </summary>
     public static readonly string[] DefaultOrder =
     {
         nameof(HighlightKind.Pentakill),
+        nameof(HighlightKind.TripleKill),
         nameof(HighlightKind.CoreRace),
         nameof(HighlightKind.Comeback),
+        nameof(HighlightKind.Award),
         nameof(HighlightKind.DeathlessCarry),
         nameof(HighlightKind.KillLeader),
+        nameof(HighlightKind.ObjectiveStandout),
         nameof(HighlightKind.SoloLane),
         nameof(HighlightKind.Mvp),
         nameof(HighlightKind.MostFollowed),
@@ -64,6 +73,13 @@ public class HighlightSettings
 
     /// <summary>The talent-build block, one line per player with an Icy Veins guide link.</summary>
     public bool TalentBuildLines { get; set; } = true;
+
+    /// <summary>
+    /// A <see cref="HighlightKind.TripleKill"/> title needs at least this many triple kills by one
+    /// hero (#512). The owner's rule: one triple kill is not enough to title a video. On 1,965
+    /// Storm League games two by one hero happened in 2 games, three in none.
+    /// </summary>
+    public int TripleKillMinBursts { get; set; } = 2;
 
     public IReadOnlyList<HighlightKind> Kinds()
     {

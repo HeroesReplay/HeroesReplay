@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using Heroes.ReplayParser;
 using Heroes.ReplayParser.MPQFiles;
@@ -45,6 +46,38 @@ public class MatchInsightsReaderTests : IClassFixture<ReplayFixture>
         Assert.Equal(insights.Lanes.LaneCount, read.Lanes.LaneCount);
         Assert.Equal(insights.Comeback, read.Comeback);
         Assert.Equal(insights.Finish, read.Finish);
+    }
+
+    [Fact]
+    public void Snapshot_HoldsTheMapAwardsMapValuesAndKillingBlows()
+    {
+        // #512: what the burst, objective and award analyzers read.
+        ReplaySnapshot snapshot = ReplaySnapshotReader.Read(
+            fixture.Replay,
+            Array.Empty<Hero>(),
+            new InsightsSettings()
+        );
+
+        Assert.Equal("Garden of Terror", snapshot.Map);
+        Assert.Contains(snapshot.Players, player => player.Score.HasAward("MVP"));
+        Assert.All(snapshot.Players, player => Assert.NotEmpty(player.Score.MapValues));
+        Assert.NotEmpty(snapshot.KillingBlows);
+        Assert.Equal(
+            snapshot.KillingBlows.Select(blow => blow.Second).OrderBy(second => second),
+            snapshot.KillingBlows.Select(blow => blow.Second)
+        );
+        Assert.All(
+            snapshot.KillingBlows,
+            blow => Assert.InRange(blow.KillerIndex, 0, snapshot.Players.Count - 1)
+        );
+
+        MatchInsights insights = MatchInsightsReader
+            .Create(new InsightsSettings(), GuideCatalog.Embedded())
+            .Read(fixture.Replay, Array.Empty<Hero>());
+        MatchInsights read = InsightsJson.Parse(InsightsJson.Write(insights));
+        Assert.Null(read.Objectives.Label);
+        Assert.Equal(insights.Awards.Awards.Count, read.Awards.Awards.Count);
+        Assert.Equal(insights.Bursts.Players.Count, read.Bursts.Players.Count);
     }
 
     [Fact]
