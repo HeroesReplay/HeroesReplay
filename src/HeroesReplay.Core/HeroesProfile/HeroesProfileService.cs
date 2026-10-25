@@ -7,10 +7,12 @@ using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.Core.Configuration;
+using HeroesReplay.Core.HeroesProfile.Interest;
 using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.Shared;
 using HeroesReplay.Core.Telemetry;
 using HeroesReplay.HeroesProfile.Client;
+using HeroesReplay.HeroesProfile.Client.Replay.Item;
 using HeroesReplay.HeroesProfile.Client.Replays;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
@@ -19,7 +21,7 @@ using Polly;
 
 namespace HeroesReplay.Core.HeroesProfile;
 
-public class HeroesProfileService : IHeroesProfileService, IReplayTierLookup
+public class HeroesProfileService : IHeroesProfileService, IReplayTierLookup, IReplayDetailLookup
 {
     private static readonly ResiliencePropertyKey<int> FilterMinIdKey = new("minId");
     private const string StormLeagueLadder = "Storm League";
@@ -267,9 +269,10 @@ public class HeroesProfileService : IHeroesProfileService, IReplayTierLookup
             double? mmr = replay.AverageMmr;
             try
             {
-                var detail = await kiotaClient
-                    .Replay[replay.Id]
-                    .GetAsync(cancellationToken: cancellationToken)
+                WithReplayGetResponse detail = await ReplayResponseAsync(
+                        replay.Id,
+                        cancellationToken
+                    )
                     .ConfigureAwait(false);
                 double? fromPlayers = RankImage.AveragePlayerMmr(detail?.Players);
                 if (fromPlayers.HasValue)
@@ -357,9 +360,7 @@ public class HeroesProfileService : IHeroesProfileService, IReplayTierLookup
                         string.IsNullOrWhiteSpace(value) ? TimeSpan.Zero : TimeSpan.FromHours(2),
                     async token =>
                     {
-                        var detail = await kiotaClient
-                            .Replay[replayId]
-                            .GetAsync(cancellationToken: token)
+                        WithReplayGetResponse detail = await ReplayResponseAsync(replayId, token)
                             .ConfigureAwait(false);
                         int? mmr = HeroesProfileRankEnricher.RoundMmr(
                             RankImage.AveragePlayerMmr(detail?.Players)
@@ -388,6 +389,52 @@ public class HeroesProfileService : IHeroesProfileService, IReplayTierLookup
             return null;
         }
     }
+
+    /// <summary>
+    /// A listed candidate's score lines and length (#510), from the same cached
+    /// <c>/replay/{id}</c> answer the rank badge reads, so scoring a candidate and then badging
+    /// the one downloaded costs one call. Null when Heroes Profile has no players or the call
+    /// failed; the pick then goes on without it.
+    /// </summary>
+    public async Task<ReplayDetail> GetDetailAsync(
+        int replayId,
+        CancellationToken cancellationToken
+    )
+    {
+        try
+        {
+            WithReplayGetResponse response = await ReplayResponseAsync(replayId, cancellationToken)
+                .ConfigureAwait(false);
+            return ReplayDetail.From(replayId, response);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(
+                "Could not read the detail of listed replay {ReplayId}: {Error}",
+                replayId,
+                e.Message
+            );
+            return null;
+        }
+    }
+
+    /// <summary><c>/replay/{id}</c>, cached half an hour. A null answer is not cached.</summary>
+    private Task<WithReplayGetResponse> ReplayResponseAsync(
+        int replayId,
+        CancellationToken cancellationToken
+    ) =>
+        MemoryCacheLookup.GetOrCreateAsync(
+            cache,
+            logger,
+            $"hp-replay-detail:{replayId}",
+            value => value == null ? TimeSpan.Zero : TimeSpan.FromMinutes(30),
+            token => kiotaClient.Replay[replayId].GetAsync(cancellationToken: token),
+            cancellationToken
+        );
 
     /// <summary>The tier <paramref name="mmr"/> falls in on one ladder, cached an hour. Empty when unknown.</summary>
     private Task<string> TierForMmrAsync(

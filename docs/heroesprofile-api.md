@@ -29,6 +29,7 @@ Hand-written partials of `HeroesProfileClient` sit next to `Generated/` and use 
 | One match | `GET /replays?after={id-1}` then pick `replayID` |
 | Reward search (map and rank rewards) | `GET /replays?after={id}&game_type=…&game_map=…` (every match after `after`, oldest first, up to 1,000; there is no rank or MMR filter) |
 | Rank badge, and a rank reward's candidates (#429) | `GET /replay/{replayID}` (average `player_mmr`), then `GET /mmr/tier?game_type=…&mmr=…`. Each game type has its own ladder: on 2026-10-13, 2,750 was Platinum 4 in `sl`, Diamond 4 in `qm` and Platinum 2 in `aram` |
+| A listed candidate's score screen (interest pick, #510) | `GET /replay/{replayID}` (`players[]` per team, each with `team`, `hero.name` and `score`; `game_length` in seconds). The same cached answer serves the rank badge |
 | Hero statistics: newest patch | `GET /patches` (newest `game_version` with `valid_globals`; `2.57.0.98348` is major `2.57`) |
 | Hero statistics: ids | `GET /heroes` (`id`, `name`, `attribute_id`) |
 | Hero statistics: every hero on every map | `GET /heroes/stats?timeframe_type=major&timeframe=2.57&game_type=sl&group_by_map=true` (one object per map, a `data` row per hero: `hero_id`, `wins`, `games_played`, `ban_rate`) |
@@ -53,6 +54,33 @@ A 401 or 403 on the replay list is a refused key, not a transient failure (#358)
 A Twitch reward request is different (#351): the viewer paid for that replay, so it is not skipped. It stays in `Data\requests.json` until its replay is renamed into `Data\Requests`, and leaves the queue in the same queue-locked step. A download Heroes Profile answers with 404 or 410, or with 403 and the body's `error.code` `replay_deleted` (Heroes Profile deleted the file: `{"error":{"code":"replay_deleted","message":"That replay is no longer stored.",...}}`, #361), or a replay whose client is now below `Spectate:MinimumGameVersion`, fails the request: it moves to `failed-requests.json` with its reason (`HTTP 403 replay_deleted`), the queue page lists it under "Could not play", and a `Cancel` line in `Data\redemption-dispositions.txt` has `twitch connect` cancel the redemption, which returns the points. Any other failure (a 429 or 5xx after the pipeline's retries, any other 403, which can be a key or plan problem, another status, a timeout, a network or disk error) keeps the request queued with its attempt count and retries it after 1, 2, 4, 8, 16, then every 30 minutes, without a refund; the requests behind it are not held back. A stop or a kill mid-download leaves the request as it was, and a kill after the replay landed leaves it queued with its replay on disk, so the next pass dequeues it without a second download.
 
 The download is `HeroesProfileClient.DownloadReplayAsync`, a hand-written partial over the generated `/download/replay` request: the generated error mapping has no 403, so Kiota would drop that body. An error answer throws `HeroesProfileApiException` with the status and the body's `error.code`. It reads at most 16 KB of an error body and keeps only that code, and only when it is a short token (letters, digits, `_`, `-`, `.`), so no other body text reaches a log or `requests.json`.
+
+### Interest pick (#510)
+
+With `HeroesProfileApi:Interest:Enabled` (on in dev; off in base and prod until its numbers are reviewed), the download role does not simply take the lowest current-patch id. For one download it:
+
+1. **Lists the candidates.** It keeps the page's first `Candidates` (20) current-patch replays that are still inside their media window.
+2. **Reads each score screen.** It asks for each one's `/replay/{id}`, within `DetailTimeout` (20 s each). The answer is cached for 30 minutes, so the rank badge of the replay it takes needs no second call.
+3. **Downloads the best.** `ReplayInterest` scores each candidate from facts on its score screen, and the highest score is downloaded. The listing cursor then moves past every candidate it scored.
+
+What scores (the points only rank one page's candidates against each other):
+
+| Signal | When it counts |
+|---|---|
+| Deathless carry | A player with 0 deaths and 8 or more kills |
+| Kill leader | Another player with 10 or more kills and at most 1 death |
+| Long takedown streak | 25 or more takedowns without dying |
+| Time on fire | 420 s or more on fire (10% of games) |
+| Multi-kills | A player whose score-screen `multikill` is 8 or more (6.6% of games). The value runs past 5 (10 or more in 1% of games), so it counts multi-kills rather than measuring one |
+| Long game | 25 minutes or more |
+| Short game | Under 13 minutes; this one takes points away |
+| League | Diamond or higher, when the listing names a rank |
+
+**Failures.** A candidate whose detail fails or times out is not scored. With none scored, the role takes the lowest id as before.
+
+**Cost.** At about 30 downloads a day, 20 candidates each is about 600 `/replay/{id}` calls a day, roughly 0.4% of its weekly allowance. The list calls don't change.
+
+**Tuning.** `heroesreplay calculators interest --directory <corpus> --recursive` scores local replays from their own score screens with the same scorer, and reports how often each signal fires.
 
 ### Hero statistics (YouTube title hooks)
 
