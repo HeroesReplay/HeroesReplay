@@ -1105,6 +1105,7 @@ public class UploadOutboxTests
         );
         string reused = await new UploadOutbox(temp.Root).ContextForReplayAsync(
             44,
+            mediaPath,
             Stamp.AddMinutes(3),
             CancellationToken.None
         );
@@ -1143,6 +1144,130 @@ public class UploadOutboxTests
         Assert.False(prepared.Succeeded);
         Assert.Equal(1, Directory.GetDirectories(temp.Root).Length);
     }
+
+    /// <summary>
+    /// #524: a dry run dispatches a full match and its clips in one second. Each recording gets
+    /// its own attempt, so a clip never lands on the match's settled one and is skipped.
+    /// </summary>
+    [Fact]
+    public async Task RecordingsInTheSameSecond_EachGetTheirOwnAttempt()
+    {
+        using var temp = new TempAttempts();
+        var outbox = new UploadOutbox(temp.Root);
+        string match = Path.Combine(temp.Root, "match.mp4");
+        string pentakill = Path.Combine(temp.Root, "clips", "pentakill-Valla-509", "clip.mp4");
+        string tripleKill = Path.Combine(temp.Root, "clips", "triple-kill-Valla-980", "clip.mp4");
+
+        string matchId = await outbox.ContextForReplayAsync(
+            44,
+            match,
+            Stamp,
+            CancellationToken.None
+        );
+        SavedDispatch matchSent = await DryRunAsync(outbox, matchId, match);
+        string pentakillId = await outbox.ContextForReplayAsync(
+            44,
+            pentakill,
+            Stamp,
+            CancellationToken.None
+        );
+        SavedDispatch pentakillSent = await DryRunAsync(outbox, pentakillId, pentakill);
+        string tripleKillId = await outbox.ContextForReplayAsync(
+            44,
+            tripleKill,
+            Stamp,
+            CancellationToken.None
+        );
+        string matchAgain = await outbox.ContextForReplayAsync(
+            44,
+            match,
+            Stamp,
+            CancellationToken.None
+        );
+
+        Assert.Equal(UploadAttemptIds.NewContext(44, Stamp), matchId);
+        Assert.Equal(UploadAttemptState.DryRunSimulated, matchSent.Result.Manifest.State);
+        Assert.Equal(matchId + "-2", pentakillId);
+        Assert.False(pentakillSent.AlreadySettled);
+        Assert.Equal(UploadAttemptState.DryRunSimulated, pentakillSent.Result.Manifest.State);
+        Assert.Equal(pentakill, pentakillSent.Result.Manifest.MediaPath);
+        Assert.Equal(matchId + "-3", tripleKillId);
+        // The same recording again in that second is still its own settled attempt.
+        Assert.Equal(matchId, matchAgain);
+    }
+
+    /// <summary>#524: an open (uploading) attempt of the full match is never handed to its clip.</summary>
+    [Fact]
+    public async Task AnOpenMatchAttempt_IsReusedOnlyForTheMatch()
+    {
+        using var temp = new TempAttempts();
+        var outbox = new UploadOutbox(temp.Root);
+        string match = Path.Combine(temp.Root, "match.mp4");
+        string clip = Path.Combine(temp.Root, "clips", "pentakill-Valla-509", "clip.mp4");
+        string matchId = UploadAttemptIds.NewContext(44, Stamp);
+        SavedDispatch started = await outbox.SaveDispatchAsync(
+            matchId,
+            44,
+            match,
+            128,
+            "len-128",
+            youtubeEnabled: true,
+            dryRun: false,
+            Stamp,
+            CancellationToken.None
+        );
+
+        string forClip = await outbox.ContextForReplayAsync(
+            44,
+            clip,
+            Stamp.AddMinutes(1),
+            CancellationToken.None
+        );
+        string forMatch = await outbox.ContextForReplayAsync(
+            44,
+            match,
+            Stamp.AddMinutes(1),
+            CancellationToken.None
+        );
+
+        Assert.True(started.MaySend);
+        Assert.Equal(UploadAttemptIds.NewContext(44, Stamp.AddMinutes(1)), forClip);
+        Assert.Equal(matchId, forMatch);
+    }
+
+    [Fact]
+    public void SameMedia_ComparesFullPathsIgnoringCase()
+    {
+        string clip = Path.Combine(Path.GetTempPath(), "Contexts", "44", "clips", "clip.mp4");
+
+        Assert.True(UploadAttemptIds.SameMedia(clip, clip.ToUpperInvariant()));
+        Assert.True(
+            UploadAttemptIds.SameMedia(
+                clip,
+                Path.Combine(Path.GetDirectoryName(clip), ".", "clip.mp4")
+            )
+        );
+        Assert.False(UploadAttemptIds.SameMedia(clip, Path.ChangeExtension(clip, ".mkv")));
+        Assert.False(UploadAttemptIds.SameMedia(null, clip));
+        Assert.False(UploadAttemptIds.SameMedia(clip, " "));
+    }
+
+    private static Task<SavedDispatch> DryRunAsync(
+        UploadOutbox outbox,
+        string attemptId,
+        string mediaPath
+    ) =>
+        outbox.SaveDispatchAsync(
+            attemptId,
+            44,
+            mediaPath,
+            128,
+            "len-128",
+            youtubeEnabled: true,
+            dryRun: true,
+            Stamp,
+            CancellationToken.None
+        );
 
     private static async Task<UploadAttemptManifest> ReachPendingAsync(
         UploadOutbox outbox,

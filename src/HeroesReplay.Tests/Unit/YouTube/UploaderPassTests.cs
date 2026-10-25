@@ -183,6 +183,35 @@ public sealed class UploaderPassTests : IDisposable
         YouTubeUploader uploader(AppSettings s) => Uploader(s);
     }
 
+    /// <summary>
+    /// #524: a dry-run pass plans a full match and its clips within milliseconds. Each recording
+    /// gets its own upload attempt, so no clip finds the match's settled one and is skipped as
+    /// "already DryRunSimulated" (dev's 66249756 on 2026-10-25).
+    /// </summary>
+    [Fact]
+    public async Task ADryRunPass_PlansTheMatchAndEveryClip()
+    {
+        AppSettings settings = Settings(live: false);
+        string match = await StageAsync(settings, 66249756, "Sky Temple");
+        string context = Path.GetDirectoryName(match);
+        string pentakill = await StageClipAsync(context, 66249756, "pentakill", "Valla", 509);
+        string tripleKill = await StageClipAsync(context, 66249756, "triple-kill", "Valla", 980);
+
+        await Uploader(settings).RunUploadPassAsync();
+
+        foreach (string recording in new[] { match, pentakill, tripleKill })
+        {
+            Assert.True(
+                File.Exists(
+                    Path.Combine(Path.GetDirectoryName(recording), DryRunRecordings.PlanFileName)
+                ),
+                recording + string.Join(Environment.NewLine, log.Lines)
+            );
+        }
+
+        Assert.DoesNotContain(log.Lines, line => line.Contains("is already DryRunSimulated"));
+    }
+
     [Fact]
     public async Task APassWithAnUnreadableEntry_IsNotWork()
     {
@@ -420,6 +449,36 @@ public sealed class UploaderPassTests : IDisposable
             Location = new LocationSettings { DataDirectory = root },
             ReplayMedia = media,
         };
+    }
+
+    /// <summary>A clip's folder under the match's context, as <c>MatchClipExporter</c> writes it.</summary>
+    private static async Task<string> StageClipAsync(
+        string context,
+        int replayId,
+        string kind,
+        string hero,
+        int hudStart
+    )
+    {
+        string folder = Path.Combine(context, "clips", kind + "-" + hero + "-" + hudStart);
+        Directory.CreateDirectory(folder);
+        string clip = Path.Combine(folder, "clip.mp4");
+        await File.WriteAllBytesAsync(clip, new byte[] { 0, 0, 0, 24, 102, 116, 121, 112 });
+        await File.WriteAllTextAsync(
+            Path.Combine(folder, "youtube-entry.json"),
+            TestJson.Entry(
+                new YouTubeEntry
+                {
+                    Title = hero + " - " + kind + " - " + replayId,
+                    ReplayId = replayId,
+                    Hero = hero,
+                    DescriptionLines = new[] { "clip:" + replayId + ":" + kind + ":" + hero },
+                    PrivacyStatus = "public",
+                    CategoryId = "20",
+                }
+            )
+        );
+        return clip;
     }
 
     private async Task<string> StageAsync(AppSettings settings, int replayId, string map)
