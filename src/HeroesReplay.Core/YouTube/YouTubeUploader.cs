@@ -455,7 +455,7 @@ public class YouTubeUploader : IYouTubeUploader
         else
         {
             attemptId = await outbox
-                .ContextForReplayAsync(entry.ReplayId, dispatchedAt, token)
+                .ContextForReplayAsync(entry.ReplayId, recording.FullName, dispatchedAt, token)
                 .ConfigureAwait(false);
         }
 
