@@ -8,7 +8,7 @@ namespace HeroesReplay.Core.HeroesProfile.Interest;
 /// <summary>
 /// A candidate's points and the reasons behind them, for the log, and each reason's signal
 /// (<c>deathless-carry</c>, <c>kill-leader</c>, <c>long-streak</c>, <c>on-fire</c>,
-/// <c>team-wipe</c>, <c>long-game</c>, <c>short-game</c>, <c>high-rank</c>) for the report.
+/// <c>multikills</c>, <c>long-game</c>, <c>short-game</c>, <c>high-rank</c>) for the report.
 /// </summary>
 public sealed record ReplayInterestScore(
     int Total,
@@ -28,7 +28,7 @@ public sealed record ReplayInterestScore(
 
 /// <summary>
 /// How interesting a replay looks from its score screen alone (#510), before it is downloaded:
-/// a standout carry, a long takedown streak, a long time on fire, a team wipe, the game's length
+/// a standout carry, a long takedown streak, a long time on fire, many multi-kills, the game's length
 /// and its league. Every signal is a fact on the score screen; nothing is estimated. The points
 /// only rank one page's candidates against each other.
 /// </summary>
@@ -103,12 +103,19 @@ public static class ReplayInterest
             Add(settings.OnFirePoints, "on-fire", $"{fire.SecondsOnFire} s on fire {fire.Hero}");
         }
 
-        if (
-            settings.TeamWipeMultikill > 0
-            && detail.Players.Any(line => line.Multikill >= settings.TeamWipeMultikill)
-        )
+        ReplayScoreLine multikills = detail
+            .Players.Where(line =>
+                settings.MultikillsAt > 0 && line.Multikill >= settings.MultikillsAt
+            )
+            .OrderByDescending(line => line.Multikill)
+            .FirstOrDefault();
+        if (multikills != null)
         {
-            Add(settings.TeamWipePoints, "team-wipe", "team wipe");
+            Add(
+                settings.MultikillsPoints,
+                "multikills",
+                $"multikill {multikills.Multikill} {multikills.Hero}"
+            );
         }
 
         if (detail.LengthSeconds is int seconds && seconds > 0)

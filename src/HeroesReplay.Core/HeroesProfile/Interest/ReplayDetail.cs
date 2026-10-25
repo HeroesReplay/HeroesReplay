@@ -15,7 +15,7 @@ namespace HeroesReplay.Core.HeroesProfile.Interest;
 /// </summary>
 /// <param name="Takedowns">Kills plus assists.</param>
 /// <param name="HighestKillStreak">The most takedowns without dying.</param>
-/// <param name="Multikill">The most takedowns in one quick burst the player took part in; a team wipe gives every hero in it 5.</param>
+/// <param name="Multikill">The score screen's multikill value (Heroes Profile's <c>multikill</c>, <c>ScoreResult.Multikill</c>).</param>
 /// <param name="SecondsOnFire">Seconds the player was on fire.</param>
 public sealed record ReplayScoreLine(
     int Team,

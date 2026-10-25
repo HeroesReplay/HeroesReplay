@@ -28,7 +28,7 @@ public class InterestCommand : Command
     public InterestCommand()
         : base(
             "interest",
-            "Read every .StormReplay in a folder, one file at a time, with events and statistics, and score each from its score screen the way the download role scores Heroes Profile candidates before a download (HeroesProfileApi:Interest): deathless carry, kill leader, long takedown streak, time on fire, team wipe, game length and league. Then how often each signal fires and how the totals spread. A replay is counted once by its id. Reads the heroes-data2 catalog under Location:DataDirectory. Read-only."
+            "Read every .StormReplay in a folder, one file at a time, with events and statistics, and score each from its score screen the way the download role scores Heroes Profile candidates before a download (HeroesProfileApi:Interest): deathless carry, kill leader, long takedown streak, time on fire, multi-kills, game length and league. Then how often each signal fires and how the totals spread. A replay is counted once by its id. Reads the heroes-data2 catalog under Location:DataDirectory. Read-only."
         )
     {
         var directoryOption = new Option<string>("--directory")

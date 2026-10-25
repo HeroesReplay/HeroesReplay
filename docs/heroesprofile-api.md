@@ -70,8 +70,8 @@ What scores (the points only rank one page's candidates against each other):
 | Deathless carry | A player with 0 deaths and 8 or more kills |
 | Kill leader | Another player with 10 or more kills and at most 1 death |
 | Long takedown streak | 25 or more takedowns without dying |
-| Time on fire | 300 s or more on fire |
-| Team wipe | A takedown burst of 5. Every hero in that wipe gets `multikill` 5, so this is a team fight, not one hero's feat |
+| Time on fire | 420 s or more on fire (10% of games) |
+| Multi-kills | A player whose score-screen `multikill` is 8 or more (6.6% of games). The value runs past 5 (10 or more in 1% of games), so it counts multi-kills rather than measuring one |
 | Long game | 25 minutes or more |
 | Short game | Under 13 minutes; this one takes points away |
 | League | Diamond or higher, when the listing names a rank |

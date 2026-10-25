@@ -34,14 +34,17 @@ public sealed class ReplayInterestSettings
     public int LongStreakPoints { get; set; } = 10;
 
     /// <summary>Seconds a player was on fire.</summary>
-    public int OnFireSeconds { get; set; } = 300;
+    public int OnFireSeconds { get; set; } = 420;
 
     public int OnFirePoints { get; set; } = 10;
 
-    /// <summary>A team wipe: a takedown burst of five, in which every hero of the winning side counts.</summary>
-    public int TeamWipeMultikill { get; set; } = 5;
+    /// <summary>
+    /// A player's score-screen <c>multikill</c> value at least this high. It runs past 5 (10 or
+    /// more in 1% of 1,965 Storm League games), so it counts multi-kills rather than measuring one.
+    /// </summary>
+    public int MultikillsAt { get; set; } = 8;
 
-    public int TeamWipePoints { get; set; } = 5;
+    public int MultikillsPoints { get; set; } = 5;
 
     /// <summary>A game at least this long.</summary>
     public TimeSpan LongGame { get; set; } = TimeSpan.FromMinutes(25);

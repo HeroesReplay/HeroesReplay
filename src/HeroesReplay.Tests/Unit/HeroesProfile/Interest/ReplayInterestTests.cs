@@ -37,10 +37,10 @@ public class ReplayInterestTests
     }
 
     [Fact]
-    public void LengthStreakFireAndAWipe_AllCount()
+    public void LengthStreakFireAndMultikills_AllCount()
     {
         ReplayInterestScore score = ReplayInterest.Score(
-            Game(27, new ReplayScoreLine(0, "Azmodan", 5, 2, 14, 19, 26, 5, 416)),
+            Game(27, new ReplayScoreLine(0, "Azmodan", 5, 2, 14, 19, 26, 9, 430)),
             null,
             Settings
         );
@@ -49,8 +49,8 @@ public class ReplayInterestTests
             new[]
             {
                 "26 takedown streak Azmodan",
-                "416 s on fire Azmodan",
-                "team wipe",
+                "430 s on fire Azmodan",
+                "multikill 9 Azmodan",
                 "long game 27 min",
             },
             score.Reasons
@@ -58,7 +58,7 @@ public class ReplayInterestTests
         Assert.Equal(
             Settings.LongStreakPoints
                 + Settings.OnFirePoints
-                + Settings.TeamWipePoints
+                + Settings.MultikillsPoints
                 + Settings.LongGamePoints,
             score.Total
         );
