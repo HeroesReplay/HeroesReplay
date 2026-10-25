@@ -97,7 +97,7 @@ public static class MatchClipExporter
         if (string.IsNullOrWhiteSpace(match))
         {
             logger?.LogWarning(
-                "No finalized OBS recording for {Directory}. Pentakill clips were not cut.",
+                "No finalized OBS recording for {Directory}. Clips were not cut.",
                 contextDirectory
             );
             return;
@@ -107,7 +107,7 @@ public static class MatchClipExporter
         if (match == null)
         {
             logger?.LogWarning(
-                "Finalized OBS recording {Path} was not readable. Pentakill clips were not cut.",
+                "Finalized OBS recording {Path} was not readable. Clips were not cut.",
                 recordingPath
             );
             return;
@@ -267,9 +267,10 @@ public static class MatchClipExporter
             ? "youtube-entry.json"
             : entryFileName;
         string id = replayId is > 0 ? replayId.Value.ToString(CultureInfo.InvariantCulture) : null;
-        string map = replay?.Map;
+        string map = EnglishMapNames.Prefer(null, replay?.Map, replay?.MapAlternativeName);
+        string kind = TeamKillClips.Title(clip);
         string title = YouTubeListing.ApplyMarker(
-            string.Join(" - ", new[] { clip.Hero, clip.Kind, map, id }.WhereNotEmpty()),
+            string.Join(" - ", new[] { clip.Hero, kind, map, id }.WhereNotEmpty()),
             youtube?.TitlePrefix
         );
         var entry = new YouTubeEntry
@@ -287,7 +288,7 @@ public static class MatchClipExporter
                     ? string.Empty
                     : $"Heroes Profile Match: https://www.heroesprofile.com/Match/Single/?replayID={id}",
             }.WhereNotEmpty(),
-            Tags = new[] { clip.Kind, clip.Hero, map }.WhereNotEmpty(),
+            Tags = new[] { kind, clip.Hero, map }.WhereNotEmpty(),
             Hero = string.IsNullOrWhiteSpace(clip.Hero) ? null : clip.Hero.Trim(),
             Heroes = string.IsNullOrWhiteSpace(clip.Hero) ? null : new[] { clip.Hero.Trim() },
         };

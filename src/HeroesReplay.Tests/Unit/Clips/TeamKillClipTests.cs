@@ -173,6 +173,102 @@ public class TeamKillClipTests
     }
 
     [Fact]
+    public void Select_ThreeBlowsWithinThreeSeconds_IsATripleKillClip()
+    {
+        // #511: burst clips, one hero's own; they never make the replay Notable.
+        IReadOnlyList<TeamKillClip> clips = TeamKillClips.Select(
+            new[]
+            {
+                Death(600, "Kael'thas", "Artanis"),
+                Death(601, "Kael'thas", "Butcher"),
+                Death(603, "Kael'thas", "Chromie"),
+            }
+        );
+
+        TeamKillClip clip = Assert.Single(clips);
+        Assert.Equal(TeamKillClips.TripleKillKind, clip.Kind);
+        Assert.Equal("Kael'thas triple kill", clip.Description);
+        Assert.Equal("triple kill", TeamKillClips.Title(clip));
+        Assert.Equal(588, clip.HudStartSecond);
+        Assert.Equal(611, clip.HudEndSecond);
+        Assert.Equal(3, clip.Kills.Count);
+        Assert.False(clip.WipedTeam);
+    }
+
+    [Fact]
+    public void Select_FourBlowsWithinThreeSeconds_IsAQuadraKill()
+    {
+        IReadOnlyList<TeamKillClip> clips = TeamKillClips.Select(
+            new[]
+            {
+                Death(600, "Valla", "Artanis"),
+                Death(601, "Valla", "Butcher"),
+                Death(602, "Valla", "Chromie"),
+                Death(603, "Valla", "Diablo"),
+            }
+        );
+
+        TeamKillClip clip = Assert.Single(clips);
+        Assert.Equal(TeamKillClips.TripleKillKind, clip.Kind);
+        Assert.Equal("Valla quadra kill", clip.Description);
+        Assert.Equal("quadra kill", TeamKillClips.Title(clip));
+        Assert.Equal(4, clip.Kills.Count);
+    }
+
+    [Fact]
+    public void Select_ABurstInsideAPentakill_IsPartOfThatClip()
+    {
+        IReadOnlyList<TeamKillClip> clips = TeamKillClips.Select(
+            new[]
+            {
+                Death(100, "Li-Ming", "Artanis"),
+                Death(101, "Li-Ming", "Butcher"),
+                Death(102, "Li-Ming", "Chromie"),
+                Death(106, "Li-Ming", "Diablo"),
+                Death(110, "Li-Ming", "E.T.C."),
+            }
+        );
+
+        TeamKillClip clip = Assert.Single(clips);
+        Assert.Equal(TeamKillClips.PentakillKind, clip.Kind);
+    }
+
+    [Fact]
+    public void Select_ThreeBlowsOverFourSeconds_AreNotATripleKill()
+    {
+        Assert.Empty(
+            TeamKillClips.Select(
+                new[]
+                {
+                    Death(600, "Valla", "Artanis"),
+                    Death(602, "Valla", "Butcher"),
+                    Death(604, "Valla", "Chromie"),
+                }
+            )
+        );
+    }
+
+    [Fact]
+    public void Select_KeepsTheTwoEarliestTripleKills()
+    {
+        var deaths = new List<TeamKillDeath>();
+        foreach (int start in new[] { 100, 400, 700 })
+        {
+            deaths.Add(Death(start, "Valla", "Artanis"));
+            deaths.Add(Death(start + 1, "Valla", "Butcher"));
+            deaths.Add(Death(start + 2, "Valla", "Chromie"));
+        }
+
+        IReadOnlyList<TeamKillClip> clips = TeamKillClips.Select(deaths);
+
+        Assert.Equal(TeamKillClips.MaxTripleKills, clips.Count);
+        Assert.Equal(
+            new[] { 100, 400 },
+            new[] { clips[0].FirstDeathSecond, clips[1].FirstDeathSecond }
+        );
+    }
+
+    [Fact]
     public void Select_EmptyIsEmpty()
     {
         Assert.Empty(TeamKillClips.Select(null));
