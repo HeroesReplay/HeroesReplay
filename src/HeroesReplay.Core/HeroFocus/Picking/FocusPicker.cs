@@ -34,6 +34,13 @@ public sealed record FocusPlan
     public IReadOnlyList<int> Order { get; init; } = Array.Empty<int>();
 
     public int? Reserved { get; init; }
+
+    /// <summary>
+    /// The waiting replays whose card has a Notable event (#510) and whose game is still inside
+    /// <c>ReplayMedia:NotableCandidateMaxAge</c>, the one closest to the end of its window first.
+    /// They play before the focus plan and the ordinary queue, after a viewer request.
+    /// </summary>
+    public IReadOnlyList<int> Notable { get; init; } = Array.Empty<int>();
 }
 
 /// <summary>
@@ -62,6 +69,7 @@ public sealed class FocusPicker
     private readonly FocusScorer scorer;
     private readonly string libraryPath;
     private readonly TimeSpan maxAge;
+    private readonly TimeSpan notableMaxAge;
     private readonly ILogger<FocusPicker> logger;
     private readonly Func<DateTime> clock;
 
@@ -71,13 +79,15 @@ public sealed class FocusPicker
         TimeSpan maxAge,
         HeroSignatures signatures,
         ILogger<FocusPicker> logger,
-        Func<DateTime> clock = null
+        Func<DateTime> clock = null,
+        TimeSpan? notableMaxAge = null
     )
     {
         this.settings = settings ?? new HeroFocusSettings();
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
         this.clock = clock ?? (() => DateTime.UtcNow);
         this.maxAge = maxAge;
+        this.notableMaxAge = notableMaxAge ?? TimeSpan.FromDays(7);
         if (string.IsNullOrWhiteSpace(dataDirectory))
         {
             return;
@@ -124,10 +134,12 @@ public sealed class FocusPicker
         bool due =
             !requestWaiting && (current.SinceFocus?.Count ?? 0) >= Math.Max(1, settings.Every) - 1;
 
-        List<FocusCard> pool = cards
+        IReadOnlyList<FocusCard> waitingCards = cards
             .ReadAll()
-            .Where(card => card.ReplayId is int id && ids.Contains(id) && Fresh(card, now))
+            .Where(card => card.ReplayId is int id && ids.Contains(id))
             .ToList();
+        IReadOnlyList<int> notable = NotableFirst(waitingCards, now);
+        List<FocusCard> pool = waitingCards.Where(card => Fresh(card, now)).ToList();
         IReadOnlyList<FocusCandidate> ranking =
             pool.Count == 0
                 ? Array.Empty<FocusCandidate>()
@@ -154,6 +166,7 @@ public sealed class FocusPicker
                 Ranked = best,
                 Order = open,
                 Reserved = standout?.ReplayId,
+                Notable = notable,
             };
         }
 
@@ -188,8 +201,25 @@ public sealed class FocusPicker
             Order = open.Concat(best.Select(candidate => candidate.ReplayId.Value))
                 .Distinct()
                 .ToList(),
+            Notable = notable,
         };
     }
+
+    /// <summary>
+    /// The waiting replays with a Notable event (#510) that can still be recorded as Notable:
+    /// the oldest game first, since its window closes soonest. A card without a game date is
+    /// inside the window, as the media policy reads it, and comes last.
+    /// </summary>
+    private IReadOnlyList<int> NotableFirst(IEnumerable<FocusCard> waitingCards, DateTime now) =>
+        waitingCards
+            .Where(card =>
+                card.Notable is { Count: > 0 }
+                && (card.GameDateUtc is not DateTime played || now - played <= notableMaxAge)
+            )
+            .OrderBy(card => card.GameDateUtc ?? DateTime.MaxValue)
+            .ThenByDescending(card => card.ReplayId)
+            .Select(card => card.ReplayId.Value)
+            .ToList();
 
     /// <summary>
     /// The focus of the replay the spectator just took, or null. A pick made before a restart

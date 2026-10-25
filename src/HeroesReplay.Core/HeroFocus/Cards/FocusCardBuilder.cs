@@ -7,6 +7,7 @@ using Heroes.ReplayParser;
 using HeroesReplay.Core.Builds.Matching;
 using HeroesReplay.Core.Builds.Played;
 using HeroesReplay.Core.Builds.Reference;
+using HeroesReplay.Core.Clips;
 using HeroesReplay.Core.HeroesData;
 using HeroesReplay.Core.MediaPolicy;
 using HeroesReplay.Core.Obs;
@@ -149,8 +150,25 @@ public sealed class FocusCardBuilder
             Players = seats
                 .Select(seat => Player(seat.Player, seat.Index, seat.Hero, winner, aram, comps))
                 .ToList(),
+            Notable = Notable(replay, catalog),
         };
     }
+
+    /// <summary>
+    /// The pentakills the media policy will count when the replay launches (#510), from the same
+    /// units it reads (<see cref="ReplayMediaFacts"/>).
+    /// </summary>
+    private static List<FocusCardNotable> Notable(Replay replay, IReadOnlyList<Hero> catalog) =>
+        ReplayMediaEvidence
+            .Accepted(TeamKillClips.Select(TeamKillDeaths.FromReplay(replay, catalog)))
+            .Select(clip => new FocusCardNotable
+            {
+                Kind = clip.Kind,
+                Hero = clip.Hero,
+                Second = clip.FirstDeathSecond,
+                WipedTeam = clip.WipedTeam,
+            })
+            .ToList();
 
     /// <summary>The talent-build reference's check date, as a card keeps it (<c>2026-10-12</c>).</summary>
     public static string CheckedAt(IGuideCatalog guides) =>
