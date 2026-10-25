@@ -7,7 +7,7 @@ namespace HeroesReplay.Core.Clips;
 
 /// <summary>
 /// Spectate's start: with clips on (<c>OBS:RecordingEnabled</c>), a missing ffmpeg or ffprobe is
-/// one error now instead of a warning after a pentakill.
+/// one error now instead of a warning after a clip-worthy moment.
 /// </summary>
 public static class ClipToolsStartup
 {
@@ -39,7 +39,7 @@ public static class ClipToolsStartup
         }
 
         logger?.LogError(
-            "Clips are on (OBS:RecordingEnabled) but {Tools} could not be found in {Searched}, so no pentakill clip will be cut. Run `heroesreplay deps install`, then `heroesreplay check ffmpeg`.",
+            "Clips are on (OBS:RecordingEnabled) but {Tools} could not be found in {Searched}, so no clip will be cut. Run `heroesreplay deps install`, then `heroesreplay check ffmpeg`.",
             string.Join(" and ", missing.Select(tool => tool.Tool + ".exe")),
             locator.DescribeSearch()
         );

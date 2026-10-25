@@ -69,6 +69,17 @@ public class MatchClipExportTests : IClassFixture<ReplayFixture>
             "Test pentakill",
             blows
         );
+        // A triple kill (#511) inside the same recording, cut as its own clip with its own entry.
+        var triple = new TeamKillClip(
+            TeamKillClips.TripleKillKind,
+            "Test",
+            blows[0].Second + 2,
+            blows[0].Second + 4,
+            blows[0].Second - 10,
+            blows[0].Second + 12,
+            "Test triple kill",
+            blows.Take(3).ToArray()
+        );
         int length = first.HudEndSecond - first.HudStartSecond + LeadSeconds * 2;
         string directory = Path.Combine(
             Path.GetTempPath(),
@@ -109,7 +120,7 @@ public class MatchClipExportTests : IClassFixture<ReplayFixture>
 
             var logger = new ListLogger();
             await MatchClipExporter.ExportAsync(
-                new[] { first },
+                new[] { first, triple },
                 fixture.Replay,
                 65000001,
                 directory,
@@ -164,6 +175,17 @@ public class MatchClipExportTests : IClassFixture<ReplayFixture>
             double expected = first.HudEndSecond - first.HudStartSecond;
             double actual = double.Parse(probe[2], CultureInfo.InvariantCulture);
             Assert.InRange(actual, expected - 1, expected + 1);
+
+            // Each kind names itself in its title and tags, with the English map name.
+            YouTubeEntry pentakillEntry = EntryOf(rows, first.HudStartSecond);
+            YouTubeEntry tripleEntry = EntryOf(rows, triple.HudStartSecond);
+            Assert.Contains(" - pentakill - Garden of Terror - 65000001", pentakillEntry.Title);
+            Assert.Equal(
+                "[TEST] Test - triple kill - Garden of Terror - 65000001",
+                tripleEntry.Title
+            );
+            Assert.Contains("triple kill", tripleEntry.Tags);
+            Assert.Equal("clip:65000001:triple-kill:Test", tripleEntry.DescriptionLines[0]);
         }
         finally
         {
@@ -173,6 +195,19 @@ public class MatchClipExportTests : IClassFixture<ReplayFixture>
             }
             catch (IOException) { }
         }
+    }
+
+    private static YouTubeEntry EntryOf(JsonDocument rows, int hudStart)
+    {
+        string clip = rows
+            .RootElement.EnumerateArray()
+            .First(element => element.GetProperty("hudStart").GetInt32() == hudStart)
+            .GetProperty("file")
+            .GetString();
+        return JsonSerializer.Deserialize(
+            File.ReadAllText(Path.Combine(Path.GetDirectoryName(clip), "youtube-entry.json")),
+            YouTubeJsonContext.Default.YouTubeEntry
+        );
     }
 
     private static string Run(string tool, string arguments)

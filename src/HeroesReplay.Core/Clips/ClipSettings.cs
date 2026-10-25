@@ -1,7 +1,7 @@
 namespace HeroesReplay.Core.Clips;
 
 /// <summary>
-/// <c>Clips</c>. Pentakill clips are cut from the OBS match recording, so they run whenever
+/// <c>Clips</c>. Clips (pentakills and triple kills, #511) are cut from the OBS match recording, so they run whenever
 /// <c>OBS:RecordingEnabled</c> is true.
 /// </summary>
 public sealed class ClipSettings
