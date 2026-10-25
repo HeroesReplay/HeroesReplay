@@ -100,16 +100,17 @@ if (Test-Path $sdk) {
     }
 }
 
-# global.json pins the .NET SDK (#462) with rollForward latestPatch: any SDK of the same feature
-# band (10.0.4xx for 10.0.402) at or above the pin builds. Dependabot moves the pin; this only
-# notes when this machine has no SDK that satisfies it.
+# global.json pins the .NET SDK (#462) with rollForward patch (#522): the pinned SDK builds, or
+# without it the newest patch of the same feature band (10.0.4xx for 10.0.402) above the pin.
+# Dependabot moves the pin; this only notes when this machine has no SDK that satisfies it.
 $pin = "$((Get-Content -LiteralPath (Join-Path $root 'global.json') -Raw | ConvertFrom-Json).sdk.version)"
 $pinned = [version]$pin
 $band = [math]::Floor($pinned.Build / 100)
 $sdks = @(dotnet --list-sdks 2>$null | ForEach-Object { ($_ -split '\s+', 2)[0] } | Where-Object { $_ -match '^\d+\.\d+\.\d+$' } | ForEach-Object { [version]$_ })
 $matching = @($sdks | Where-Object { $_.Major -eq $pinned.Major -and $_.Minor -eq $pinned.Minor -and [math]::Floor($_.Build / 100) -eq $band -and $_.Build -ge $pinned.Build })
 if ($matching.Count -gt 0) {
-    Write-Host ".NET SDK $(($matching | Sort-Object -Descending)[0]) satisfies global.json ($pin, latestPatch)."
+    $used = if ($sdks -contains $pinned) { $pinned } else { ($matching | Sort-Object -Descending)[0] }
+    Write-Host ".NET SDK $used satisfies global.json ($pin, patch)."
 }
 else {
     Write-Warning ".NET SDK $pin (global.json) is not installed. Installed: $(if ($sdks) { $sdks -join ', ' } else { 'none' })."
