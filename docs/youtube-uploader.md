@@ -143,6 +143,14 @@ The first matching class wins.
 3. **High-skill.** Rank or MMR meets the configured floor. With no floor, this class never matches.
 4. **Ordinary.** Everything else.
 
+**Play order.** Waiting replays play in this order:
+1. viewer requests;
+2. Notable replays still inside their window (#510), oldest game first;
+3. the focus plan;
+4. the rest, newest first.
+
+The queue knows a waiting replay is Notable from its focus card (`FocusCard.Notable`). The download role builds those cards while `Focus:Enabled` is on (dev and prod). The class itself is still decided at launch. Playing first does not by itself guarantee a recording: when the upload backlog is full, the recording cap treats a Notable replay like an ordinary one.
+
 Each class expires from the game's UTC time. Ordinary expires at `OrdinaryCandidateMaxAge` (72 hours in production). Notable and high-skill expire after 7 days. A request expires after 14 days. Those three ages are not in `appsettings.json` today. `RecordingMode` `All` still records an expired replay. Publication does not offer an expired replay.
 
 A request may ignore `MinimumGameVersion` when `RequestsBypassPatchRequirement` is true, which is the default. Production does not set `RequireCurrentPatch`, so the patch floor is not a publication gate. The downloader still lists Storm League only (`HeroesProfileApi:GameTypes`).

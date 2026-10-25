@@ -502,13 +502,15 @@ public sealed class ReplayCacheProvider : IReplayProvider
     }
 
     /// <summary>
-    /// Requests stay first. Then the plan's replays in its order (a kept pick, then the ranked
-    /// focus candidates), then the rest newest first, and a reserved standout last, so an
-    /// ordinary pick takes it only when nothing else can launch.
+    /// Requests stay first. Then the Notable replays still inside their window (#510), the one
+    /// whose window closes first first, so a pentakill is not lost behind newer games. Then the
+    /// plan's replays in its order (a kept pick, then the ranked focus candidates), then the rest
+    /// newest first, and a reserved standout last, so an ordinary pick takes it only when nothing
+    /// else can launch.
     /// </summary>
     private List<FileInfo> OrderForFocus(List<FileInfo> fresh, FocusPlan plan)
     {
-        if (plan.Order.Count == 0 && plan.Reserved == null)
+        if (plan.Order.Count == 0 && plan.Reserved == null && plan.Notable.Count == 0)
         {
             return fresh;
         }
@@ -519,7 +521,14 @@ public sealed class ReplayCacheProvider : IReplayProvider
             position.TryAdd(plan.Order[index], index);
         }
 
+        var notableAt = new Dictionary<int, int>();
+        for (int index = 0; index < plan.Notable.Count; index++)
+        {
+            notableAt.TryAdd(plan.Notable[index], index);
+        }
+
         var ordered = new List<FileInfo>();
+        var notable = new List<(int Position, FileInfo File)>();
         var focused = new List<(int Position, FileInfo File)>();
         var rest = new List<FileInfo>();
         FileInfo reserved = null;
@@ -529,6 +538,10 @@ public sealed class ReplayCacheProvider : IReplayProvider
             if (IsRequest(file))
             {
                 ordered.Add(file);
+            }
+            else if (notableAt.TryGetValue(id, out int first))
+            {
+                notable.Add((first, file));
             }
             else if (position.TryGetValue(id, out int at))
             {
@@ -544,6 +557,18 @@ public sealed class ReplayCacheProvider : IReplayProvider
             }
         }
 
+        if (notable.Count > 0)
+        {
+            logger.LogInformation(
+                "Notable replays play first while inside their window: {Notable}.",
+                string.Join(
+                    ", ",
+                    notable.OrderBy(pair => pair.Position).Select(pair => pair.File.Name)
+                )
+            );
+        }
+
+        ordered.AddRange(notable.OrderBy(pair => pair.Position).Select(pair => pair.File));
         ordered.AddRange(focused.OrderBy(pair => pair.Position).Select(pair => pair.File));
         ordered.AddRange(rest);
         if (reserved != null)

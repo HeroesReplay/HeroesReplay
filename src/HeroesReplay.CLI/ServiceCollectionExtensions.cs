@@ -550,7 +550,8 @@ public static class ServiceCollectionExtensions
                 settings.Location?.DataDirectory,
                 settings.ReplayMedia?.FocusCandidateMaxAge ?? TimeSpan.FromDays(7),
                 HeroSignatures.Embedded(),
-                serviceProvider.GetRequiredService<ILogger<FocusPicker>>()
+                serviceProvider.GetRequiredService<ILogger<FocusPicker>>(),
+                notableMaxAge: settings.ReplayMedia?.NotableCandidateMaxAge
             ))
             .AddSingleton<IGameData, GameData>()
             .AddSingleton<IReplayHelper, ReplayHelper>()
