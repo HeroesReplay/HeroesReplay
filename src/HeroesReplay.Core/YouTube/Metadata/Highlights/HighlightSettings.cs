@@ -11,10 +11,10 @@ namespace HeroesReplay.Core.YouTube.Metadata.Highlights;
 public class HighlightSettings
 {
     /// <summary>
-    /// Rarest first (#512, 1,975 Storm League games): pentakill 0.25%, two triple kills by one hero
-    /// 0.1%, core race about 1%, comeback 4%, an award 2.2%, deathless carry 9%, kill leader 10%,
+    /// Rarest first (#512, 1,974 Storm League games): pentakill 0.25%, two triple kills by one hero
+    /// 0.1%, core race 1%, comeback 4%, an award 2.2%, deathless carry 10%, kill leader 6%,
     /// objective standout 6% (after the kill standouts, so it leads only when no kill feat does),
-    /// then the common solo lane and the MVP, which every game has.
+    /// then the common solo lane (42% of teams) and the MVP, which every game has.
     /// </summary>
     public static readonly string[] DefaultOrder =
     {
