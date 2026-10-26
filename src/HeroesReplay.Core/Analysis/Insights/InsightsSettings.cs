@@ -32,6 +32,52 @@ public class InsightsSettings
     public ObjectiveInsightSettings Objectives { get; set; } = new();
 
     public AwardInsightSettings Awards { get; set; } = new();
+
+    public BossFightInsightSettings Bosses { get; set; } = new();
+}
+
+/// <summary>
+/// The fight at the pit before each boss capture (#528), read from hero positions. A pit boss is
+/// about 9 map units across its attackers (<c>Spectate:MaxDistanceToBoss</c>); a fight spills a
+/// little wider.
+/// </summary>
+public class BossFightInsightSettings
+{
+    /// <summary>A hero this close to the camp is at the pit.</summary>
+    public double Radius { get; set; } = 12;
+
+    /// <summary>The fight is looked for at most this long before the capture.</summary>
+    public int MaxFightSeconds { get; set; } = 90;
+
+    /// <summary>The fight goes on across this many seconds with no hero at the pit.</summary>
+    public int GapSeconds { get; set; } = 4;
+
+    /// <summary>A team has a group at the pit with this many heroes: most of the team.</summary>
+    public int MinGroup { get; set; } = 3;
+
+    /// <summary>
+    /// A team started the boss when its group was at the pit at least this long before the other
+    /// team's first hero. A steal by position and a defended boss both need it.
+    /// </summary>
+    public int MinLeadSeconds { get; set; } = 5;
+
+    /// <summary>A steal by position: the team that started it had a group at the pit at least this many seconds.</summary>
+    public int StealMinGroupSeconds { get; set; } = 8;
+
+    /// <summary>Defended: both teams had a group at the pit together at least this many seconds.</summary>
+    public int ContestMinSeconds { get; set; } = 6;
+
+    /// <summary>And at least this many heroes died at the pit.</summary>
+    public int ContestMinDeaths { get; set; } = 3;
+
+    /// <summary>A hero who died this close to the camp died at the pit.</summary>
+    public double DeathRadius { get; set; } = 18;
+
+    /// <summary>A death this long after the capture still counts: the fight goes on for a moment.</summary>
+    public int DeathGraceSeconds { get; set; } = 3;
+
+    /// <summary>A pit is on a team's side when it is nearer that team's core by this ratio.</summary>
+    public double SideRatio { get; set; } = 0.85;
 }
 
 /// <summary>

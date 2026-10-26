@@ -284,7 +284,8 @@ public class GameManager : IGameManager
                                 settings.YouTube?.EntryFileName,
                                 logger,
                                 gameData.Heroes,
-                                FfmpegLocator.From(settings.Clips, settings.Dependencies)
+                                FfmpegLocator.From(settings.Clips, settings.Dependencies),
+                                settings.Insights
                             )
                             .ConfigureAwait(false);
                     }

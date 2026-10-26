@@ -56,6 +56,12 @@ public sealed record ReplaySnapshot
     /// <summary>Hero killing blows by players, in time order (#512).</summary>
     public IReadOnlyList<KillingBlow> KillingBlows { get; init; } = Array.Empty<KillingBlow>();
 
+    /// <summary>Boss camps captured (#528), in time order.</summary>
+    public IReadOnlyList<BossCapture> BossCaptures { get; init; } = Array.Empty<BossCapture>();
+
+    /// <summary>Every hero death and where it happened (#528), in time order.</summary>
+    public IReadOnlyList<HeroDeath> HeroDeaths { get; init; } = Array.Empty<HeroDeath>();
+
     public static string TeamName(int team) => team == 0 ? "Blue" : "Red";
 }
 
@@ -149,3 +155,20 @@ public sealed record Camp(int Id, MapPoint Point);
 
 /// <summary>A camp captured by <see cref="Team"/>.</summary>
 public sealed record CampCapture(int CampId, string CampType, int Team, TimeSpan Time);
+
+/// <summary>
+/// A boss camp captured by <see cref="Team"/> (#528): the <c>JungleCampCapture</c> of a camp whose
+/// type names a boss, at the camp's <c>JungleCampInit</c> position. <see cref="KillerIndex"/> is the
+/// player whose unit landed the boss's killing blow, or -1 when the replay names none. That player
+/// can be on the other team: a killed boss is captured by standing in its circle.
+/// </summary>
+public sealed record BossCapture(
+    int CampId,
+    int Team,
+    TimeSpan Time,
+    MapPoint Point,
+    int KillerIndex
+);
+
+/// <summary>A player's hero unit died at <see cref="Point"/> (#528).</summary>
+public sealed record HeroDeath(int PlayerIndex, int Team, TimeSpan Time, MapPoint Point);

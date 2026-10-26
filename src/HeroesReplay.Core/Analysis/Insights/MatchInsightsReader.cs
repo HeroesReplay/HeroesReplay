@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Heroes.ReplayParser;
 using HeroesReplay.Core.Analysis.Insights.Awards;
+using HeroesReplay.Core.Analysis.Insights.Bosses;
 using HeroesReplay.Core.Analysis.Insights.Builds;
 using HeroesReplay.Core.Analysis.Insights.Bursts;
 using HeroesReplay.Core.Analysis.Insights.Camps;
@@ -51,6 +52,7 @@ public sealed class MatchInsightsReader : IMatchInsightsReader
     private readonly IInsightAnalyzer<BurstInsights> bursts;
     private readonly IInsightAnalyzer<ObjectiveInsights> objectives;
     private readonly IInsightAnalyzer<AwardInsights> awards;
+    private readonly IInsightAnalyzer<BossFightInsights> bosses;
 
     public MatchInsightsReader(
         InsightsSettings settings,
@@ -64,9 +66,11 @@ public sealed class MatchInsightsReader : IMatchInsightsReader
         FocusAnalyzer focus,
         IInsightAnalyzer<BurstInsights> bursts,
         IInsightAnalyzer<ObjectiveInsights> objectives,
-        IInsightAnalyzer<AwardInsights> awards
+        IInsightAnalyzer<AwardInsights> awards,
+        IInsightAnalyzer<BossFightInsights> bosses
     )
     {
+        this.bosses = bosses ?? throw new ArgumentNullException(nameof(bosses));
         this.settings = settings ?? new InsightsSettings();
         this.bursts = bursts ?? throw new ArgumentNullException(nameof(bursts));
         this.objectives = objectives ?? throw new ArgumentNullException(nameof(objectives));
@@ -105,7 +109,8 @@ public sealed class MatchInsightsReader : IMatchInsightsReader
             new FocusAnalyzer(),
             new BurstAnalyzer(settings.Bursts),
             new ObjectiveAnalyzer(settings.Objectives),
-            new AwardAnalyzer(settings.Awards)
+            new AwardAnalyzer(settings.Awards),
+            new BossFightAnalyzer(settings.Bosses)
         );
     }
 
@@ -129,6 +134,7 @@ public sealed class MatchInsightsReader : IMatchInsightsReader
             Bursts = bursts.Analyze(snapshot),
             Objectives = objectives.Analyze(snapshot),
             Awards = awards.Analyze(snapshot),
+            Bosses = bosses.Analyze(snapshot),
         };
     }
 }

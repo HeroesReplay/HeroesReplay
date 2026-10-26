@@ -1,4 +1,5 @@
 using HeroesReplay.Core.Analysis.Insights.Awards;
+using HeroesReplay.Core.Analysis.Insights.Bosses;
 using HeroesReplay.Core.Analysis.Insights.Builds;
 using HeroesReplay.Core.Analysis.Insights.Bursts;
 using HeroesReplay.Core.Analysis.Insights.Camps;
@@ -46,4 +47,7 @@ public sealed record MatchInsights
     public ObjectiveInsights Objectives { get; set; } = new();
 
     public AwardInsights Awards { get; set; } = new();
+
+    /// <summary>Each boss capture and the fight at the pit before it (#528).</summary>
+    public BossFightInsights Bosses { get; set; } = new();
 }
