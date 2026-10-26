@@ -21,6 +21,9 @@ public sealed class SavedDispatch
 
 public sealed class UploadOutbox
 {
+    /// <summary>A full match and its clips: at most two pentakills and two triple kills (#511) and room to spare.</summary>
+    public const int MaxAttemptsPerSecond = 16;
+
     private readonly UploadAttemptStore store;
 
     public UploadOutbox(string attemptsRoot)
@@ -125,18 +128,15 @@ public sealed class UploadOutbox
         );
     }
 
-    public Task<string> ContextForReplayAsync(
+    /// <summary>
+    /// The attempt id for <paramref name="mediaPath"/> (#524): its own open attempt, else a new id.
+    /// When another recording of the replay already took this second's id, the next free one
+    /// (<see cref="UploadAttemptIds.InSameSecond"/>). Null when none is left; the recording stays
+    /// pending and the next pass has another second.
+    /// </summary>
+    public async Task<string> ContextForReplayAsync(
         int? replayId,
-        DateTimeOffset at,
-        CancellationToken cancellationToken
-    )
-    {
-        return ContextForReplayAsync(store, replayId, at, cancellationToken);
-    }
-
-    private static async Task<string> ContextForReplayAsync(
-        UploadAttemptStore store,
-        int? replayId,
+        string mediaPath,
         DateTimeOffset at,
         CancellationToken cancellationToken
     )
@@ -144,7 +144,28 @@ public sealed class UploadOutbox
         IReadOnlyList<UploadAttemptManifest> open = await store
             .ListOpenAsync(cancellationToken)
             .ConfigureAwait(false);
-        return UploadAttemptIds.SelectContext(open, replayId, at);
+        string selected = UploadAttemptIds.SelectContext(open, replayId, mediaPath, at);
+        if (selected == null)
+        {
+            return null;
+        }
+
+        for (int index = 1; index <= MaxAttemptsPerSecond; index++)
+        {
+            string candidate = UploadAttemptIds.InSameSecond(selected, index);
+            UploadAttemptResult loaded = await store
+                .LoadAsync(candidate, cancellationToken)
+                .ConfigureAwait(false);
+            if (
+                !loaded.Succeeded
+                || UploadAttemptIds.SameMedia(loaded.Manifest.MediaPath, mediaPath)
+            )
+            {
+                return candidate;
+            }
+        }
+
+        return null;
     }
 
     public Task<UploadAttemptResult> NoteSessionAsync(

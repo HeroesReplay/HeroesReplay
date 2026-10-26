@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using HeroesReplay.Core.Analysis;
 
 namespace HeroesReplay.Core.Clips;
@@ -34,14 +35,32 @@ public readonly record struct TeamKillClip(
 }
 
 /// <summary>
-/// Individual pentakills: one player lands five or more hero-unit killing blows, each within the
-/// window of the previous one. Only they are clips, so clips stay rare. A wipe shared across
-/// players is never a clip, and a pentakill that killed the whole team is still one clip
-/// (<see cref="TeamKillClip.WipedTeam"/>, #369).
+/// One player's own feats, so clips stay rare. A wipe shared across players is never a clip.
+/// <list type="bullet">
+/// <item><b>Pentakill:</b> five or more hero-unit killing blows, each within the window of the
+/// previous one. A pentakill that killed the whole team is still one clip
+/// (<see cref="TeamKillClip.WipedTeam"/>, #369). Only a pentakill makes a replay Notable
+/// (<see cref="MediaPolicy.ReplayMediaEvidence.Accepted"/>).</item>
+/// <item><b>Triple kill (#511):</b> a burst of three or more blows within
+/// <see cref="KillBursts.SpanSeconds"/> of the first (<see cref="KillBursts"/>), that is not
+/// part of a pentakill. It is cut and uploaded as a clip but never makes the replay Notable (owner
+/// decision 2026-10-25). At most <see cref="MaxTripleKills"/> a replay.</item>
+/// </list>
 /// </summary>
 public static class TeamKillClips
 {
     public const string PentakillKind = "pentakill";
+
+    public const string TripleKillKind = "triple-kill";
+
+    /// <summary>The most triple-kill clips one replay is cut into, the earliest first.</summary>
+    public const int MaxTripleKills = 2;
+
+    /// <summary>The word a clip's title and tags use for its kind (<c>triple kill</c>, <c>quadra kill</c>).</summary>
+    public static string Title(TeamKillClip clip) =>
+        clip.Kind == TripleKillKind
+            ? (clip.Kills?.Count >= 4 ? "quadra kill" : "triple kill")
+            : clip.Kind;
 
     public static IReadOnlyList<TeamKillClip> Select(
         IReadOnlyList<TeamKillDeath> deaths,
@@ -72,6 +91,15 @@ public static class TeamKillClips
 
         var clips = new List<TeamKillClip>();
         clips.AddRange(ByKiller(deaths, windowSeconds, leadSeconds, tailSeconds));
+        List<TeamKillClip> tripleKills = clips
+            .Where(clip => clip.Kind == TripleKillKind)
+            .OrderBy(clip => clip.FirstDeathSecond)
+            .ToList();
+        foreach (TeamKillClip extra in tripleKills.Skip(MaxTripleKills))
+        {
+            clips.Remove(extra);
+        }
+
         clips.Sort(
             (left, right) =>
             {
@@ -127,11 +155,13 @@ public static class TeamKillClips
             }
 
             IReadOnlyList<KillStreak> streaks = KillStreaks.Group(seconds, windowSeconds);
+            var pentakills = new List<KillStreak>();
             int offset = 0;
             foreach (KillStreak streak in streaks)
             {
                 if (streak.Kills >= 5)
                 {
+                    pentakills.Add(streak);
                     // One clip per pentakill, also when its victims were the whole team (#369).
                     TeamKillBlow[] blows = Blows(victims, offset, streak.Kills);
                     clips.Add(
@@ -151,6 +181,34 @@ public static class TeamKillClips
                 }
 
                 offset += streak.Kills;
+            }
+
+            // A burst inside a pentakill is part of that clip, not one of its own.
+            foreach (KillBurst burst in KillBursts.Find(seconds))
+            {
+                if (
+                    pentakills.Any(streak =>
+                        burst.StartSecond <= streak.EndSecond
+                        && burst.EndSecond >= streak.StartSecond
+                    )
+                )
+                {
+                    continue;
+                }
+
+                TeamKillBlow[] blows = Blows(victims, burst.Start, burst.Kills);
+                clips.Add(
+                    Clip(
+                        TripleKillKind,
+                        hero,
+                        burst.StartSecond,
+                        burst.EndSecond,
+                        leadSeconds,
+                        tailSeconds,
+                        hero + (burst.Kills >= 4 ? " quadra kill" : " triple kill"),
+                        blows
+                    )
+                );
             }
         }
 

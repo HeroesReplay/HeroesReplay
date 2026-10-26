@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 
 namespace HeroesReplay.Core.YouTube.Outbox;
 
@@ -76,9 +77,14 @@ public static class UploadAttemptIds
         return "file-" + stamp;
     }
 
+    /// <summary>
+    /// The open (uploading or ambiguous) attempt of this recording, else a new id. An attempt of
+    /// another recording of the same replay, the full match or another clip, is never reused (#524).
+    /// </summary>
     public static string SelectContext(
         IReadOnlyList<UploadAttemptManifest> open,
         int? replayId,
+        string mediaPath,
         DateTimeOffset utc
     )
     {
@@ -86,7 +92,11 @@ public static class UploadAttemptIds
         {
             foreach (UploadAttemptManifest manifest in open)
             {
-                if (manifest == null || manifest.ReplayId != replayId)
+                if (
+                    manifest == null
+                    || manifest.ReplayId != replayId
+                    || !SameMedia(manifest.MediaPath, mediaPath)
+                )
                 {
                     continue;
                 }
@@ -102,6 +112,36 @@ public static class UploadAttemptIds
         }
 
         return NewContext(replayId, utc);
+    }
+
+    /// <summary>
+    /// The <paramref name="index"/>th id for <paramref name="baseId"/>'s second (#524): a full match
+    /// and its clips are dispatched within milliseconds in a dry run, so the second-only id of the
+    /// first is <c>replay-44-20261025202159</c> and the next <c>replay-44-20261025202159-2</c>.
+    /// </summary>
+    public static string InSameSecond(string baseId, int index) =>
+        index <= 1 ? baseId : baseId + "-" + index.ToString(CultureInfo.InvariantCulture);
+
+    /// <summary>Both paths name the same file (full paths, ignoring case). A missing path never matches.</summary>
+    public static bool SameMedia(string left, string right)
+    {
+        if (string.IsNullOrWhiteSpace(left) || string.IsNullOrWhiteSpace(right))
+        {
+            return false;
+        }
+
+        try
+        {
+            return string.Equals(
+                Path.GetFullPath(left),
+                Path.GetFullPath(right),
+                StringComparison.OrdinalIgnoreCase
+            );
+        }
+        catch (Exception exception) when (exception is ArgumentException or NotSupportedException)
+        {
+            return false;
+        }
     }
 
     public static bool IsSessionUri(string value)

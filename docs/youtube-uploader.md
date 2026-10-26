@@ -143,6 +143,14 @@ The first matching class wins.
 3. **High-skill.** Rank or MMR meets the configured floor. With no floor, this class never matches.
 4. **Ordinary.** Everything else.
 
+**Play order.** Waiting replays play in this order:
+1. viewer requests;
+2. Notable replays still inside their window (#510), oldest game first;
+3. the focus plan;
+4. the rest, newest first.
+
+The queue knows a waiting replay is Notable from its focus card (`FocusCard.Notable`). The download role builds those cards while `Focus:Enabled` is on (dev and prod). The class itself is still decided at launch. Playing first does not by itself guarantee a recording: when the upload backlog is full, the recording cap treats a Notable replay like an ordinary one.
+
 Each class expires from the game's UTC time. Ordinary expires at `OrdinaryCandidateMaxAge` (72 hours in production). Notable and high-skill expire after 7 days. A request expires after 14 days. Those three ages are not in `appsettings.json` today. `RecordingMode` `All` still records an expired replay. Publication does not offer an expired replay.
 
 A request may ignore `MinimumGameVersion` when `RequestsBypassPatchRequirement` is true, which is the default. Production does not set `RequireCurrentPatch`, so the patch floor is not a publication gate. The downloader still lists Storm League only (`HeroesProfileApi:GameTypes`).
@@ -201,6 +209,7 @@ A granted send that fails still keeps its slot. The retry is allowed through tha
 
 A send that stops part way (a release restart, `services stop`, a network failure) is retried by the uploader itself. Nobody has to act after a release.
 
+- Each recording has its own attempt under `Data\upload-attempts` (#524). It is named `replay-<id>-<yyyyMMddHHmmss>` from its dispatch, and a second recording of the replay in that same second gets `-2`, `-3` and so on. A dry run plans a full match and its clips within milliseconds. Before #524 a clip found the match's settled attempt and was skipped as `already DryRunSimulated`; that happened to 66249756's pentakill clip on 2026-10-25. An open (uploading or ambiguous) attempt is picked up again only for the same recording, never for another clip of the replay.
 - The resumable session URI is saved on the attempt before the first byte is sent (`InitiateSessionAsync`, then the media), so every interrupted send can be checked. YouTube creates the video only when it has every byte, so an incomplete session has no video.
 - The saved URI never holds the API key (#368). Google.Apis starts the session with `key=<YouTube:ApiKey>`, and YouTube's session URI repeats it, so the `key` parameter is taken out before the attempt is written (`UploadSessionUri`) and the configured key is added back only for the send and the status query, which are then the same requests as before. An attempt saved before #368 is rewritten without the key the next time it is read, atomically under its lock, and the uploader reads every saved attempt once when it starts (`Removed the API key from N saved upload sessions.`). The role logs, the heartbeat `lastError`, and CLI output mask `key=` and any Google API key.
 - On a stop the send ends at the next chunk boundary (10 MB chunks), so YouTube keeps every byte sent; a chunk that has not finished after 10 seconds (`YouTubeUploader.StopGrace`) is cut off, inside the 20 seconds `services stop` waits. The log says `Upload of ... paused for the service stop after N of M bytes. YouTube keeps the upload session; the next start resumes it.`
@@ -376,7 +385,7 @@ With `YouTube:Titles:Highlights:Enabled` (on in dev and prod, off in the base fi
 - **Named-player requests.** A request that named a player keeps its `X focus` lead, and takes only a highlight about no one hero.
 - **Featured hero.** A highlight about the featured new hero replaces its `Ft.` part.
 
-**What can lead.** The first kind in `Order` that the match has wins. The default order is `Pentakill`, `CoreRace`, `Comeback`, `DeathlessCarry`, `KillLeader`, `SoloLane`, `Mvp`, `MostFollowed`. A name in `Order` that is no kind is ignored, so an older config that still lists the removed `CampDrought` starts as before. Every kind is a positive call-out about a hero or the match; a team is never called out for what it did not do, so a team's camp count stays on the neutral `Camps:` line of the description:
+**What can lead.** The first kind in `Order` that the match has wins. The default order is `Pentakill`, `TripleKill`, `CoreRace`, `Comeback`, `Award`, `DeathlessCarry`, `KillLeader`, `ObjectiveStandout`, `SoloLane`, `Mvp`, `MostFollowed`: rarest first, with the objective standout after the kill standouts so it leads only when no kill feat does (#512). A name in `Order` that is no kind is ignored, so an older config that still lists the removed `CampDrought` starts as before. Every kind is a positive call-out about a hero or the match; a team is never called out for what it did not do, so a team's camp count stays on the neutral `Camps:` line of the description:
 
 | Kind | Title | When | Measured on 545 local games |
 | --- | --- | --- | --- |
@@ -388,6 +397,11 @@ With `YouTube:Titles:Highlights:Enabled` (on in dev and prod, off in the base fi
 | `SoloLane` | `Solo lane Chen vs Thrall` | Each team's one side-lane soaker from gates open to the first level 10, at High confidence only: the other team's soaker was in the same lane | 32% of teams |
 | `Mvp` | `MVP Orphea 7/1/5` | The game's MVP award | 100% |
 | `MostFollowed` | `Valla 3/4/10` | The hero the focus timeline followed most | |
+| `TripleKill` | `Kael'thas 2 triple kills` | One hero's triple kills (3 hero killing blows within 3 s, the clips' rule, #511), at least `TripleKillMinBursts` (2) of them. One triple kill is clipped but never titled | 2 of 1,975 SL games |
+| `ObjectiveStandout` | `Valla 52% of Immortal damage` | The map objective's leader (`Insights:Objectives`): at least 40% of every player's total, at least twice the next player, and the game's own objective award. Battlefield of Eternity, Braxis Holdout, Cursed Hollow, Dragon Shire, Haunted Mines, Infernal Shrines, Sky Temple, Tomb of the Spider Queen and Towers of Doom; Alterac Pass, Garden of Terror and Volskaya Foundry have no usable value | 6.0% of SL games |
+| `Award` | `Falstad hat trick`, `Rehgar 9 clutch heals` | The game's Hat Trick, or Clutch Healer with 8+ clutch heals, Avenger with 5+ vengeances, Escape Artist with 6+ escapes (`Insights:Awards`). The award alone is common: the game gives most players one | 2.2% of SL games |
+
+The last three rows (#512) were measured on 1,975 Storm League games from 2026-10-25 with `calculators insights`.
 
 **Builds in a title.** A player highlight names the hero's closest guide build only when all of these hold:
 
@@ -397,14 +411,14 @@ With `YouTube:Titles:Highlights:Enabled` (on in dev and prod, off in the base fi
 
 **Description lines.**
 
-- **`Highlights:`** keeps the pentakills first, then adds the standouts (`Li-Ming 12/0/9 with no deaths`), the MVP (merged into a standout of the same player), the core race, and the comeback.
+- **`Highlights:`** keeps the pentakills first, then adds the standouts (`Li-Ming 12/0/9 with no deaths`), the MVP (merged into a standout of the same player), each hero's triple kills (`Valla triple kill`, also a single one; not for a hero with a pentakill), the objective standout, the awards, the core race, and the comeback.
 - **`Solo lanes: Chen (Blue) vs Thrall (Red)`** names High confidence only.
 - **`Camps: Blue 9 (4 on Red's side), Red 3 (0 on Blue's side)`** counts each team's captures and those on the other team's side.
 - **The talent-build block** follows the roster lines. Its heading credits Icy Veins and links its hero guides, and each line names one player's closest guide build and links that guide. A player is listed when their talents score at least `DescriptionBuildMinScore` (0.70): about 57% of players in the corpus. Example: `Li-Ming (Blue): Teleport Build, 6 of 7 talents as recommended - https://www.icy-veins.com/heroes/li-ming-build-guide`.
 
 None of these lines starts with a label the library pass reads.
 
-**Tags.** The highlight's tag (`Deathless`, `Core race`, `Comeback`, `Solo lane`, `MVP`, `Pentakill`) and the build with the hero (`Teleport Li-Ming`) come after the composition labels.
+**Tags.** The highlight's tag (`Deathless`, `Core race`, `Comeback`, `Solo lane`, `MVP`, `Pentakill`, `Triple kill`, `Objective`, `Hat trick`, `Clutch healer`, `Avenger`, `Escape artist`) and the build with the hero (`Teleport Li-Ming`) come after the composition labels.
 
 **The build reference.**
 
@@ -418,7 +432,7 @@ None of these lines starts with a label the library pass reads.
 - `heroesreplay youtube preview --replay <file> [--insights]` prints the title, description and tags a replay would get, offline.
 - `heroesreplay calculators insights --directory <folder> --recursive --output report.md` measures how often each insight fires on a corpus. The thresholds are in `Insights`.
 
-The description starts with `Twitch: https://twitch.tv/saltysadism`, then the Heroes Profile attribution when a statistics hook was used, `Full match.` when the recording completed, the replay id, the Heroes Profile match link, date, build, map, mode, rank, the featured hero when one was named, the draft note with its composition labels, `Featuring:` when a new hero is in the title, the `Stats:` line of a hook, each pentakill as a highlight (`Highlights: Valla pentakill (team wipe)` when it wiped the team), and the requestor when it was a paid upload. The Blue and Red roster lines name each player without the BattleTag number, because YouTube turns `#1234` into a hashtag. Average MMR is not written. The winner is not included. Category id is `20`. Tags come from the map, mode, rank, hero, those events, and each composition label. The entry records `TemplateVersion` 8 (7 had no match highlights, 6 no statistics hook).
+The description starts with `Twitch: https://twitch.tv/saltysadism`, then the Heroes Profile attribution when a statistics hook was used, `Full match.` when the recording completed, the replay id, the Heroes Profile match link, date, build, map, mode, rank, the featured hero when one was named, the draft note with its composition labels, `Featuring:` when a new hero is in the title, the `Stats:` line of a hook, each pentakill as a highlight (`Highlights: Valla pentakill (team wipe)` when it wiped the team), and the requestor when it was a paid upload. The Blue and Red roster lines name each player without the BattleTag number, because YouTube turns `#1234` into a hashtag. Average MMR is not written. The winner is not included. Category id is `20`. Tags come from the map, mode, rank, hero, those events, and each composition label. The entry records `TemplateVersion` 10 (9 had no triple kill, objective or award highlights, 8 no focus-hero titles, 7 no match highlights, 6 no statistics hook).
 
 Every `videos.insert`, full match or clip, is built by `UploadBody` with the `snippet,status` parts:
 
@@ -432,7 +446,11 @@ Every `videos.insert`, full match or clip, is built by `UploadBody` with the `sn
 
 Videos uploaded before this template can still have BattleTag numbers in the roster lines, or a viewer's name in the title. `tools/youtube-fix-descriptions.cs` is a one-off script that rewrites those videos on YouTube. It only prints the changes unless it is given `--apply`, and it changes titles only with `--titles`.
 
-Clips are individual pentakills only (#369): one full-frame cut per pentakill under the context `clips` folder. A pentakill that wiped the whole team is still one clip, and a wipe shared across players is never cut. Each cut starts 12 seconds before the streak and ends 8 seconds after it on the match clock. `clips.json` in that context lists each cut with the hero and the killing blows (`second` and `victim`). The hero name is the English catalog name when the catalog has that hero. Each clip has its own `youtube-entry.json` and can be inserted as its own video. It uses the parent replay's class and the parent replay's one publication slot. Each insert still counts toward the quota. Clip titles look like `Li-Ming - pentakill - Alterac Pass - 65550001`.
+Clips are one player's own feats, one full-frame cut each under the context `clips` folder. A wipe shared across players is never cut (#369).
+- **Pentakill.** A pentakill that wiped the whole team is still one clip.
+- **Triple kill (#511).** A burst of 3 or more of one hero's killing blows within 3 s of the first, that is not part of a pentakill, is cut too, at most 2 a replay, earliest first. On 1,965 Storm League games one happened in 55 games (Kael'thas in 10). A triple kill never makes the replay Notable and adds nothing to the media score: only a pentakill does (owner decision 2026-10-25). Its title says `quadra kill` when the burst has 4 blows.
+
+Each cut starts 12 seconds before the streak and ends 8 seconds after it on the match clock. `clips.json` in that context lists each cut with the hero and the killing blows (`second` and `victim`). The hero name is the English catalog name when the catalog has that hero. Each clip has its own `youtube-entry.json` and can be inserted as its own video. It uses the parent replay's class and the parent replay's one publication slot. The uploader's file watcher tries a clip once, as soon as it is cut. A clip that has to wait then is sent by a later upload pass, which also looks in each context's `clips` folders (`PendingYouTubeUpload.FindClips`, #511). Reasons to wait include the parent's decision not being written yet, the insert cap, or a full publication window. Before #511 such a clip was never tried again, which is how prod's Malthael pentakill (65893649) lost its clip. Each insert still counts toward the quota. Clip titles look like `Li-Ming - pentakill - Alterac Pass - 65550001` or `Kael'thas - triple kill - Cursed Hollow - 65550002`, with the English map name; the tags are the kind, the hero and the map.
 
 After a successful upload, retention deletes the mp4 on the next sweep, which the uploader runs right after the insert. The video may still be waiting for its `publishAt`. The context folder itself lasts `VideoKeepDays` (3 in production), and an entry that waits for `publishAt` no longer keeps it.
 

@@ -94,6 +94,46 @@ public class FocusCardBuilderTests
     }
 
     [Fact]
+    public void Build_KeepsAnIndividualPentakill_AsTheReplaysNotableEvent()
+    {
+        // Player 0 (Hero 0) lands the killing blow on all five of team 1, 4 s apart (#510).
+        Replay replay = FocusReplays.Replay();
+        Player killer = replay.Players[0];
+        ReplayUnit killerUnit = killer.HeroUnits[0];
+        for (int victim = 5; victim < 10; victim++)
+        {
+            ReplayUnit unit = replay.Players[victim].HeroUnits[0];
+            unit.TimeSpanDied = TimeSpan.FromSeconds(500 + (victim - 5) * 4);
+            unit.PlayerKilledBy = killer;
+            unit.UnitKilledBy = killerUnit;
+        }
+
+        FocusCard card = Builder()
+            .Build(replay, FocusReplays.Catalog, new FocusReplayFacts("65550007", 65550007), Now);
+
+        FocusCardNotable notable = Assert.Single(card.Notable);
+        Assert.Equal("pentakill", notable.Kind);
+        Assert.Equal("Hero 0", notable.Hero);
+        Assert.Equal(500, notable.Second);
+        Assert.True(notable.WipedTeam);
+        Assert.Equal(2, FocusCard.CurrentVersion);
+    }
+
+    [Fact]
+    public void Build_HasNoNotableEvent_WithoutAPentakill()
+    {
+        FocusCard card = Builder()
+            .Build(
+                FocusReplays.Replay(),
+                FocusReplays.Catalog,
+                new FocusReplayFacts("65550008", 65550008),
+                Now
+            );
+
+        Assert.Empty(card.Notable);
+    }
+
+    [Fact]
     public void Build_RefusesAReplayWithoutAKey()
     {
         Assert.Throws<ArgumentException>(() =>

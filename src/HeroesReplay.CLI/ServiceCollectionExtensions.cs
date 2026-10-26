@@ -21,6 +21,7 @@ using HeroesReplay.Core.GameClient.Firewall;
 using HeroesReplay.Core.HeroesData;
 using HeroesReplay.Core.HeroesData.Rotation;
 using HeroesReplay.Core.HeroesProfile;
+using HeroesReplay.Core.HeroesProfile.Interest;
 using HeroesReplay.Core.HeroFocus;
 using HeroesReplay.Core.HeroFocus.Cards;
 using HeroesReplay.Core.HeroFocus.Ledger;
@@ -550,7 +551,8 @@ public static class ServiceCollectionExtensions
                 settings.Location?.DataDirectory,
                 settings.ReplayMedia?.FocusCandidateMaxAge ?? TimeSpan.FromDays(7),
                 HeroSignatures.Embedded(),
-                serviceProvider.GetRequiredService<ILogger<FocusPicker>>()
+                serviceProvider.GetRequiredService<ILogger<FocusPicker>>(),
+                notableMaxAge: settings.ReplayMedia?.NotableCandidateMaxAge
             ))
             .AddSingleton<IGameData, GameData>()
             .AddSingleton<IReplayHelper, ReplayHelper>()
@@ -657,7 +659,9 @@ public static class ServiceCollectionExtensions
                 sp.GetRequiredService<HeroesProfileService>()
             )
             // A rank reward's tier lookups (#429) share the service's client and cache.
-            .AddSingleton<IReplayTierLookup>(sp => sp.GetRequiredService<HeroesProfileService>());
+            .AddSingleton<IReplayTierLookup>(sp => sp.GetRequiredService<HeroesProfileService>())
+            // So does the download role's candidate scoring (#510).
+            .AddSingleton<IReplayDetailLookup>(sp => sp.GetRequiredService<HeroesProfileService>());
     }
 
     /// <summary>

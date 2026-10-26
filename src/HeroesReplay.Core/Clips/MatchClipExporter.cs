@@ -16,6 +16,12 @@ namespace HeroesReplay.Core.Clips;
 
 public static class MatchClipExporter
 {
+    /// <summary>The folder of a context that holds its clips, one folder per clip.</summary>
+    public const string FolderName = "clips";
+
+    /// <summary>The cut file in each clip's folder, next to that clip's own entry.</summary>
+    public const string ClipFileName = "clip.mp4";
+
     /// <summary><c>clips.json</c>: indented, and camelCase as its anonymous rows were before #454.</summary>
     internal static readonly ClipsJsonContext Index = new(
         new JsonSerializerOptions
@@ -91,7 +97,7 @@ public static class MatchClipExporter
         if (string.IsNullOrWhiteSpace(match))
         {
             logger?.LogWarning(
-                "No finalized OBS recording for {Directory}. Pentakill clips were not cut.",
+                "No finalized OBS recording for {Directory}. Clips were not cut.",
                 contextDirectory
             );
             return;
@@ -101,7 +107,7 @@ public static class MatchClipExporter
         if (match == null)
         {
             logger?.LogWarning(
-                "Finalized OBS recording {Path} was not readable. Pentakill clips were not cut.",
+                "Finalized OBS recording {Path} was not readable. Clips were not cut.",
                 recordingPath
             );
             return;
@@ -136,7 +142,7 @@ public static class MatchClipExporter
             logger?.LogInformation("{OwnedDuration}", ownedDuration);
         }
 
-        string clipRoot = Path.Combine(contextDirectory, "clips");
+        string clipRoot = Path.Combine(contextDirectory, FolderName);
         Directory.CreateDirectory(clipRoot);
         var written = new List<ClipIndexRow>();
         foreach (TeamKillClip clip in clips)
@@ -175,7 +181,7 @@ public static class MatchClipExporter
             string folderName = SafeName($"{clip.Kind}-{clip.Hero}-{clip.HudStartSecond}");
             string folder = Path.Combine(clipRoot, folderName);
             Directory.CreateDirectory(folder);
-            string output = Path.Combine(folder, "clip.mp4");
+            string output = Path.Combine(folder, ClipFileName);
             if (File.Exists(output) && new FileInfo(output).Length > 10_000)
             {
                 written.Add(Row(clip, start, duration, output));
@@ -261,9 +267,10 @@ public static class MatchClipExporter
             ? "youtube-entry.json"
             : entryFileName;
         string id = replayId is > 0 ? replayId.Value.ToString(CultureInfo.InvariantCulture) : null;
-        string map = replay?.Map;
+        string map = EnglishMapNames.Prefer(null, replay?.Map, replay?.MapAlternativeName);
+        string kind = TeamKillClips.Title(clip);
         string title = YouTubeListing.ApplyMarker(
-            string.Join(" - ", new[] { clip.Hero, clip.Kind, map, id }.WhereNotEmpty()),
+            string.Join(" - ", new[] { clip.Hero, kind, map, id }.WhereNotEmpty()),
             youtube?.TitlePrefix
         );
         var entry = new YouTubeEntry
@@ -281,7 +288,7 @@ public static class MatchClipExporter
                     ? string.Empty
                     : $"Heroes Profile Match: https://www.heroesprofile.com/Match/Single/?replayID={id}",
             }.WhereNotEmpty(),
-            Tags = new[] { clip.Kind, clip.Hero, map }.WhereNotEmpty(),
+            Tags = new[] { kind, clip.Hero, map }.WhereNotEmpty(),
             Hero = string.IsNullOrWhiteSpace(clip.Hero) ? null : clip.Hero.Trim(),
             Heroes = string.IsNullOrWhiteSpace(clip.Hero) ? null : new[] { clip.Hero.Trim() },
         };

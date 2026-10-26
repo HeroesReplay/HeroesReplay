@@ -22,6 +22,12 @@ public class HeroesProfileApiSettings
     /// </summary>
     public int CachedReplayLimit { get; set; } = 5;
 
+    /// <summary>
+    /// Score a page's candidates from their Heroes Profile score screen and download the most
+    /// interesting one (#510), instead of the lowest id. Off unless set.
+    /// </summary>
+    public Interest.ReplayInterestSettings Interest { get; set; } = new();
+
     /// <summary>A Standard candidate older than this makes the cursor jump to recent ids. Zero turns it off.</summary>
     public TimeSpan StandardMaxReplayAge { get; set; } = TimeSpan.FromHours(12);
 

@@ -12,7 +12,7 @@ namespace HeroesReplay.Core.HeroFocus.Cards;
 public sealed class FocusCard
 {
     /// <summary>Raised when the card gains or changes a fact; an older card is built again.</summary>
-    public const int CurrentVersion = 1;
+    public const int CurrentVersion = 2;
 
     public int Version { get; set; } = CurrentVersion;
 
@@ -51,6 +51,29 @@ public sealed class FocusCard
     public DateTime BuiltAtUtc { get; set; }
 
     public List<FocusCardPlayer> Players { get; set; } = new();
+
+    /// <summary>
+    /// The events that make the replay Notable when it launches (#510): each individual pentakill,
+    /// the media policy's evidence (<see cref="MediaPolicy.ReplayMediaEvidence.Accepted"/>). The
+    /// spectator plays a waiting replay with one before the ordinary queue while it is inside
+    /// <c>ReplayMedia:NotableCandidateMaxAge</c>, so a rare clip is not lost behind newer games.
+    /// </summary>
+    public List<FocusCardNotable> Notable { get; set; } = new();
+}
+
+/// <summary>One Notable event on a <see cref="FocusCard"/>: a pentakill and whose it was.</summary>
+public sealed class FocusCardNotable
+{
+    /// <summary>The clip kind (<c>pentakill</c>).</summary>
+    public string Kind { get; set; }
+
+    /// <summary>The English catalog name of the hero who landed it.</summary>
+    public string Hero { get; set; }
+
+    /// <summary>The match second of its first killing blow.</summary>
+    public int Second { get; set; }
+
+    public bool WipedTeam { get; set; }
 }
 
 public sealed class FocusCardPlayer

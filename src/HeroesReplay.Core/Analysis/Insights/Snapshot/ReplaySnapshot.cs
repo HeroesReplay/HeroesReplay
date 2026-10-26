@@ -1,17 +1,22 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using HeroesReplay.Core.Shared;
 
 namespace HeroesReplay.Core.Analysis.Insights.Snapshot;
 
 /// <summary>
 /// The facts of one replay every insight analyzer reads (#412), parsed once from the replay:
-/// players and their end-of-game stats, cores, forts and keeps with their lanes, merc camps and
-/// their captures, team levels, and hero positions. Team 0 is Blue, team 1 is Red.
+/// players and their end-of-game stats and awards, cores, forts and keeps with their lanes, merc
+/// camps and their captures, team levels, hero killing blows, and hero positions. Team 0 is Blue,
+/// team 1 is Red.
 /// </summary>
 public sealed record ReplaySnapshot
 {
     public bool Aram { get; init; }
+
+    /// <summary>The map's English name (<c>EnglishMapNames</c>), whatever the replay's game language.</summary>
+    public string Map { get; init; }
 
     public TimeSpan GatesOpen { get; init; }
 
@@ -47,6 +52,9 @@ public sealed record ReplaySnapshot
         new Dictionary<int, IReadOnlyDictionary<int, TimeSpan>>();
 
     public IHeroPositions Positions { get; init; }
+
+    /// <summary>Hero killing blows by players, in time order (#512).</summary>
+    public IReadOnlyList<KillingBlow> KillingBlows { get; init; } = Array.Empty<KillingBlow>();
 
     public static string TeamName(int team) => team == 0 ? "Blue" : "Red";
 }
@@ -89,7 +97,44 @@ public sealed record PlayerScore
 
     /// <summary>The game's own MVP award. A player on either team can earn it.</summary>
     public bool Mvp { get; init; }
+
+    /// <summary>The score screen's multikills (two or more hero kills in quick succession).</summary>
+    public int Multikill { get; init; }
+
+    public int ClutchHeals { get; init; }
+
+    public int Vengeances { get; init; }
+
+    public int Escapes { get; init; }
+
+    public int TeamfightEscapes { get; init; }
+
+    public int OutnumberedDeaths { get; init; }
+
+    public int Protection { get; init; }
+
+    public TimeSpan CrowdControl { get; init; }
+
+    public TimeSpan OnFire { get; init; }
+
+    /// <summary>The game's end-of-match awards by <c>MatchAwardType</c> name (#512): <c>HatTrick</c>, <c>MostImmortalDamage</c>.</summary>
+    public IReadOnlyList<string> Awards { get; init; } = Array.Empty<string>();
+
+    /// <summary>
+    /// The score screen's values the parser does not map (#512), such as the map objective's
+    /// <c>CurseDamageDone</c>, <c>TimeOnPoint</c> or <c>GardenSeedsCollectedByPlayer</c>.
+    /// </summary>
+    public IReadOnlyDictionary<string, int> MapValues { get; init; } =
+        new Dictionary<string, int>();
+
+    public bool HasAward(string award) => Awards.Contains(award, StringComparer.OrdinalIgnoreCase);
 }
+
+/// <summary>
+/// A hero killing blow (#512): one of the killer's own hero units killed an enemy player's hero
+/// unit (the <c>TeamKillDeaths</c> rule). <see cref="Second"/> is replay time.
+/// </summary>
+public sealed record KillingBlow(int Second, int KillerIndex);
 
 /// <summary>A fort (level 2) or keep (level 3).</summary>
 public sealed record Town(int Id, int Team, int Lane, MapPoint Point);

@@ -146,7 +146,9 @@ public class ReleaseWorkflowTests
         using var global = JsonDocument.Parse(ReadRepoFile("global.json"));
         JsonElement sdk = global.RootElement.GetProperty("sdk");
         Assert.Matches(@"^10\.0\.\d{3}$", sdk.GetProperty("version").GetString());
-        Assert.Equal("latestPatch", sdk.GetProperty("rollForward").GetString());
+        // #522: not latestPatch, which setup-dotnet turns into a channel (10.0.4xx) that can point at
+        // an SDK Microsoft has staged but not released (HTTP 409); patch installs this exact version.
+        Assert.Equal("patch", sdk.GetProperty("rollForward").GetString());
 
         foreach (string workflow in new[] { "ci.yml", "release.yml" })
         {

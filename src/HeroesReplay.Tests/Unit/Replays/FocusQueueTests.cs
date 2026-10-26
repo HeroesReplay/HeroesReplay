@@ -87,6 +87,54 @@ public sealed class FocusQueueTests : IDisposable
     }
 
     [Fact]
+    public async Task ANotableReplay_PlaysBeforeNewerReplays_WhileInsideItsWindow()
+    {
+        // 101 has a pentakill from five days ago; 102 and 103 are newer ordinary replays (#510).
+        Standard(101, 102, 103);
+        NotableCard(101, Now - TimeSpan.FromDays(5));
+        ReplayCacheProvider provider = Provider();
+
+        LoadedReplay first = await provider.TryLoadNextReplayAsync();
+        provider.MarkSpectated(first);
+        LoadedReplay second = await provider.TryLoadNextReplayAsync();
+
+        Assert.Equal(101, first.ReplayId);
+        Assert.Equal(103, second.ReplayId);
+    }
+
+    [Fact]
+    public async Task ANotableReplayPastItsWindow_WaitsItsTurn()
+    {
+        Standard(101, 102, 103);
+        NotableCard(101, Now - TimeSpan.FromDays(8));
+        ReplayCacheProvider provider = Provider();
+
+        LoadedReplay first = await provider.TryLoadNextReplayAsync();
+
+        Assert.Equal(103, first.ReplayId);
+    }
+
+    [Fact]
+    public async Task NotableReplays_PlayTheOldestGameFirst_AfterAWaitingRequest()
+    {
+        Standard(101, 102, 103);
+        Request(200);
+        NotableCard(103, Now - TimeSpan.FromDays(2));
+        NotableCard(102, Now - TimeSpan.FromDays(6));
+        ReplayCacheProvider provider = Provider();
+
+        var order = new List<int?>();
+        for (int pick = 0; pick < 4; pick++)
+        {
+            LoadedReplay next = await provider.TryLoadNextReplayAsync();
+            order.Add(next.ReplayId);
+            provider.MarkSpectated(next);
+        }
+
+        Assert.Equal(new int?[] { 200, 102, 103, 101 }, order);
+    }
+
+    [Fact]
     public async Task AWaitingRequest_PlaysFirst_WithoutAFocus_AndDoesNotCount()
     {
         Standard(101, 105);
@@ -230,6 +278,30 @@ public sealed class FocusQueueTests : IDisposable
             other.IsAi = true;
         }
 
+        new FocusCardStore(FocusCardStore.DirectoryFor(root)).Write(card);
+    }
+
+    /// <summary>
+    /// A card whose replay has an individual pentakill (#510), its game played at
+    /// <paramref name="played"/>. All ten players are AI, so it is never a focus candidate.
+    /// </summary>
+    private void NotableCard(int id, DateTime played)
+    {
+        FocusCard card = FocusFixtures.Card(id, Player(0, "Valla", "Demo", "Ranged Assassin"));
+        foreach (FocusCardPlayer player in card.Players)
+        {
+            player.IsAi = true;
+        }
+
+        card.GameDateUtc = played;
+        card.Notable.Add(
+            new FocusCardNotable
+            {
+                Kind = "pentakill",
+                Hero = "Valla",
+                Second = 521,
+            }
+        );
         new FocusCardStore(FocusCardStore.DirectoryFor(root)).Write(card);
     }
 

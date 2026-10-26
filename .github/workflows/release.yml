@@ -12,10 +12,10 @@ jobs:
   publish:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           # The SDK global.json pins (#462). Dependabot bumps it; package-release.ps1 writes
           # the .NET runtime the packaged exe runs on into runtime.txt.
@@ -74,7 +74,7 @@ jobs:
             }
           }
       # Without target_commitish, GitHub creates a new tag on the default branch (develop).
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           tag_name: v${{ steps.gitversion.outputs.semVer }}
           target_commitish: ${{ github.sha }}

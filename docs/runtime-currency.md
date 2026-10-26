@@ -12,7 +12,7 @@ A self-contained release (#453) or a Native AOT release (#461) carries its runti
 
 | What | Where | Moved by |
 | --- | --- | --- |
-| The .NET SDK | `global.json` (`10.0.402`, `rollForward: latestPatch`) | Dependabot `dotnet-sdk`, weekly |
+| The .NET SDK | `global.json` (`10.0.402`, `rollForward: patch`) | Dependabot `dotnet-sdk`, weekly |
 | `Microsoft.Extensions.*` and `System.*` (the 10.0.x servicing train) | `Directory.Packages.props` | Dependabot `nuget`, weekly, one `microsoft-extensions` pull request |
 | OpenTelemetry, Kiota | `Directory.Packages.props` | Dependabot `nuget`, weekly, one pull request per group |
 | Every other package | `Directory.Packages.props` | Dependabot `nuget`, weekly, one pull request each |
@@ -23,7 +23,7 @@ A self-contained release (#453) or a Native AOT release (#461) carries its runti
   - `ci.yml` and `release.yml` install it with `actions/setup-dotnet` and `global-json-file: global.json`.
   - `tools/bootstrap-workstation.ps1` warns when no installed SDK satisfies the pin.
   - The SDK brings the runtime the build is tested on. Native AOT also bakes that runtime patch in, so the SDK bump pull request is the record of which runtime ships.
-  - `latestPatch` lets a runner use a newer preinstalled patch of the same feature band (10.0.4xx for 10.0.402). `runtime.txt` shows which runtime was used. Set `"rollForward": "disable"` if exact reproducibility matters more than a runner that already has a newer patch.
+  - `patch` (#522) makes `setup-dotnet` install exactly the pinned SDK. A local build uses the pinned SDK, or without it the newest installed patch of the same feature band (10.0.4xx for 10.0.402). It was `latestPatch` until 2026-10-25: `setup-dotnet` turns that into the channel `10.0.4xx`, which pointed at 10.0.403 before Microsoft released it, and every CI run failed with HTTP 409 on the download. `runtime.txt` shows which runtime was used.
 - **Majors.** Dependabot ignores major versions of `Microsoft.Extensions.*` and `System.*`. That keeps the packages on the .NET 10 LTS line and keeps `System.CommandLine` on 2 (AGENTS.md hard rules).
 - **Security updates.** Turn on Dependabot security updates in the repository settings (Code security). That is a setting, not a file.
 

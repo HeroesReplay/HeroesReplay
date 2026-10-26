@@ -61,11 +61,20 @@ Count team-composition labels (split push, siege, dive, poke, and the rest) and 
 
 ## `calculators insights`
 
-Read every .StormReplay in a folder, one file at a time, with units, events and statistics, and print each replay's match insights: each team's solo laner and its confidence, positive standouts, the MVP, camps (and how many on the enemy side), forts and keeps lost, a core race, a comeback, and each player's closest guide build. Then how often each appears per game, per team or per player, to tune the Insights thresholds. Reads the heroes-data2 catalog under Location:DataDirectory and the shipped talent-build reference. Read-only.
+Read every .StormReplay in a folder, one file at a time, with units, events and statistics, and print each replay's match insights: each team's solo laner and its confidence, positive standouts, the MVP, camps (and how many on the enemy side), forts and keeps lost, a core race, a comeback, each player's closest guide build, each hero's kill bursts (3 killing blows within 3 s), the map objective's leader with its share and award, and the standout awards (clutch heals, vengeances, escapes). Then how often each appears per game, per team or per player, to tune the Insights thresholds. Reads the heroes-data2 catalog under Location:DataDirectory and the shipped talent-build reference. Read-only.
 
 - **Options:** `--directory` (`-d`, required), `--recursive`, `--output` (`-o`)
 - **Before:** A folder of replays (`--directory`, `--recursive` for subfolders), the heroes-data2 catalog under `Location:DataDirectory`, and the shipped talent-build reference.
 - **Changes:** Prints each replay's match insights and the frequency tables; writes `--output` (`.md`) when given. Read-only for the replays.
+- **Exit:** 0 when at least one replay was read. 1 for a missing folder, an `--output` that is not `.md`, or no replays in it. 2 when no replay parsed.
+
+## `calculators interest`
+
+Read every .StormReplay in a folder, one file at a time, with events and statistics, and score each from its score screen the way the download role scores Heroes Profile candidates before a download (HeroesProfileApi:Interest): deathless carry, kill leader, long takedown streak, time on fire, multi-kills, game length and league. Then how often each signal fires and how the totals spread. A replay is counted once by its id. Reads the heroes-data2 catalog under Location:DataDirectory. Read-only.
+
+- **Options:** `--directory` (`-d`, required), `--recursive`, `--output` (`-o`)
+- **Before:** A folder of replays (`--directory`, `--recursive` for subfolders) and the heroes-data2 catalog under `Location:DataDirectory`. The points and thresholds are `HeroesProfileApi:Interest`.
+- **Changes:** Prints each replay's interest score and reasons, how often each signal fires and how the totals spread; writes `--output` (`.md`) when given. Each replay id counts once. Read-only for the replays; no Heroes Profile call.
 - **Exit:** 0 when at least one replay was read. 1 for a missing folder, an `--output` that is not `.md`, or no replays in it. 2 when no replay parsed.
 
 ## `builds import`

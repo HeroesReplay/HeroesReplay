@@ -41,6 +41,47 @@ public class PendingYouTubeUploadTests
     }
 
     [Fact]
+    public void FindClips_ReturnsAWaitingClip_ButNotAnUploadedOne_AndFindStaysFullMatchesOnly()
+    {
+        // #511: prod's Malthael pentakill (65893649) was cut but never sent: the watcher tried it
+        // once, and the pass never looked inside clips\.
+        string root = Path.Combine(Path.GetTempPath(), "hr-yt-" + Path.GetRandomFileName());
+        string context = Path.Combine(root, "65893649");
+        string waiting = Path.Combine(context, "clips", "pentakill-Malthael-755");
+        string sent = Path.Combine(context, "clips", "triple-kill-Malthael-1180");
+        try
+        {
+            Directory.CreateDirectory(waiting);
+            Directory.CreateDirectory(sent);
+            File.WriteAllText(Path.Combine(waiting, "clip.mp4"), "video");
+            File.WriteAllText(Path.Combine(waiting, "youtube-entry.json"), "{}");
+            File.WriteAllText(Path.Combine(sent, "clip.mp4"), "video");
+            File.WriteAllText(Path.Combine(sent, "youtube-entry-uploaded.json"), "{}");
+
+            IReadOnlyList<string> clips = PendingYouTubeUpload.FindClips(
+                root,
+                "youtube-entry.json",
+                "youtube-entry-uploaded.json"
+            );
+            IReadOnlyList<string> matches = PendingYouTubeUpload.Find(
+                root,
+                "youtube-entry.json",
+                "youtube-entry-uploaded.json"
+            );
+
+            Assert.Equal(new[] { Path.Combine(waiting, "clip.mp4") }, clips);
+            Assert.Empty(matches);
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public void Find_SkipsARecordingThatAlreadyHasAnUploadReceipt()
     {
         string root = Path.Combine(Path.GetTempPath(), "hr-yt-" + Path.GetRandomFileName());
