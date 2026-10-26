@@ -80,6 +80,17 @@ public class MatchClipExportTests : IClassFixture<ReplayFixture>
             "Test triple kill",
             blows.Take(3).ToArray()
         );
+        // A boss stolen from the team that killed it (#528) names the capturing team, not a hero.
+        var steal = new TeamKillClip(
+            BossFightClips.StealKind,
+            "Red team",
+            blows[0].Second + 1,
+            blows[0].Second + 6,
+            blows[0].Second - 11,
+            blows[0].Second + 12,
+            "Red steals the boss Blue killed",
+            NamesTeam: true
+        );
         int length = first.HudEndSecond - first.HudStartSecond + LeadSeconds * 2;
         string directory = Path.Combine(
             Path.GetTempPath(),
@@ -120,7 +131,7 @@ public class MatchClipExportTests : IClassFixture<ReplayFixture>
 
             var logger = new ListLogger();
             await MatchClipExporter.ExportAsync(
-                new[] { first, triple },
+                new[] { first, triple, steal },
                 fixture.Replay,
                 65000001,
                 directory,
@@ -186,6 +197,14 @@ public class MatchClipExportTests : IClassFixture<ReplayFixture>
             );
             Assert.Contains("triple kill", tripleEntry.Tags);
             Assert.Equal("clip:65000001:triple-kill:Test", tripleEntry.DescriptionLines[0]);
+            YouTubeEntry stealEntry = EntryOf(rows, steal.HudStartSecond);
+            Assert.Equal(
+                "[TEST] Red team - boss steal - Garden of Terror - 65000001",
+                stealEntry.Title
+            );
+            Assert.Null(stealEntry.Hero);
+            Assert.Null(stealEntry.Heroes);
+            Assert.Equal(new[] { "boss steal", "Garden of Terror" }, stealEntry.Tags);
         }
         finally
         {

@@ -6,6 +6,9 @@ using System.IO;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Heroes.ReplayParser;
+using HeroesReplay.Core.Analysis.Insights;
+using HeroesReplay.Core.Analysis.Insights.Bosses;
+using HeroesReplay.Core.Analysis.Insights.Snapshot;
 using HeroesReplay.Core.Obs.Recording;
 using HeroesReplay.Core.Shared;
 using HeroesReplay.Core.YouTube;
@@ -41,7 +44,8 @@ public static class MatchClipExporter
         string entryFileName,
         ILogger logger,
         IReadOnlyList<Hero> heroes = null,
-        FfmpegLocator ffmpeg = null
+        FfmpegLocator ffmpeg = null,
+        InsightsSettings insights = null
     )
     {
         if (
@@ -54,9 +58,11 @@ public static class MatchClipExporter
             return;
         }
 
-        IReadOnlyList<TeamKillClip> clips = TeamKillClips.Select(
+        IReadOnlyList<TeamKillClip> kills = TeamKillClips.Select(
             TeamKillDeaths.FromReplay(replay, heroes)
         );
+        var clips = new List<TeamKillClip>(kills);
+        clips.AddRange(BossClips(replay, heroes, insights, kills, logger));
         await ExportAsync(
                 clips,
                 replay,
@@ -70,6 +76,34 @@ public static class MatchClipExporter
                 ffmpeg
             )
             .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The replay's boss steals and defended bosses (#528). A replay the analysis cannot read
+    /// gives none, so the kill clips are still cut.
+    /// </summary>
+    internal static IReadOnlyList<TeamKillClip> BossClips(
+        Replay replay,
+        IReadOnlyList<Hero> heroes,
+        InsightsSettings insights,
+        IReadOnlyList<TeamKillClip> kills,
+        ILogger logger
+    )
+    {
+        try
+        {
+            insights ??= new InsightsSettings();
+            ReplaySnapshot snapshot = ReplaySnapshotReader.Read(replay, heroes, insights);
+            return BossFightClips.Select(
+                new BossFightAnalyzer(insights.Bosses).Analyze(snapshot),
+                kills
+            );
+        }
+        catch (Exception e)
+        {
+            logger?.LogWarning(e, "Could not read the boss fights. Only kill clips are cut.");
+            return Array.Empty<TeamKillClip>();
+        }
     }
 
     /// <summary>Cuts the given clips out of the finalized recording.</summary>
@@ -269,6 +303,8 @@ public static class MatchClipExporter
         string id = replayId is > 0 ? replayId.Value.ToString(CultureInfo.InvariantCulture) : null;
         string map = EnglishMapNames.Prefer(null, replay?.Map, replay?.MapAlternativeName);
         string kind = TeamKillClips.Title(clip);
+        // A clip that names a team (a boss stolen from the team that killed it, #528) has no hero.
+        string hero = clip.NamesTeam ? null : clip.Hero?.Trim();
         string title = YouTubeListing.ApplyMarker(
             string.Join(" - ", new[] { clip.Hero, kind, map, id }.WhereNotEmpty()),
             youtube?.TitlePrefix
@@ -288,9 +324,9 @@ public static class MatchClipExporter
                     ? string.Empty
                     : $"Heroes Profile Match: https://www.heroesprofile.com/Match/Single/?replayID={id}",
             }.WhereNotEmpty(),
-            Tags = new[] { kind, clip.Hero, map }.WhereNotEmpty(),
-            Hero = string.IsNullOrWhiteSpace(clip.Hero) ? null : clip.Hero.Trim(),
-            Heroes = string.IsNullOrWhiteSpace(clip.Hero) ? null : new[] { clip.Hero.Trim() },
+            Tags = new[] { kind, clip.NamesTeam ? null : clip.Hero, map }.WhereNotEmpty(),
+            Hero = string.IsNullOrWhiteSpace(hero) ? null : hero,
+            Heroes = string.IsNullOrWhiteSpace(hero) ? null : new[] { hero },
         };
         File.WriteAllText(
             Path.Combine(folder, name),

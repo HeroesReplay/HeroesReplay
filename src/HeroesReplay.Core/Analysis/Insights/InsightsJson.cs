@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using HeroesReplay.Core.Analysis.Insights.Awards;
+using HeroesReplay.Core.Analysis.Insights.Bosses;
 using HeroesReplay.Core.Analysis.Insights.Lanes;
 using HeroesReplay.Core.Analysis.Insights.Players;
 
@@ -22,6 +23,7 @@ public static class InsightsJson
                 new JsonStringEnumConverter<LaneConfidence>(),
                 new JsonStringEnumConverter<StandoutKind>(),
                 new JsonStringEnumConverter<AwardKind>(),
+                new JsonStringEnumConverter<BossFightKind>(),
             },
         }
     );
