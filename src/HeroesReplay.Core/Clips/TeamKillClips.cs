@@ -23,9 +23,16 @@ public readonly record struct TeamKillClip(
     int HudStartSecond,
     int HudEndSecond,
     string Description,
-    IReadOnlyList<TeamKillBlow> Kills = null
+    IReadOnlyList<TeamKillBlow> Kills = null,
+    bool NamesTeam = false
 )
 {
+    /// <summary>
+    /// <see cref="Hero"/> names a team (<c>Blue team</c>), not a hero: a boss stolen from the team
+    /// that killed it (#528). The clip's entry then names no hero.
+    /// </summary>
+    public bool NamesTeam { get; init; } = NamesTeam;
+
     /// <summary>
     /// The pentakill's blows killed five different enemy heroes: the whole team. It is a fact
     /// about this one clip, which the media score and the full match tags use. It is never a
@@ -56,11 +63,15 @@ public static class TeamKillClips
     /// <summary>The most triple-kill clips one replay is cut into, the earliest first.</summary>
     public const int MaxTripleKills = 2;
 
-    /// <summary>The word a clip's title and tags use for its kind (<c>triple kill</c>, <c>quadra kill</c>).</summary>
+    /// <summary>The word a clip's title and tags use for its kind (<c>triple kill</c>, <c>quadra kill</c>, <c>boss steal</c>).</summary>
     public static string Title(TeamKillClip clip) =>
-        clip.Kind == TripleKillKind
-            ? (clip.Kills?.Count >= 4 ? "quadra kill" : "triple kill")
-            : clip.Kind;
+        clip.Kind switch
+        {
+            TripleKillKind => clip.Kills?.Count >= 4 ? "quadra kill" : "triple kill",
+            BossFightClips.StealKind => "boss steal",
+            BossFightClips.DefendedKind => "boss defended",
+            _ => clip.Kind,
+        };
 
     public static IReadOnlyList<TeamKillClip> Select(
         IReadOnlyList<TeamKillDeath> deaths,
