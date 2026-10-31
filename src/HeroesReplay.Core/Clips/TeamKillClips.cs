@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using HeroesReplay.Core.Analysis;
+using HeroesReplay.Core.Analysis.Insights.Snapshot;
 
 namespace HeroesReplay.Core.Clips;
 
@@ -24,7 +25,9 @@ public readonly record struct TeamKillClip(
     int HudEndSecond,
     string Description,
     IReadOnlyList<TeamKillBlow> Kills = null,
-    bool NamesTeam = false
+    bool NamesTeam = false,
+    int Player = -1,
+    MapPoint? Point = null
 )
 {
     /// <summary>
@@ -32,6 +35,17 @@ public readonly record struct TeamKillClip(
     /// that killed it (#528). The clip's entry then names no hero.
     /// </summary>
     public bool NamesTeam { get; init; } = NamesTeam;
+
+    /// <summary>
+    /// The player whose kills the clip shows, or -1. The camera shows the clip while it follows
+    /// that player or a hero next to them (<see cref="ClipCamera"/>).
+    /// </summary>
+    public int Player { get; init; } = Player;
+
+    /// <summary>
+    /// Where the clip happens, such as a boss pit, or null when it follows <see cref="Player"/>.
+    /// </summary>
+    public MapPoint? Point { get; init; } = Point;
 
     /// <summary>
     /// The pentakill's blows killed five different enemy heroes: the whole team. It is a fact
@@ -159,6 +173,7 @@ public static class TeamKillClips
         {
             victims.Sort((left, right) => left.Second.CompareTo(right.Second));
             string hero = victims[0].KillerHero;
+            int player = victims[0].KillerKey;
             var seconds = new List<int>(victims.Count);
             foreach (TeamKillDeath victim in victims)
             {
@@ -186,7 +201,8 @@ public static class TeamKillClips
                             UniqueVictims(blows) >= 5
                                 ? hero + " pentakill (team wipe)"
                                 : hero + " pentakill",
-                            blows
+                            blows,
+                            player
                         )
                     );
                 }
@@ -217,7 +233,8 @@ public static class TeamKillClips
                         leadSeconds,
                         tailSeconds,
                         hero + (burst.Kills >= 4 ? " quadra kill" : " triple kill"),
-                        blows
+                        blows,
+                        player
                     )
                 );
             }
@@ -275,7 +292,8 @@ public static class TeamKillClips
         int leadSeconds,
         int tailSeconds,
         string description,
-        IReadOnlyList<TeamKillBlow> kills
+        IReadOnlyList<TeamKillBlow> kills,
+        int player
     )
     {
         int start = firstDeath - leadSeconds;
@@ -292,7 +310,8 @@ public static class TeamKillClips
             start,
             lastDeath + tailSeconds,
             description,
-            kills
+            kills,
+            Player: player
         );
     }
 }

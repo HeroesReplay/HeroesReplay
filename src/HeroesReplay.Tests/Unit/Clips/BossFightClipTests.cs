@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using HeroesReplay.Core.Analysis.Insights.Bosses;
+using HeroesReplay.Core.Analysis.Insights.Snapshot;
 using HeroesReplay.Core.Clips;
 using Xunit;
 
@@ -119,6 +120,31 @@ public class BossFightClipTests
         );
 
         Assert.Empty(BossFightClips.Select(Insights(Fight(BossFightKind.Steal, 600, 580)), kills));
+    }
+
+    [Fact]
+    public void AStealTheCameraDidNotShow_IsSkipped_AndTheNextFightTakesItsPlace()
+    {
+        IReadOnlyList<TeamKillClip> clips = BossFightClips.Select(
+            Insights(Fight(BossFightKind.Steal, 900, 880), Fight(BossFightKind.Defended, 300, 280)),
+            onCamera: clip => clip.Kind != BossFightClips.StealKind
+        );
+
+        TeamKillClip clip = Assert.Single(clips);
+        Assert.Equal(BossFightClips.DefendedKind, clip.Kind);
+    }
+
+    [Fact]
+    public void ABossClip_IsPlacedAtThePit()
+    {
+        BossFight fight = Fight(BossFightKind.Steal, 600, 580) with
+        {
+            Point = new MapPoint(99, 62),
+        };
+
+        TeamKillClip clip = Assert.Single(BossFightClips.Select(Insights(fight)));
+
+        Assert.Equal(new MapPoint(99, 62), clip.Point);
     }
 
     private static BossFightInsights Insights(params BossFight[] fights) =>
