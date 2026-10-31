@@ -6,6 +6,7 @@ using System.IO;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Heroes.ReplayParser;
+using HeroesReplay.Core.Analysis;
 using HeroesReplay.Core.Analysis.Insights;
 using HeroesReplay.Core.Analysis.Insights.Bosses;
 using HeroesReplay.Core.Analysis.Insights.Snapshot;
@@ -45,7 +46,9 @@ public static class MatchClipExporter
         ILogger logger,
         IReadOnlyList<Hero> heroes = null,
         FfmpegLocator ffmpeg = null,
-        InsightsSettings insights = null
+        InsightsSettings insights = null,
+        IReadOnlyDictionary<TimeSpan, Focus> camera = null,
+        ClipSettings settings = null
     )
     {
         if (
@@ -58,11 +61,22 @@ public static class MatchClipExporter
             return;
         }
 
-        IReadOnlyList<TeamKillClip> kills = TeamKillClips.Select(
-            TeamKillDeaths.FromReplay(replay, heroes)
-        );
+        insights ??= new InsightsSettings();
+        ReplaySnapshot snapshot = Snapshot(replay, heroes, insights, logger);
+        Func<TeamKillClip, bool> shown = OnCamera(camera, snapshot?.Positions, settings, logger);
+        var kills = new List<TeamKillClip>();
+        foreach (
+            TeamKillClip kill in TeamKillClips.Select(TeamKillDeaths.FromReplay(replay, heroes))
+        )
+        {
+            if (shown(kill))
+            {
+                kills.Add(kill);
+            }
+        }
+
         var clips = new List<TeamKillClip>(kills);
-        clips.AddRange(BossClips(replay, heroes, insights, kills, logger));
+        clips.AddRange(BossClips(snapshot, insights, kills, shown, logger));
         await ExportAsync(
                 clips,
                 replay,
@@ -78,25 +92,80 @@ public static class MatchClipExporter
             .ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// The replay's boss steals and defended bosses (#528). A replay the analysis cannot read
-    /// gives none, so the kill clips are still cut.
-    /// </summary>
-    internal static IReadOnlyList<TeamKillClip> BossClips(
+    /// <summary>The replay read for the boss fights and hero positions, or null when it cannot be read.</summary>
+    private static ReplaySnapshot Snapshot(
         Replay replay,
         IReadOnlyList<Hero> heroes,
         InsightsSettings insights,
-        IReadOnlyList<TeamKillClip> kills,
         ILogger logger
     )
     {
         try
         {
+            return ReplaySnapshotReader.Read(replay, heroes, insights);
+        }
+        catch (Exception e)
+        {
+            logger?.LogWarning(e, "Could not read the boss fights. Only kill clips are cut.");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Whether the camera the spectator followed showed a clip (<see cref="ClipCamera"/>). A clip
+    /// it did not show is logged and not cut: the recording has something else at that time.
+    /// </summary>
+    internal static Func<TeamKillClip, bool> OnCamera(
+        IReadOnlyDictionary<TimeSpan, Focus> camera,
+        IHeroPositions positions,
+        ClipSettings settings,
+        ILogger logger
+    ) =>
+        clip =>
+        {
+            if (ClipCamera.Shows(clip, camera, positions, settings))
+            {
+                return true;
+            }
+
+            ClipCoverage coverage = ClipCamera.Coverage(clip, camera, positions, settings);
+            logger?.LogInformation(
+                "Not on camera: {Kind} {Hero} at HUD {First}-{Last}, shown {Shown}/{Seconds}s, end shown {Moment}. Not cut.",
+                clip.Kind,
+                clip.Hero,
+                clip.FirstDeathSecond,
+                clip.LastDeathSecond,
+                coverage.Shown,
+                coverage.Seconds,
+                coverage.Moment
+            );
+            return false;
+        };
+
+    /// <summary>
+    /// The replay's boss steals and defended bosses (#528) that the camera showed. A replay the
+    /// analysis cannot read gives none, so the kill clips are still cut.
+    /// </summary>
+    internal static IReadOnlyList<TeamKillClip> BossClips(
+        ReplaySnapshot snapshot,
+        InsightsSettings insights,
+        IReadOnlyList<TeamKillClip> kills,
+        Func<TeamKillClip, bool> onCamera,
+        ILogger logger
+    )
+    {
+        if (snapshot == null)
+        {
+            return Array.Empty<TeamKillClip>();
+        }
+
+        try
+        {
             insights ??= new InsightsSettings();
-            ReplaySnapshot snapshot = ReplaySnapshotReader.Read(replay, heroes, insights);
             return BossFightClips.Select(
                 new BossFightAnalyzer(insights.Bosses).Analyze(snapshot),
-                kills
+                kills,
+                onCamera
             );
         }
         catch (Exception e)

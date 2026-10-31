@@ -285,7 +285,9 @@ public class GameManager : IGameManager
                                 logger,
                                 gameData.Heroes,
                                 FfmpegLocator.From(settings.Clips, settings.Dependencies),
-                                settings.Insights
+                                settings.Insights,
+                                context.Current?.Players,
+                                settings.Clips
                             )
                             .ConfigureAwait(false);
                     }
