@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using HeroesReplay.Core.Analysis.Insights.Snapshot;
 
 namespace HeroesReplay.Core.Analysis.Insights.Bosses;
 
@@ -41,6 +42,9 @@ public enum BossFightKind
 public sealed record BossFight
 {
     public int CampId { get; init; }
+
+    /// <summary>Where the pit is: the camp's position.</summary>
+    public MapPoint Point { get; init; }
 
     /// <summary>The team that captured the boss.</summary>
     public int Team { get; init; }
