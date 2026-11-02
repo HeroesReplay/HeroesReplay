@@ -102,6 +102,7 @@ public sealed class BossFightAnalyzer : IInsightAnalyzer<BossFightInsights>
         return new BossFight
         {
             CampId = capture.CampId,
+            Point = capture.Point,
             Team = capture.Team,
             Second = end,
             StartSecond = start,

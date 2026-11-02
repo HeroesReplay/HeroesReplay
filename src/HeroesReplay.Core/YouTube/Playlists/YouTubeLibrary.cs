@@ -459,9 +459,13 @@ public class YouTubeLibrary : IYouTubeLibrary
                     newOnPage++;
                 }
 
-                foreach (int id in YouTubeReplayMatch.IdsIn(video.Title, video.Description))
+                // A clip names its replay too, but only the full match keeps spectate away (#535).
+                if (!YouTubeVideoFacts.IsClip(video.Description))
                 {
-                    YouTubeReplayCatalog.Remember(catalog, id);
+                    foreach (int id in YouTubeReplayMatch.IdsIn(video.Title, video.Description))
+                    {
+                        YouTubeReplayCatalog.Remember(catalog, id);
+                    }
                 }
 
                 Learn(video, videoId, record, recordPath, waiting, index, pass, now);

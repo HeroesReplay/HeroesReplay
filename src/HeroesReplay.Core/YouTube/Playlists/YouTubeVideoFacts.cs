@@ -34,6 +34,12 @@ public static class YouTubeVideoFacts
         "Support",
     };
 
+    /// <summary>A clip's description has a <c>clip:</c> line.</summary>
+    public static bool IsClip(string description) => IsClip(Lines(description));
+
+    private static bool IsClip(string[] lines) =>
+        lines.Any(line => line.StartsWith("clip:", StringComparison.Ordinal));
+
     public static YouTubeLibraryVideo Read(
         string videoId,
         string title,
@@ -42,7 +48,7 @@ public static class YouTubeVideoFacts
     )
     {
         string[] lines = Lines(description);
-        bool clip = lines.Any(line => line.StartsWith("clip:", StringComparison.Ordinal));
+        bool clip = IsClip(lines);
         int replayId = YouTubeReplayMatch.IdsIn(title, description).FirstOrDefault();
         string map = Catalog(Label(lines, "Map:"));
         string mode = YouTubePlaylistNames.Mode(

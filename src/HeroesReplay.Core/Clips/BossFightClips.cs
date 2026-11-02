@@ -12,7 +12,8 @@ namespace HeroesReplay.Core.Clips;
 /// named after the hero whose unit killed the boss, or after the capturing team when the other
 /// team killed it (<see cref="TeamKillClip.NamesTeam"/>). Like a triple kill, a boss clip is cut and
 /// uploaded but never makes the replay Notable. At most <see cref="MaxClips"/> a replay, steals
-/// first, and none that overlaps a pentakill or triple-kill clip: that moment is already cut.
+/// first, and none that overlaps a pentakill or triple-kill clip: that moment is already cut. A fight
+/// the camera did not show (<see cref="ClipCamera"/>) is skipped, so the next one can take its place.
 /// </summary>
 public static class BossFightClips
 {
@@ -32,7 +33,8 @@ public static class BossFightClips
 
     public static IReadOnlyList<TeamKillClip> Select(
         BossFightInsights insights,
-        IReadOnlyList<TeamKillClip> killClips = null
+        IReadOnlyList<TeamKillClip> killClips = null,
+        Func<TeamKillClip, bool> onCamera = null
     )
     {
         if (insights?.Fights == null || insights.Fights.Count == 0)
@@ -50,7 +52,8 @@ public static class BossFightClips
         {
             TeamKillClip clip = Clip(fight);
             if (
-                (killClips ?? Array.Empty<TeamKillClip>()).Any(kill => Overlaps(kill, clip))
+                (onCamera != null && !onCamera(clip))
+                || (killClips ?? Array.Empty<TeamKillClip>()).Any(kill => Overlaps(kill, clip))
                 || clips.Any(other => Overlaps(other, clip))
             )
             {
@@ -107,7 +110,8 @@ public static class BossFightClips
             Math.Max(0, first - LeadSeconds),
             fight.Second + TailSeconds,
             description,
-            NamesTeam: namesTeam
+            NamesTeam: namesTeam,
+            Point: fight.Point
         );
     }
 
