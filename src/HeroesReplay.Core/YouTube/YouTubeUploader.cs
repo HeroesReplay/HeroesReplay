@@ -59,6 +59,14 @@ public class YouTubeUploader : IYouTubeUploader
 
     private const string UploadBucket = "upload-bucket";
 
+    /// <summary>
+    /// The longest an upload pass waits for one recording to settle (#535). A pass lists only
+    /// recordings whose entry is written, so OBS has stopped and the wait is normally seconds.
+    /// </summary>
+    internal static readonly TimeSpan PassReadyWait = TimeSpan.FromMinutes(2);
+
+    private static readonly FileInfo NotReady = new(Path.Combine(Path.GetTempPath(), "not-ready"));
+
     private readonly ILogger<YouTubeUploader> logger;
     private readonly AppSettings settings;
     private readonly CancellationTokenSource cancellationTokenSource;
@@ -272,15 +280,23 @@ public class YouTubeUploader : IYouTubeUploader
 
     public Task ProcessRecording(string recordingPath) => ProcessRecordingAsync(recordingPath);
 
-    internal async Task<UploadOutcome> ProcessRecordingAsync(string recordingPath)
+    internal async Task<UploadOutcome> ProcessRecordingAsync(
+        string recordingPath,
+        TimeSpan? readyWithin = null
+    )
     {
         CancellationToken token = cancellationTokenSource.Token;
-        FileInfo recording = await WaitForRecordingReadyAsync(recordingPath, token)
+        FileInfo recording = await WaitForRecordingReadyAsync(recordingPath, token, readyWithin)
             .ConfigureAwait(false);
         if (recording == null)
         {
             waits.Clear(recordingPath);
             return UploadOutcome.Done;
+        }
+
+        if (ReferenceEquals(recording, NotReady))
+        {
+            return UploadOutcome.Waiting;
         }
 
         FileInfo entryFile = await WaitForEntryAsync(recording.Directory, token)
@@ -802,9 +818,9 @@ public class YouTubeUploader : IYouTubeUploader
             )
             .ConfigureAwait(false);
         logger.LogInformation(
-            "Saved YouTube video id {VideoId} for replay {ReplayId} at {Privacy}.",
+            "Saved YouTube video id {VideoId} for {Video} at {Privacy}.",
             entry.VideoId,
-            entry.ReplayId,
+            VideoLabel(entry),
             entry.ActualPrivacyStatus
         );
         UploadAttemptResult recorded = reconcile
@@ -860,8 +876,8 @@ public class YouTubeUploader : IYouTubeUploader
         {
             // Scheduled, not stuck: the library pass reads it public after publishAt (#250).
             logger.LogInformation(
-                "Replay {ReplayId} uploaded as {Privacy}. YouTube publishes it at {PublishAt}. The recording can go; the library pass confirms it public after that time.",
-                entry.ReplayId,
+                "{Video} uploaded as {Privacy}. YouTube publishes it at {PublishAt}. The recording can go; the library pass confirms it public after that time.",
+                VideoLabel(entry),
                 entry.ActualPrivacyStatus ?? UploadVisibility.Staged,
                 entry.PublishAtUtc
             );
@@ -876,8 +892,8 @@ public class YouTubeUploader : IYouTubeUploader
         else
         {
             logger.LogInformation(
-                "Replay {ReplayId} uploaded as {Privacy}. A private video is not treated as public.",
-                entry.ReplayId,
+                "{Video} uploaded as {Privacy}. A private video is not treated as public.",
+                VideoLabel(entry),
                 entry.ActualPrivacyStatus ?? UploadVisibility.Staged
             );
         }
@@ -1319,7 +1335,7 @@ public class YouTubeUploader : IYouTubeUploader
                     UploadOutcome outcome;
                     try
                     {
-                        outcome = await ProcessOnceAsync(path).ConfigureAwait(false);
+                        outcome = await ProcessOnceAsync(path, PassReadyWait).ConfigureAwait(false);
                     }
                     catch (OperationCanceledException)
                     {
@@ -2037,7 +2053,10 @@ public class YouTubeUploader : IYouTubeUploader
         }
     }
 
-    private async Task<UploadOutcome> ProcessOnceAsync(string recordingPath)
+    private async Task<UploadOutcome> ProcessOnceAsync(
+        string recordingPath,
+        TimeSpan? readyWithin = null
+    )
     {
         if (string.IsNullOrWhiteSpace(recordingPath))
         {
@@ -2053,7 +2072,7 @@ public class YouTubeUploader : IYouTubeUploader
 
         try
         {
-            return await ProcessRecordingAsync(key).ConfigureAwait(false);
+            return await ProcessRecordingAsync(key, readyWithin).ConfigureAwait(false);
         }
         finally
         {
@@ -2194,9 +2213,14 @@ public class YouTubeUploader : IYouTubeUploader
     /// finished multi-gigabyte file for 10 seconds every time. A new mp4 the watcher sees waits
     /// until its size holds still for <c>ReadyStableReads</c> reads.
     /// </summary>
+    /// <summary>
+    /// Null when the recording is gone. <see cref="NotReady"/> when it did not settle within
+    /// <paramref name="readyWithin"/> (an upload pass); the file watcher waits as long as OBS writes.
+    /// </summary>
     private async Task<FileInfo> WaitForRecordingReadyAsync(
         string recordingPath,
-        CancellationToken token
+        CancellationToken token,
+        TimeSpan? readyWithin = null
     )
     {
         var finished = new FileInfo(recordingPath);
@@ -2214,18 +2238,34 @@ public class YouTubeUploader : IYouTubeUploader
 
         long lastLength = -1;
         int stable = 0;
+        DateTime started = DateTime.UtcNow;
         while (!token.IsCancellationRequested)
         {
             var recording = new FileInfo(recordingPath);
             recording.Refresh();
-            if (!recording.Exists && lastLength >= 0)
+            if (!recording.Exists)
             {
-                // The spectator discarded it (not published), or retention removed it.
+                // The spectator discarded it (not published), or retention removed it. A pass
+                // lists its recordings first and reaches this one minutes later, so the file can
+                // be gone before the first look; waiting for it then held the pass forever (#535).
                 logger.LogInformation(
                     "Recording {Path} was removed before it was ready. Nothing to upload.",
                     recordingPath
                 );
                 return null;
+            }
+
+            if (readyWithin is TimeSpan limit && DateTime.UtcNow - started >= limit)
+            {
+                // A pass never waits on one recording past this: the next pass looks again (#535).
+                LogWait(
+                    recordingPath,
+                    "not-ready",
+                    "Recording {Path} did not settle within {Limit}. It stays pending and the next pass looks again.",
+                    recordingPath,
+                    limit
+                );
+                return NotReady;
             }
 
             if (recording.Exists && recording.Length > 0 && recording.Length == lastLength)
@@ -2358,10 +2398,19 @@ public class YouTubeUploader : IYouTubeUploader
         SweepRetention();
     }
 
+    /// <summary>"Replay 123" for a full match, "Clip of replay 123" for a clip (#535).</summary>
+    private static string VideoLabel(YouTubeEntry entry) =>
+        (YouTubeLibraryRecord.IsClipEntry(entry) ? "Clip of replay " : "Replay ")
+        + entry?.ReplayId?.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// The catalog names replays whose full match is on the channel. A clip is not the match: it
+    /// told spectate the replay was done and left the match itself unsent (#535).
+    /// </summary>
     private void RememberUploaded(YouTubeEntry entry)
     {
         int? replayId = YouTubeReplayMatch.FromEntry(entry);
-        if (replayId is not > 0)
+        if (replayId is not > 0 || YouTubeLibraryRecord.IsClipEntry(entry))
         {
             return;
         }

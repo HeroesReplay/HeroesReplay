@@ -212,6 +212,97 @@ public sealed class UploaderPassTests : IDisposable
         Assert.DoesNotContain(log.Lines, line => line.Contains("is already DryRunSimulated"));
     }
 
+    /// <summary>
+    /// #535: a pass lists its recordings, then reaches each one minutes later. One removed in
+    /// between (retention after another upload) was waited for forever, so the running uploader
+    /// never sent another full match; prod's 66406295 waited from 29 Oct to a restart on 2 Nov.
+    /// </summary>
+    [Fact]
+    public async Task ARecordingRemovedBeforeItsTurn_EndsAtOnce()
+    {
+        AppSettings settings = Settings(live: true);
+        string recording = await StageAsync(settings, 66406295, "Cursed Hollow");
+        File.Delete(recording);
+
+        Task<UploadOutcome> processed = Uploader(settings)
+            .ProcessRecordingAsync(recording, YouTubeUploader.PassReadyWait);
+        Task finished = await Task.WhenAny(processed, Task.Delay(TimeSpan.FromSeconds(10)));
+
+        Assert.Same(processed, finished);
+        Assert.Equal(UploadOutcome.Done, await processed);
+        Assert.Contains(log.Lines, line => line.Contains("was removed before it was ready"));
+    }
+
+    /// <summary>#535: a pass never waits on one recording past its limit; the next pass looks again.</summary>
+    [Fact]
+    public async Task ARecordingThatNeverSettles_WaitsForTheNextPass()
+    {
+        AppSettings settings = Settings(live: true);
+        string recording = await StageAsync(settings, 66432139, "Cursed Hollow");
+        using var held = new FileStream(
+            recording,
+            FileMode.Open,
+            FileAccess.ReadWrite,
+            FileShare.None
+        );
+
+        Task<UploadOutcome> processed = Uploader(settings)
+            .ProcessRecordingAsync(recording, TimeSpan.FromMilliseconds(300));
+        Task finished = await Task.WhenAny(processed, Task.Delay(TimeSpan.FromSeconds(10)));
+
+        Assert.Same(processed, finished);
+        Assert.Equal(UploadOutcome.Waiting, await processed);
+        Assert.Contains(log.Lines, line => line.Contains("did not settle within"));
+    }
+
+    /// <summary>
+    /// #535: a clip on YouTube is not the replay's upload. Before, its video put the replay in the
+    /// catalog, so spectate counted the replay done while its full match was never sent.
+    /// </summary>
+    [Fact]
+    public async Task AClipOnYouTube_DoesNotMarkItsReplayUploaded()
+    {
+        AppSettings settings = Settings(live: true);
+        string match = await StageAsync(settings, 66406295, "Cursed Hollow");
+        string clip = await StageClipAsync(
+            Path.GetDirectoryName(match),
+            66406295,
+            "boss-steal",
+            "Raynor",
+            767
+        );
+        await SetVideoIdAsync(clip, "6BacUh3MZ98");
+        YouTubeUploader uploader = Uploader(settings);
+
+        Assert.Equal(UploadOutcome.Done, await uploader.ProcessRecordingAsync(clip));
+        Assert.False(YouTubeReplayCatalog.Contains(YouTubeReplayCatalog.PathFor(root), 66406295));
+        Assert.DoesNotContain(log.Lines, line => line.StartsWith("Recorded YouTube upload"));
+
+        await SetVideoIdAsync(match, "o6n-A0zWg24");
+        Assert.Equal(UploadOutcome.Done, await uploader.ProcessRecordingAsync(match));
+        Assert.True(YouTubeReplayCatalog.Contains(YouTubeReplayCatalog.PathFor(root), 66406295));
+    }
+
+    [Fact]
+    public void AClipVideo_IsKnownByItsDescription()
+    {
+        Assert.True(YouTubeVideoFacts.IsClip("clip:66406295:boss-steal:Raynor\nMore"));
+        Assert.False(YouTubeVideoFacts.IsClip("Map: Cursed Hollow\nReplay 66406295"));
+        Assert.False(YouTubeVideoFacts.IsClip(null));
+    }
+
+    private static async Task SetVideoIdAsync(string recording, string videoId)
+    {
+        string path = Path.Combine(Path.GetDirectoryName(recording), "youtube-entry.json");
+        YouTubeEntry entry = System.Text.Json.JsonSerializer.Deserialize(
+            await File.ReadAllTextAsync(path),
+            YouTubeJsonContext.Default.YouTubeEntry
+        );
+        entry.VideoId = videoId;
+        entry.ActualPrivacyStatus = "private";
+        await File.WriteAllTextAsync(path, TestJson.Entry(entry));
+    }
+
     [Fact]
     public async Task APassWithAnUnreadableEntry_IsNotWork()
     {
