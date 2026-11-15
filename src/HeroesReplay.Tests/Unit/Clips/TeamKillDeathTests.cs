@@ -85,7 +85,14 @@ public class TeamKillDeathTests
         players.Add(Dead("Diablo", killer, heroUnit, 109));
         players.Add(Dead("E.T.C.", killer, summon, 112));
 
-        Assert.Empty(TeamKillClips.Select(TeamKillDeaths.FromReplay(ReplayOf(players))));
+        // The summon's blow is not Azmodan's: four of his own are a quadra kill, not a pentakill.
+        TeamKillClip clip = Assert.Single(
+            TeamKillClips.Select(TeamKillDeaths.FromReplay(ReplayOf(players)))
+        );
+        Assert.Equal(TeamKillClips.TripleKillKind, clip.Kind);
+        Assert.Equal("quadra kill", TeamKillClips.Title(clip));
+        Assert.Equal(4, clip.Kills.Count);
+        Assert.Equal(109, clip.LastDeathSecond);
     }
 
     [Fact]

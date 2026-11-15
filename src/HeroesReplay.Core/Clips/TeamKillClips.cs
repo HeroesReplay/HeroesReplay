@@ -62,11 +62,17 @@ public readonly record struct TeamKillClip(
 /// previous one. A pentakill that killed the whole team is still one clip
 /// (<see cref="TeamKillClip.WipedTeam"/>, #369). Only a pentakill makes a replay Notable
 /// (<see cref="MediaPolicy.ReplayMediaEvidence.Accepted"/>).</item>
+/// <item><b>Quadra kill:</b> exactly four blows chained like a pentakill's, each within the
+/// window of the previous one: a pentakill one blow short. Its kind is
+/// <see cref="TripleKillKind"/> and its title <c>quadra kill</c>. A triple-kill burst inside it
+/// is part of that clip, so the clip never stops at the third blow.</item>
 /// <item><b>Triple kill (#511):</b> a burst of three or more blows within
 /// <see cref="KillBursts.SpanSeconds"/> of the first (<see cref="KillBursts"/>), that is not
-/// part of a pentakill. It is cut and uploaded as a clip but never makes the replay Notable (owner
-/// decision 2026-10-25). At most <see cref="MaxTripleKills"/> a replay.</item>
+/// part of a pentakill or a quadra kill. It is cut and uploaded as a clip but never makes the
+/// replay Notable (owner decision 2026-10-25).</item>
 /// </list>
+/// At most <see cref="MaxTripleKills"/> triple and quadra kill clips a replay, the most blows
+/// first, then the earliest, chosen from the clips the camera showed.
 /// </summary>
 public static class TeamKillClips
 {
@@ -74,7 +80,10 @@ public static class TeamKillClips
 
     public const string TripleKillKind = "triple-kill";
 
-    /// <summary>The most triple-kill clips one replay is cut into, the earliest first.</summary>
+    /// <summary>
+    /// The most triple and quadra kill clips one replay is cut into: the most blows first, then
+    /// the earliest, so a quadra kill is never dropped for a triple kill.
+    /// </summary>
     public const int MaxTripleKills = 2;
 
     /// <summary>The word a clip's title and tags use for its kind (<c>triple kill</c>, <c>quadra kill</c>, <c>boss steal</c>).</summary>
@@ -87,11 +96,17 @@ public static class TeamKillClips
             _ => clip.Kind,
         };
 
+    /// <param name="shown">
+    /// Whether the camera showed a clip (<see cref="ClipCamera"/>), or null to keep every clip. It
+    /// runs before the triple and quadra kill limit, so a clip the camera missed never takes the
+    /// place of one it showed.
+    /// </param>
     public static IReadOnlyList<TeamKillClip> Select(
         IReadOnlyList<TeamKillDeath> deaths,
         int windowSeconds = 12,
         int leadSeconds = 12,
-        int tailSeconds = 8
+        int tailSeconds = 8,
+        Func<TeamKillClip, bool> shown = null
     )
     {
         if (deaths == null || deaths.Count == 0)
@@ -115,10 +130,18 @@ public static class TeamKillClips
         }
 
         var clips = new List<TeamKillClip>();
-        clips.AddRange(ByKiller(deaths, windowSeconds, leadSeconds, tailSeconds));
+        foreach (TeamKillClip clip in ByKiller(deaths, windowSeconds, leadSeconds, tailSeconds))
+        {
+            if (shown == null || shown(clip))
+            {
+                clips.Add(clip);
+            }
+        }
+
         List<TeamKillClip> tripleKills = clips
             .Where(clip => clip.Kind == TripleKillKind)
-            .OrderBy(clip => clip.FirstDeathSecond)
+            .OrderByDescending(clip => clip.Kills?.Count ?? 0)
+            .ThenBy(clip => clip.FirstDeathSecond)
             .ToList();
         foreach (TeamKillClip extra in tripleKills.Skip(MaxTripleKills))
         {
@@ -181,13 +204,14 @@ public static class TeamKillClips
             }
 
             IReadOnlyList<KillStreak> streaks = KillStreaks.Group(seconds, windowSeconds);
-            var pentakills = new List<KillStreak>();
+            // Pentakills and quadra kills: a triple-kill burst inside one is part of that clip.
+            var chained = new List<KillStreak>();
             int offset = 0;
             foreach (KillStreak streak in streaks)
             {
                 if (streak.Kills >= 5)
                 {
-                    pentakills.Add(streak);
+                    chained.Add(streak);
                     // One clip per pentakill, also when its victims were the whole team (#369).
                     TeamKillBlow[] blows = Blows(victims, offset, streak.Kills);
                     clips.Add(
@@ -206,15 +230,33 @@ public static class TeamKillClips
                         )
                     );
                 }
+                else if (streak.Kills == 4)
+                {
+                    chained.Add(streak);
+                    TeamKillBlow[] blows = Blows(victims, offset, streak.Kills);
+                    clips.Add(
+                        Clip(
+                            TripleKillKind,
+                            hero,
+                            blows[0].Second,
+                            blows[blows.Length - 1].Second,
+                            leadSeconds,
+                            tailSeconds,
+                            hero + " quadra kill",
+                            blows,
+                            player
+                        )
+                    );
+                }
 
                 offset += streak.Kills;
             }
 
-            // A burst inside a pentakill is part of that clip, not one of its own.
+            // A burst inside a pentakill or a quadra kill is part of that clip, not one of its own.
             foreach (KillBurst burst in KillBursts.Find(seconds))
             {
                 if (
-                    pentakills.Any(streak =>
+                    chained.Any(streak =>
                         burst.StartSecond <= streak.EndSecond
                         && burst.EndSecond >= streak.StartSecond
                     )
