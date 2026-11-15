@@ -300,10 +300,8 @@ public static class PredictionVerdict
     }
 
     internal static string Fill(string template, IReadOnlyDictionary<string, string> values) =>
-        Placeholder.Replace(
-            template,
-            match =>
-                values.TryGetValue(match.Groups[1].Value, out string value) ? value : match.Value
+        Placeholder.Replace(template, match =>
+            values.TryGetValue(match.Groups[1].Value, out string value) ? value : match.Value
         );
 
     internal static IReadOnlyDictionary<string, string> Values(PredictionReport report)

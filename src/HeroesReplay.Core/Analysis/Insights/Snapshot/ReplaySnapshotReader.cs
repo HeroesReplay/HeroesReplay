@@ -72,8 +72,8 @@ public static class ReplaySnapshotReader
         {
             Aram = replay.GameMode == GameMode.ARAM,
             Map = EnglishMapNames.Prefer(null, replay.Map, replay.MapAlternativeName),
-            GatesOpen =
-                events.FirstOrDefault(stat => stat.Name == GatesOpen)?.Time ?? TimeSpan.Zero,
+            GatesOpen = events.FirstOrDefault(stat => stat.Name == GatesOpen)?.Time
+                ?? TimeSpan.Zero,
             End = fallen?.TimeSpanDied ?? replay.ReplayLength,
             CoreLostBy = fallen?.Team,
             Players = players
@@ -155,8 +155,7 @@ public static class ReplaySnapshotReader
                         Awards = (score.MatchAwards ?? new List<MatchAwardType>())
                             .Select(award => award.ToString())
                             .ToArray(),
-                        MapValues =
-                            player.MiscellaneousScoreResultEventDictionary
+                        MapValues = player.MiscellaneousScoreResultEventDictionary
                             ?? new Dictionary<string, int>(),
                     },
         };

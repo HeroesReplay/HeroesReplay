@@ -55,11 +55,9 @@ public class RequestQueueTests
             Assert.Null(await queue.PeekDownloadAsync(DateTimeOffset.UtcNow));
             Assert.DoesNotContain(logger.Entries, entry => entry.Level >= LogLevel.Error);
             Assert.DoesNotContain(logger.Entries, entry => entry.Exception != null);
-            Assert.Contains(
-                logger.Entries,
-                entry =>
-                    entry.Level == LogLevel.Warning
-                    && entry.Message.Contains("busy", StringComparison.OrdinalIgnoreCase)
+            Assert.Contains(logger.Entries, entry =>
+                entry.Level == LogLevel.Warning
+                && entry.Message.Contains("busy", StringComparison.OrdinalIgnoreCase)
             );
         }
         finally

@@ -194,14 +194,12 @@ public class ObsPagesTests
             // The match report (a web page) and the countdown (a packaged asset) are not reloaded.
             Assert.DoesNotContain("match-report-browser", obs.Reloaded);
             Assert.DoesNotContain("countdown", obs.Reloaded);
-            Assert.All(
-                obs.Requests,
-                request =>
-                    Assert.True(
-                        request.StartsWith("Get", System.StringComparison.Ordinal)
-                            || request == "PressInputPropertiesButton",
-                        request
-                    )
+            Assert.All(obs.Requests, request =>
+                Assert.True(
+                    request.StartsWith("Get", System.StringComparison.Ordinal)
+                        || request == "PressInputPropertiesButton",
+                    request
+                )
             );
         }
         finally

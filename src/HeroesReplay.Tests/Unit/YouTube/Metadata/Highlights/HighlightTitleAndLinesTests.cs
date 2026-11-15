@@ -111,9 +111,8 @@ public class HighlightTitleAndLinesTests
             },
             lines
         );
-        Assert.DoesNotContain(
-            lines,
-            line => line.StartsWith("Build:", StringComparison.OrdinalIgnoreCase)
+        Assert.DoesNotContain(lines, line =>
+            line.StartsWith("Build:", StringComparison.OrdinalIgnoreCase)
         );
         Assert.Empty(
             HighlightLines.TalentBuilds(

@@ -75,9 +75,8 @@ public class ObsStreamArmTests
     [Fact]
     public void Settings_HaveNoArmPath()
     {
-        Assert.DoesNotContain(
-            typeof(OBSSettings).GetProperties(),
-            property => property.Name.Contains("Arm", StringComparison.OrdinalIgnoreCase)
+        Assert.DoesNotContain(typeof(OBSSettings).GetProperties(), property =>
+            property.Name.Contains("Arm", StringComparison.OrdinalIgnoreCase)
         );
     }
 }

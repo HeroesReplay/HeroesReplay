@@ -43,8 +43,7 @@ public sealed class GuideCatalog : IGuideCatalog
 
     public static GuideCatalog Embedded()
     {
-        using Stream stream =
-            typeof(GuideCatalog).Assembly.GetManifestResourceStream(ResourceName)
+        using Stream stream = typeof(GuideCatalog).Assembly.GetManifestResourceStream(ResourceName)
             ?? throw new InvalidOperationException($"{ResourceName} is not embedded.");
         using var reader = new StreamReader(stream);
         return new GuideCatalog(GuideReferenceJson.Parse(reader.ReadToEnd()));

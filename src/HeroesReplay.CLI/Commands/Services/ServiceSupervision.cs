@@ -472,10 +472,9 @@ public sealed class ServiceSupervision
         ServiceLaunch launch;
         try
         {
-            launch =
-                Launch?.Invoke(
-                    new ServiceLaunchRequest(role, readyWait, Record, () => Save(force: false))
-                )
+            launch = Launch?.Invoke(
+                new ServiceLaunchRequest(role, readyWait, Record, () => Save(force: false))
+            )
                 ?? new ServiceLaunch(null, false, false, "No launcher was given.");
         }
         catch (Exception e)
@@ -778,8 +777,7 @@ public sealed class ServiceSupervision
 
         try
         {
-            ServiceLock snapshot =
-                ServiceLockStore.TryLoad(LockPath)
+            ServiceLock snapshot = ServiceLockStore.TryLoad(LockPath)
                 ?? new ServiceLock { StartedAt = Time.GetUtcNow() };
             snapshot.Processes ??= new List<ServiceProcessRecord>();
             int index = snapshot.Processes.FindIndex(item =>

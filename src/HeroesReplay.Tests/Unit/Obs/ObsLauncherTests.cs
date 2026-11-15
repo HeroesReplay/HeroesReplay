@@ -75,13 +75,11 @@ public sealed class ObsLauncherTests : IDisposable
         Assert.DoesNotContain("--startstreaming", start.Arguments, StringComparison.Ordinal);
         Assert.True(gateHeld);
         Assert.False(sentinelLeft);
-        Assert.Contains(
-            log.Lines,
-            line =>
-                line.Level == LogLevel.Information
-                && line.Message.Contains("obs64 pid 7001", StringComparison.Ordinal)
-                && line.Message.Contains($"parent pid {FakeProcessStarter.CmdPid}")
-                && line.Message.Contains("not a child of this process", StringComparison.Ordinal)
+        Assert.Contains(log.Lines, line =>
+            line.Level == LogLevel.Information
+            && line.Message.Contains("obs64 pid 7001", StringComparison.Ordinal)
+            && line.Message.Contains($"parent pid {FakeProcessStarter.CmdPid}")
+            && line.Message.Contains("not a child of this process", StringComparison.Ordinal)
         );
         Assert.False(LaunchGateProbe.HeldElsewhere(gate));
     }

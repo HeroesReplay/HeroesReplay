@@ -184,9 +184,8 @@ public class HighlightPickerTests
                 candidate => candidate.Hero == null
             )
         );
-        Assert.All(
-            new HighlightSettings().Kinds(),
-            kind => Assert.Contains(kind.ToString(), HighlightSettings.DefaultOrder)
+        Assert.All(new HighlightSettings().Kinds(), kind =>
+            Assert.Contains(kind.ToString(), HighlightSettings.DefaultOrder)
         );
         Assert.Equal(
             HighlightSettings.DefaultOrder.Length,

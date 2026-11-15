@@ -117,9 +117,8 @@ public sealed class StatHookTitleTests : IDisposable
             Assert.Equal("Garden of Terror - Storm League - Diamond 2 - 65644212", plain.Title);
             Assert.Null(plain.StatHook);
             Assert.Equal("Full match.", plain.DescriptionLines[0]);
-            Assert.DoesNotContain(
-                plain.DescriptionLines,
-                line => line.StartsWith("Stats:", StringComparison.Ordinal)
+            Assert.DoesNotContain(plain.DescriptionLines, line =>
+                line.StartsWith("Stats:", StringComparison.Ordinal)
             );
             Assert.DoesNotContain(StatHookPicker.Attribution, plain.DescriptionLines);
         }
@@ -162,9 +161,8 @@ public sealed class StatHookTitleTests : IDisposable
             Options(enabled: true)
         );
 
-        Assert.Contains(
-            metadata.DescriptionLines,
-            line => line.StartsWith("Draft:", StringComparison.Ordinal)
+        Assert.Contains(metadata.DescriptionLines, line =>
+            line.StartsWith("Draft:", StringComparison.Ordinal)
         );
         Assert.DoesNotContain("duo", metadata.Title, StringComparison.Ordinal);
         Assert.Null(metadata.StatHook);

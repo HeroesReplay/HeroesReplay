@@ -216,14 +216,12 @@ public sealed class HeroStatsRefresh
         CancellationToken cancellationToken
     )
     {
-        string major =
-            HeroStatsPatch.Major(patch)
+        string major = HeroStatsPatch.Major(patch)
             ?? throw new ArgumentException(
                 "A major patch such as 2.57 is required.",
                 nameof(patch)
             );
-        string code =
-            HeroStatsPatch.GameTypeCode(gameTypeCode)
+        string code = HeroStatsPatch.GameTypeCode(gameTypeCode)
             ?? throw new ArgumentException("A game type is required.", nameof(gameTypeCode));
         var watch = Stopwatch.StartNew();
 

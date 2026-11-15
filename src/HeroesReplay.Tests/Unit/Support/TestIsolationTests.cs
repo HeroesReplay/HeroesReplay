@@ -103,9 +103,8 @@ public class TestIsolationTests
                 2,
                 Find([sample], new Regex(@"SpecialFolder\.LocalApplicationData")).Count()
             );
-            Assert.Single(
-                Find([sample], new Regex(@"SpecialFolder\.LocalApplicationData")),
-                hit => !hit.Contains(PathTextOnly, StringComparison.Ordinal)
+            Assert.Single(Find([sample], new Regex(@"SpecialFolder\.LocalApplicationData")), hit =>
+                !hit.Contains(PathTextOnly, StringComparison.Ordinal)
             );
             Assert.Single(Find([sample], new Regex(@"\bGetDirectories\(\s*Path\.GetTempPath\(\)")));
             Assert.Single(Find([sample], new Regex(@"static\s+readonly\s+Mutex\s+\w+\s*=\s*new")));

@@ -159,8 +159,8 @@ public static class GuideImporter
                 continue;
             }
 
-            IReadOnlyList<GuideExtractTier> extractTiers =
-                build.Tiers ?? Array.Empty<GuideExtractTier>();
+            IReadOnlyList<GuideExtractTier> extractTiers = build.Tiers
+                ?? Array.Empty<GuideExtractTier>();
             if (extractTiers.Count != HeroTalents.TierCount)
             {
                 errors.Add(

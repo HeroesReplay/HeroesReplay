@@ -43,11 +43,10 @@ public sealed class PredictionReportWriter
             return false;
         }
 
-        PredictionReport report =
-            JsonSerializer.Deserialize(
-                File.ReadAllText(saved),
-                TwitchJsonContext.Default.PredictionReport
-            ) ?? throw new JsonException(SavedReportFileName + " is empty.");
+        PredictionReport report = JsonSerializer.Deserialize(
+            File.ReadAllText(saved),
+            TwitchJsonContext.Default.PredictionReport
+        ) ?? throw new JsonException(SavedReportFileName + " is empty.");
         DurableFile.Replace(
             Path.Combine(dataDirectory, ReportFileName),
             PredictionReportPage.ToHtml(report)

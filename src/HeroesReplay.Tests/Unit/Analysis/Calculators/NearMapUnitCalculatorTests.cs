@@ -38,9 +38,8 @@ public class NearMapUnitCalculatorTests
         ReplayUnit tribute = Moving("RavenLordTribute", 5, 0, 0);
         IReadOnlyDictionary<TimeSpan, Focus> focus = Analyze(Replay(hero, tribute), Settings());
 
-        Assert.DoesNotContain(
-            focus.Values,
-            value => value.Calculator == typeof(NearMapUnitCalculator)
+        Assert.DoesNotContain(focus.Values, value =>
+            value.Calculator == typeof(NearMapUnitCalculator)
         );
     }
 
@@ -86,9 +85,8 @@ public class NearMapUnitCalculatorTests
             Settings()
         );
 
-        Assert.DoesNotContain(
-            focus.Values,
-            value => value.Calculator == typeof(NearMapUnitCalculator)
+        Assert.DoesNotContain(focus.Values, value =>
+            value.Calculator == typeof(NearMapUnitCalculator)
         );
     }
 

@@ -42,8 +42,8 @@ internal sealed class WindowsObsProcess : IObsProcess
         this.launcher = launcher ?? throw new ArgumentNullException(nameof(launcher));
         this.table = table ?? WindowsProcessTable.Instance;
         this.closeMainWindow = closeMainWindow ?? CloseMainWindow;
-        this.obsRunning =
-            obsRunning ?? (() => NamedProcess.IsRunning(ObsLaunchDecision.ProcessName));
+        this.obsRunning = obsRunning
+            ?? (() => NamedProcess.IsRunning(ObsLaunchDecision.ProcessName));
     }
 
     /// <summary>The obs64 this process started still runs: same pid, same start time.</summary>

@@ -126,9 +126,9 @@ public static class DependencyManifest
 
     private static IReadOnlyList<DependencyPin> LoadEmbedded()
     {
-        using Stream stream =
-            typeof(DependencyManifest).Assembly.GetManifestResourceStream(ResourceName)
-            ?? throw new InvalidOperationException($"{ResourceName} is not embedded.");
+        using Stream stream = typeof(DependencyManifest).Assembly.GetManifestResourceStream(
+            ResourceName
+        ) ?? throw new InvalidOperationException($"{ResourceName} is not embedded.");
         using var reader = new StreamReader(stream);
         return Parse(reader.ReadToEnd());
     }

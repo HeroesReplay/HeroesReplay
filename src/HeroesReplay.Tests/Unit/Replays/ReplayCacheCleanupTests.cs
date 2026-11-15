@@ -67,12 +67,8 @@ public sealed class ReplayCacheCleanupTests : IDisposable
             "quarantined",
             plan.Items.Single(item => item.Path == brokenRequest).Reason
         );
-        Assert.DoesNotContain(
-            plan.Items,
-            item =>
-                item.Path == waitingRequest
-                || item.Path == waitingSidecar
-                || item.Path == youngSidecar
+        Assert.DoesNotContain(plan.Items, item =>
+            item.Path == waitingRequest || item.Path == waitingSidecar || item.Path == youngSidecar
         );
     }
 
@@ -189,13 +185,11 @@ public sealed class ReplayCacheCleanupTests : IDisposable
 
         PrunePlan one = HeroesDataCleanup.Plan(data, retainedVersions: 1, Now);
 
-        Assert.Contains(
-            one.Items,
-            item => item.Path == Path.Combine(builds, "98304") && item.IsDirectory
+        Assert.Contains(one.Items, item =>
+            item.Path == Path.Combine(builds, "98304") && item.IsDirectory
         );
-        Assert.DoesNotContain(
-            one.Items,
-            item => item.Path.StartsWith(Path.Combine(builds, "98348"))
+        Assert.DoesNotContain(one.Items, item =>
+            item.Path.StartsWith(Path.Combine(builds, "98348"))
         );
     }
 

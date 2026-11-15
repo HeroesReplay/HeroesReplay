@@ -44,16 +44,11 @@ public sealed class FocusLedgerStoreTests : IDisposable
         var one = new FocusLedgerStore(LedgerPath);
         var two = new FocusLedgerStore(LedgerPath);
 
-        Parallel.For(
-            0,
-            20,
-            i =>
-                (i % 2 == 0 ? one : two).Update(ledger =>
-                {
-                    ledger.Put(Entry("Hero" + i, "Tank", Now, key: i.ToString()));
-                    return 0;
-                })
-        );
+        Parallel.For(0, 20, i => (i % 2 == 0 ? one : two).Update(ledger =>
+            {
+                ledger.Put(Entry("Hero" + i, "Tank", Now, key: i.ToString()));
+                return 0;
+            }));
 
         Assert.Equal(20, one.Read().Entries.Select(entry => entry.Key).Distinct().Count());
     }

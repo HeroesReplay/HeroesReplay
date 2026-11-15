@@ -39,11 +39,9 @@ public class FilteredReplaySearchTests
         ).ToList();
 
         Assert.Equal(new[] { 302 }, found.Select(replay => replay.Id));
-        Assert.Contains(
-            http.Queries,
-            query =>
-                query.Contains("game_type=Quick%20Match", StringComparison.Ordinal)
-                && query.Contains("game_map=Hanamura%20Temple", StringComparison.Ordinal)
+        Assert.Contains(http.Queries, query =>
+            query.Contains("game_type=Quick%20Match", StringComparison.Ordinal)
+            && query.Contains("game_map=Hanamura%20Temple", StringComparison.Ordinal)
         );
     }
 
@@ -123,9 +121,8 @@ public class FilteredReplaySearchTests
         var services = new ServiceCollection();
         services.AddLogging();
         services
-            .AddHttpClient(
-                HeroesProfileHttp.ClientName,
-                client => client.Timeout = Timeout.InfiniteTimeSpan
+            .AddHttpClient(HeroesProfileHttp.ClientName, client =>
+                client.Timeout = Timeout.InfiniteTimeSpan
             )
             .ConfigurePrimaryHttpMessageHandler(() => handler)
             .AddResilienceHandler(HeroesProfileHttp.ClientName, HeroesProfileHttp.Configure);

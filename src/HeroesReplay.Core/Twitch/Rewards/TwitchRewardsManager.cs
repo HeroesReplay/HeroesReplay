@@ -71,8 +71,8 @@ public class TwitchRewardsManager : ITwitchRewardsManager
         }
 
         var rewards = await twitchApi.Helix.ChannelPoints.GetCustomRewardAsync(broadcasterId);
-        var existing =
-            rewards?.Data ?? Array.Empty<TwitchLib.Api.Helix.Models.ChannelPoints.CustomReward>();
+        var existing = rewards?.Data
+            ?? Array.Empty<TwitchLib.Api.Helix.Models.ChannelPoints.CustomReward>();
         existing = await DeleteRetiredRewardsAsync(broadcasterId, existing);
 
         var updateList = new List<UpdateCustomRewardResponse>();
@@ -231,8 +231,8 @@ public class TwitchRewardsManager : ITwitchRewardsManager
             broadcasterId,
             accessToken: settings.Twitch.AccessToken
         );
-        var existing =
-            rewards?.Data ?? Array.Empty<TwitchLib.Api.Helix.Models.ChannelPoints.CustomReward>();
+        var existing = rewards?.Data
+            ?? Array.Empty<TwitchLib.Api.Helix.Models.ChannelPoints.CustomReward>();
         var deleted = new List<string>();
         var failed = new List<string>();
 

@@ -112,15 +112,13 @@ public class ServiceSupervisorTests
             },
         };
 
-        List<ServiceProcessRecord> living = ServiceProcessPlan.StillRunning(
-            records,
-            pid =>
-                pid switch
-                {
-                    10 => "heroesreplay",
-                    11 => "notepad",
-                    _ => null,
-                }
+        List<ServiceProcessRecord> living = ServiceProcessPlan.StillRunning(records, pid =>
+            pid switch
+            {
+                10 => "heroesreplay",
+                11 => "notepad",
+                _ => null,
+            }
         );
 
         ServiceProcessRecord only = Assert.Single(living);
@@ -292,9 +290,8 @@ public class ServiceSupervisorTests
             Assert.Equal(1, code);
             Assert.Null(ServiceLockStore.TryLoad(path));
             Assert.Equal(new[] { 7, 7 }, stopped);
-            Assert.Contains(
-                messages,
-                message => message.Contains("download") && message.Contains("Failed to start")
+            Assert.Contains(messages, message =>
+                message.Contains("download") && message.Contains("Failed to start")
             );
         }
         finally
@@ -1313,9 +1310,8 @@ public class ServiceSupervisorTests
             Assert.Equal(1, starts);
             Assert.Equal(new[] { 101 }, stopped);
             Assert.Null(ServiceLockStore.TryLoad(path));
-            Assert.Contains(
-                messages,
-                message => message.Contains("spectate") && message.Contains("exited before ready")
+            Assert.Contains(messages, message =>
+                message.Contains("spectate") && message.Contains("exited before ready")
             );
         }
         finally
@@ -1381,10 +1377,8 @@ public class ServiceSupervisorTests
             );
             Assert.Equal(new[] { 41 }, stopped);
             Assert.Null(ServiceLockStore.TryLoad(path));
-            Assert.Contains(
-                messages,
-                message =>
-                    message.Contains("spectate") && message.Contains("exited before heartbeat")
+            Assert.Contains(messages, message =>
+                message.Contains("spectate") && message.Contains("exited before heartbeat")
             );
         }
         finally
@@ -1419,9 +1413,8 @@ public class ServiceSupervisorTests
             Assert.Equal(1, code);
             Assert.Equal(new[] { 5 }, stopped);
             Assert.Null(ServiceLockStore.TryLoad(path));
-            Assert.Contains(
-                messages,
-                message => message.Contains("spectate") && message.Contains("ready timed out")
+            Assert.Contains(messages, message =>
+                message.Contains("spectate") && message.Contains("ready timed out")
             );
         }
         finally
@@ -1500,9 +1493,8 @@ public class ServiceSupervisorTests
             Assert.Equal(1, starts);
             Assert.Equal(new[] { 71 }, stopped);
             Assert.Null(ServiceLockStore.TryLoad(path));
-            Assert.Contains(
-                messages,
-                message => message.Contains("twitch") && message.Contains("token")
+            Assert.Contains(messages, message =>
+                message.Contains("twitch") && message.Contains("token")
             );
         }
         finally
@@ -1541,9 +1533,8 @@ public class ServiceSupervisorTests
             Assert.Equal(1, code);
             Assert.Equal(new[] { 502, 501, 500 }, stopped);
             Assert.Null(ServiceLockStore.TryLoad(path));
-            Assert.Contains(
-                messages,
-                message => message.Contains("youtube") && message.Contains("context")
+            Assert.Contains(messages, message =>
+                message.Contains("youtube") && message.Contains("context")
             );
         }
         finally
@@ -1815,9 +1806,8 @@ public class ServiceSupervisorTests
             ServiceStopResult result = ServiceSupervisor.Stop(path, shutdown);
 
             Assert.Equal(1, result.ExitCode);
-            Assert.All(
-                result.Roles,
-                role => Assert.Equal(ServiceStopOutcome.Graceful, role.Outcome)
+            Assert.All(result.Roles, role =>
+                Assert.Equal(ServiceStopOutcome.Graceful, role.Outcome)
             );
             Assert.Empty(processes.Killed);
             Assert.Contains(result.Failures(), failure => failure.Contains("still streaming"));
@@ -1886,11 +1876,9 @@ public class ServiceSupervisorTests
             ServiceStopResult result = ServiceSupervisor.Stop(path, shutdown);
 
             Assert.False(result.Succeeded);
-            Assert.Contains(
-                result.Failures(),
-                failure =>
-                    failure.Contains("may still be live", StringComparison.Ordinal)
-                    || failure.Contains("not confirmed stopped", StringComparison.Ordinal)
+            Assert.Contains(result.Failures(), failure =>
+                failure.Contains("may still be live", StringComparison.Ordinal)
+                || failure.Contains("not confirmed stopped", StringComparison.Ordinal)
             );
         }
         finally

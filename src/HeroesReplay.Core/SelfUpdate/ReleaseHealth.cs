@@ -112,8 +112,10 @@ public static class ReleaseHealth
         }
 
         var problems = new List<string>();
-        List<ServiceRoleHealth> expected =
-            roles?.Where(role => role != null && role.Expected).ToList() ?? new();
+        List<ServiceRoleHealth> expected = roles
+            ?.Where(role => role != null && role.Expected)
+            .ToList()
+            ?? new();
         ServiceRoleHealth spectate = expected.FirstOrDefault(IsSpectate);
         if (expected.Count == 0)
         {

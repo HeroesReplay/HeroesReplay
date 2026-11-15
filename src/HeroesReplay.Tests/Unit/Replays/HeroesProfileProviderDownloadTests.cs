@@ -104,12 +104,10 @@ public class HeroesProfileProviderDownloadTests
     {
         string root = NewRoot();
         DateTime now = DateTime.UtcNow;
-        var service = new ListedDownloads(
-            newest: 65660000,
-            listPage: minId =>
-                minId < 65657000
-                    ? Replay(minId + 1, now - TimeSpan.FromDays(3))
-                    : Replay(minId + 1, now - TimeSpan.FromHours(1))
+        var service = new ListedDownloads(newest: 65660000, listPage: minId =>
+            minId < 65657000
+                ? Replay(minId + 1, now - TimeSpan.FromDays(3))
+                : Replay(minId + 1, now - TimeSpan.FromHours(1))
         );
 
         try
@@ -139,9 +137,8 @@ public class HeroesProfileProviderDownloadTests
     {
         string root = NewRoot();
         DateTime now = DateTime.UtcNow;
-        var service = new ListedDownloads(
-            newest: 65660000,
-            listPage: minId => Replay(minId + 1, now - TimeSpan.FromDays(3))
+        var service = new ListedDownloads(newest: 65660000, listPage: minId =>
+            Replay(minId + 1, now - TimeSpan.FromDays(3))
         );
 
         try
@@ -173,12 +170,10 @@ public class HeroesProfileProviderDownloadTests
     public async Task DownloadNextAsync_TakesTheCurrentPatchOverALowerIdOnAnOlderBuild()
     {
         string root = NewRoot();
-        var service = new ListedDownloads(
-            newest: 65580010,
-            listPage: minId =>
-                minId < 65580002
-                    ? Builds((65580001, Previous), (65580002, Current))
-                    : ReplayListing.Empty
+        var service = new ListedDownloads(newest: 65580010, listPage: minId =>
+            minId < 65580002
+                ? Builds((65580001, Previous), (65580002, Current))
+                : ReplayListing.Empty
         );
 
         try
@@ -200,20 +195,12 @@ public class HeroesProfileProviderDownloadTests
     {
         // #510: three current-patch candidates; 65580002 has a deathless carry.
         string root = NewRoot();
-        var service = new ListedDownloads(
-            newest: 65580010,
-            listPage: minId =>
-                minId switch
-                {
-                    < 65580003 => Builds(
-                        (65580001, Current),
-                        (65580002, Current),
-                        (65580003, Current)
-                    ),
-                    < 65580004 => Builds((65580004, Current)),
-                    _ => ReplayListing.Empty,
-                }
-        );
+        var service = new ListedDownloads(newest: 65580010, listPage: minId => minId switch
+            {
+                < 65580003 => Builds((65580001, Current), (65580002, Current), (65580003, Current)),
+                < 65580004 => Builds((65580004, Current)),
+                _ => ReplayListing.Empty,
+            });
         var details = new Details(
             Game(65580001, 11),
             Game(65580002, 20, new ReplayScoreLine(0, "Valla", 12, 0, 9, 21, 21, 3, 240)),
@@ -242,12 +229,10 @@ public class HeroesProfileProviderDownloadTests
     public async Task DownloadNextAsync_WithNoScoreScreen_TakesTheLowestIdAsBefore()
     {
         string root = NewRoot();
-        var service = new ListedDownloads(
-            newest: 65580010,
-            listPage: minId =>
-                minId < 65580003
-                    ? Builds((65580001, Current), (65580002, Current), (65580003, Current))
-                    : ReplayListing.Empty
+        var service = new ListedDownloads(newest: 65580010, listPage: minId =>
+            minId < 65580003
+                ? Builds((65580001, Current), (65580002, Current), (65580003, Current))
+                : ReplayListing.Empty
         );
 
         try
@@ -269,16 +254,12 @@ public class HeroesProfileProviderDownloadTests
     public async Task DownloadNextAsync_ReadsAheadForTheCurrentPatch()
     {
         string root = NewRoot();
-        var service = new ListedDownloads(
-            newest: 65581010,
-            listPage: minId =>
-                minId switch
-                {
-                    < 65580001 => Builds((65580001, Previous)),
-                    < 65581001 => Builds((65581001, Current)),
-                    _ => ReplayListing.Empty,
-                }
-        );
+        var service = new ListedDownloads(newest: 65581010, listPage: minId => minId switch
+            {
+                < 65580001 => Builds((65580001, Previous)),
+                < 65581001 => Builds((65581001, Current)),
+                _ => ReplayListing.Empty,
+            });
 
         try
         {
@@ -299,12 +280,10 @@ public class HeroesProfileProviderDownloadTests
     public async Task DownloadNextAsync_FallsBackToThePreviousBuildWhenTheCurrentPatchIsNotListed()
     {
         string root = NewRoot();
-        var service = new ListedDownloads(
-            newest: 65580010,
-            listPage: minId =>
-                minId < 65580002
-                    ? Builds((65580001, Previous), (65580002, Previous))
-                    : ReplayListing.Empty
+        var service = new ListedDownloads(newest: 65580010, listPage: minId =>
+            minId < 65580002
+                ? Builds((65580001, Previous), (65580002, Previous))
+                : ReplayListing.Empty
         );
 
         try
@@ -330,9 +309,8 @@ public class HeroesProfileProviderDownloadTests
     public async Task DownloadNextAsync_SkipsAReplayWhoseDownloadHeroesProfileRefuses()
     {
         string root = NewRoot();
-        var service = new ListedDownloads(
-            newest: 65590000,
-            listPage: minId => Builds((minId + 1, Current))
+        var service = new ListedDownloads(newest: 65590000, listPage: minId =>
+            Builds((minId + 1, Current))
         )
         {
             Refuse = id =>
@@ -349,9 +327,8 @@ public class HeroesProfileProviderDownloadTests
             Assert.False(await provider.DownloadNextAsync());
 
             Assert.Empty(Directory.GetFiles(Path.Combine(root, "Standard")));
-            LogLine skip = Assert.Single(
-                logger.Lines,
-                line => line.Message.StartsWith("Skipped replay", StringComparison.Ordinal)
+            LogLine skip = Assert.Single(logger.Lines, line =>
+                line.Message.StartsWith("Skipped replay", StringComparison.Ordinal)
             );
             Assert.Equal(65580001, skip.Values["ReplayId"]);
             Assert.Equal(429, skip.Values["Status"]);
@@ -373,9 +350,8 @@ public class HeroesProfileProviderDownloadTests
     public async Task DownloadNextAsync_ANetworkFailureStillThrows()
     {
         string root = NewRoot();
-        var service = new ListedDownloads(
-            newest: 65590000,
-            listPage: minId => Builds((minId + 1, Current))
+        var service = new ListedDownloads(newest: 65590000, listPage: minId =>
+            Builds((minId + 1, Current))
         )
         {
             Refuse = _ => new HttpRequestException("No such host is known."),
@@ -411,9 +387,8 @@ public class HeroesProfileProviderDownloadTests
     {
         string root = NewRoot();
         Dictionary<int, DateTime> played = Backlog(expired: 97, fresh);
-        var service = new ListedDownloads(
-            newest: 65590000,
-            listPage: minId => Builds((minId + 1, Current))
+        var service = new ListedDownloads(newest: 65590000, listPage: minId =>
+            Builds((minId + 1, Current))
         );
 
         try
@@ -454,9 +429,8 @@ public class HeroesProfileProviderDownloadTests
     {
         string root = NewRoot();
         Dictionary<int, DateTime> played = Backlog(expired: 0, fresh);
-        var service = new ListedDownloads(
-            newest: 65590000,
-            listPage: minId => Builds((minId + 1, Current))
+        var service = new ListedDownloads(newest: 65590000, listPage: minId =>
+            Builds((minId + 1, Current))
         );
 
         try
@@ -478,9 +452,8 @@ public class HeroesProfileProviderDownloadTests
     {
         string root = NewRoot();
         Dictionary<int, DateTime> played = Backlog(expired: 97, fresh: Limit);
-        var service = new ListedDownloads(
-            newest: 65590000,
-            listPage: minId => Builds((minId + 1, Current))
+        var service = new ListedDownloads(newest: 65590000, listPage: minId =>
+            Builds((minId + 1, Current))
         );
         var logger = new ListLogger();
 
@@ -523,9 +496,8 @@ public class HeroesProfileProviderDownloadTests
         string root = NewRoot();
         Dictionary<int, DateTime> played = Backlog(expired, fresh: 0);
         DateTime now = DateTime.UtcNow;
-        var service = new ListedDownloads(
-            newest: 65660000,
-            listPage: minId => Replay(minId + 1, now - TimeSpan.FromDays(7))
+        var service = new ListedDownloads(newest: 65660000, listPage: minId =>
+            Replay(minId + 1, now - TimeSpan.FromDays(7))
         );
 
         try
@@ -556,9 +528,8 @@ public class HeroesProfileProviderDownloadTests
     public async Task DownloadNextAsync_CountsAWaitingReplayWhoseGameDateCannotBeRead()
     {
         string root = NewRoot();
-        var service = new ListedDownloads(
-            newest: 65590000,
-            listPage: minId => Builds((minId + 1, Current))
+        var service = new ListedDownloads(newest: 65590000, listPage: minId =>
+            Builds((minId + 1, Current))
         );
         int reads = 0;
 

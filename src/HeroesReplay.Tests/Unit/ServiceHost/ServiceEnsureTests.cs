@@ -125,9 +125,8 @@ public class ServiceEnsureTests
         Assert.Equal(ServiceEnsureCodes.Mismatch, report.Code);
         Assert.Contains("download pid 100", report.Message);
         Assert.Contains("services stop", report.Remediation);
-        Assert.Contains(
-            report.Roles,
-            role => role.Role == "download" && role.Action == ServiceEnsureActions.Blocked
+        Assert.Contains(report.Roles, role =>
+            role.Role == "download" && role.Action == ServiceEnsureActions.Blocked
         );
         // The down role it would have started is blocked too: a refusal starts nothing.
         Assert.Equal(
@@ -340,9 +339,8 @@ public class ServiceEnsureTests
 
         Assert.Equal(ServiceEnsureCodes.StopPending, report.Code);
         Assert.Empty(stack.Killed);
-        Assert.Contains(
-            ServiceLockStore.TryLoad(stack.LockPath).Processes,
-            record => record.Name == "youtube"
+        Assert.Contains(ServiceLockStore.TryLoad(stack.LockPath).Processes, record =>
+            record.Name == "youtube"
         );
     }
 

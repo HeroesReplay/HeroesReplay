@@ -46,8 +46,8 @@ public sealed class StatEvent
                 continue;
             }
 
-            TrackerEventStructure[] items =
-                section.Value?.array ?? section.Value?.optionalData?.array;
+            TrackerEventStructure[] items = section.Value?.array
+                ?? section.Value?.optionalData?.array;
             foreach (TrackerEventStructure item in items ?? Array.Empty<TrackerEventStructure>())
             {
                 string key = Key(item);

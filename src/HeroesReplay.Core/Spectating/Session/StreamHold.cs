@@ -80,14 +80,8 @@ public sealed class StreamHold
         IConnectivityWatchdog connectivity,
         SpectatorStatusStore statusStore
     )
-        : this(
-            logger,
-            settings,
-            obs,
-            connectivity,
-            statusStore,
-            new ObsStreamArm().IsArmed,
-            () => NamedProcess.IsRunning(NamedProcess.HeroesOfTheStorm)
+        : this(logger, settings, obs, connectivity, statusStore, new ObsStreamArm().IsArmed, () =>
+            NamedProcess.IsRunning(NamedProcess.HeroesOfTheStorm)
         ) { }
 
     /// <param name="clientRunning">

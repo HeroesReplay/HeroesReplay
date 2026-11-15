@@ -104,9 +104,8 @@ public sealed class BookkeepingPrunerTests : IDisposable
         PrunePlan later = store.PlanPrune(Now.AddDays(25), settings);
 
         Assert.Contains(later.Items, entry => entry.Path == store.PathFor("Hidden#1234", 2));
-        Assert.DoesNotContain(
-            later.Items,
-            entry => Path.GetFileName(entry.Path) == PlayerHeroStatsStore.CallsFileName
+        Assert.DoesNotContain(later.Items, entry =>
+            Path.GetFileName(entry.Path) == PlayerHeroStatsStore.CallsFileName
         );
     }
 

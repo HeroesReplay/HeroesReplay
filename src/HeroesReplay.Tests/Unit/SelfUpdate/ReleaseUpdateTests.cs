@@ -109,9 +109,8 @@ public class ReleaseUpdateTests
 
             IReadOnlyList<string> open = InstallObs(install, appData, obsIsRunning: true);
 
-            Assert.Contains(
-                open,
-                note => note.Contains("OBS is running", StringComparison.Ordinal)
+            Assert.Contains(open, note =>
+                note.Contains("OBS is running", StringComparison.Ordinal)
             );
             Assert.False(
                 File.Exists(
@@ -165,9 +164,8 @@ public class ReleaseUpdateTests
             IReadOnlyList<string> notes = InstallObs(install, appData, obsIsRunning: false);
 
             Assert.Equal(machine, File.ReadAllText(Path.Combine(profileDir, "basic.ini")));
-            Assert.Contains(
-                notes,
-                note => note.Contains("Kept the existing OBS profile", StringComparison.Ordinal)
+            Assert.Contains(notes, note =>
+                note.Contains("Kept the existing OBS profile", StringComparison.Ordinal)
             );
             Assert.False(File.Exists(Path.Combine(profileDir, "service.json")));
             Assert.Empty(Directory.GetFiles(appData, "service.json", SearchOption.AllDirectories));
@@ -331,11 +329,9 @@ public class ReleaseUpdateTests
             );
 
             Assert.Equal(custom, File.ReadAllText(live));
-            Assert.Contains(
-                notes,
-                note =>
-                    note.Contains("not overwritten", StringComparison.Ordinal)
-                    && note.Contains("my-webcam", StringComparison.Ordinal)
+            Assert.Contains(notes, note =>
+                note.Contains("not overwritten", StringComparison.Ordinal)
+                && note.Contains("my-webcam", StringComparison.Ordinal)
             );
             Assert.Empty(ObsFileTransaction.Backups(Managed(appData).BackupDirectory, live));
         }
@@ -375,9 +371,8 @@ public class ReleaseUpdateTests
             );
 
             Assert.Equal(before, File.ReadAllText(live));
-            Assert.Contains(
-                notes,
-                note => note.Contains("OBS is running", StringComparison.Ordinal)
+            Assert.Contains(notes, note =>
+                note.Contains("OBS is running", StringComparison.Ordinal)
             );
 
             // services start (no release, no previous install) with OBS closed.
@@ -430,9 +425,8 @@ public class ReleaseUpdateTests
             Assert.Contains("body{margin:0}", merged, StringComparison.Ordinal);
             Assert.Contains("my-webcam", merged, StringComparison.Ordinal);
             Assert.Contains("\"cam\"", merged, StringComparison.Ordinal);
-            Assert.Contains(
-                notes,
-                note => note.Contains("Merged this install's OBS collection template changes (1)")
+            Assert.Contains(notes, note =>
+                note.Contains("Merged this install's OBS collection template changes (1)")
             );
             string backup = Assert.Single(
                 ObsFileTransaction.Backups(Managed(appData).BackupDirectory, live)
@@ -481,15 +475,13 @@ public class ReleaseUpdateTests
 
             Assert.Equal(before, File.ReadAllText(live));
             Assert.Empty(ObsFileTransaction.Backups(Managed(appData).BackupDirectory, live));
-            Assert.Contains(
-                notes,
-                note =>
-                    note.Contains("not overwritten", StringComparison.Ordinal)
-                    && note.Contains("both changed 1 value", StringComparison.Ordinal)
-                    && note.Contains(
-                        "filter 'Crop/Pad' on 'countdown' settings.top: template 20, live 10, was 0",
-                        StringComparison.Ordinal
-                    )
+            Assert.Contains(notes, note =>
+                note.Contains("not overwritten", StringComparison.Ordinal)
+                && note.Contains("both changed 1 value", StringComparison.Ordinal)
+                && note.Contains(
+                    "filter 'Crop/Pad' on 'countdown' settings.top: template 20, live 10, was 0",
+                    StringComparison.Ordinal
+                )
             );
             Assert.Equal(TemplateHashOf(previous), Managed(appData).Read(live).TemplateSha256);
         }
@@ -529,13 +521,11 @@ public class ReleaseUpdateTests
                 previousInstall: previous
             );
 
-            Assert.Contains(
-                notes,
-                note =>
-                    note.Contains(
-                        "Replaced the live OBS collection with this install's template",
-                        StringComparison.Ordinal
-                    )
+            Assert.Contains(notes, note =>
+                note.Contains(
+                    "Replaced the live OBS collection with this install's template",
+                    StringComparison.Ordinal
+                )
             );
             Assert.Equal(
                 File.ReadAllText(Path.Combine(install, "obs", "Default.json")),
@@ -590,9 +580,8 @@ public class ReleaseUpdateTests
             );
 
             Assert.Equal(before, File.ReadAllText(live));
-            Assert.Contains(
-                notes,
-                note => note.Contains("the next time HeroesReplay finds OBS closed")
+            Assert.Contains(notes, note =>
+                note.Contains("the next time HeroesReplay finds OBS closed")
             );
             Directory.Delete(previous, recursive: true);
 
@@ -714,9 +703,8 @@ public class ReleaseUpdateTests
         "{\"name\":\"HeroesReplay\",\"sources\":["
         + string.Join(
             ",",
-            Array.ConvertAll(
-                sources,
-                name => "{\"name\":\"" + name + "\",\"id\":\"image_source\",\"settings\":{}}"
+            Array.ConvertAll(sources, name =>
+                "{\"name\":\"" + name + "\",\"id\":\"image_source\",\"settings\":{}}"
             )
         )
         + "]}";

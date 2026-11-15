@@ -323,14 +323,15 @@ internal sealed class FakeObs : IObsReadSessionFactory
             "GetRecordDirectory" => new JObject { ["recordDirectory"] = RecordDirectory },
             "GetInputList" => new JObject { ["inputs"] = new JArray(Inputs()) },
             "GetInputSettings" => InputSettings((string)data?["inputName"]),
-            "GetInputMute" => Audio(
-                (string)data?["inputName"],
-                muted => new JObject { ["inputMuted"] = muted }
-            ),
-            "GetInputVolume" => Audio(
-                (string)data?["inputName"],
-                _ => new JObject { ["inputVolumeMul"] = 1.0, ["inputVolumeDb"] = 0.0 }
-            ),
+            "GetInputMute" => Audio((string)data?["inputName"], muted => new JObject
+            {
+                ["inputMuted"] = muted,
+            }),
+            "GetInputVolume" => Audio((string)data?["inputName"], _ => new JObject
+            {
+                ["inputVolumeMul"] = 1.0,
+                ["inputVolumeDb"] = 0.0,
+            }),
             "GetSpecialInputs" => new JObject
             {
                 ["desktop1"] = DesktopAudio,

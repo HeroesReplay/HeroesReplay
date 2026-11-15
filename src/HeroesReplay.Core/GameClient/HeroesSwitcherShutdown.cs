@@ -111,8 +111,8 @@ public sealed class HeroesSwitcherShutdown
     )
     {
         this.snapshot = snapshot ?? throw new ArgumentNullException(nameof(snapshot));
-        this.closeMainWindow =
-            closeMainWindow ?? throw new ArgumentNullException(nameof(closeMainWindow));
+        this.closeMainWindow = closeMainWindow
+            ?? throw new ArgumentNullException(nameof(closeMainWindow));
         this.kill = kill ?? throw new ArgumentNullException(nameof(kill));
         this.wait = wait ?? throw new ArgumentNullException(nameof(wait));
         this.grace = grace > TimeSpan.Zero ? grace : TimeSpan.Zero;

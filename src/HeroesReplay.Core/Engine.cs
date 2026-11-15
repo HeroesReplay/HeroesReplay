@@ -100,17 +100,17 @@ public class Engine : IEngine
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
         this.gameManager = gameManager ?? throw new ArgumentNullException(nameof(gameManager));
         this.gameData = gameData ?? throw new ArgumentNullException(nameof(gameData));
-        this.replayProvider =
-            replayProvider ?? throw new ArgumentNullException(nameof(replayProvider));
-        this.consoleTokenProvider =
-            consoleTokenProvider ?? throw new ArgumentNullException(nameof(consoleTokenProvider));
+        this.replayProvider = replayProvider
+            ?? throw new ArgumentNullException(nameof(replayProvider));
+        this.consoleTokenProvider = consoleTokenProvider
+            ?? throw new ArgumentNullException(nameof(consoleTokenProvider));
         this.statusStore = statusStore ?? throw new ArgumentNullException(nameof(statusStore));
-        this.connectivityWatchdog =
-            connectivityWatchdog ?? throw new ArgumentNullException(nameof(connectivityWatchdog));
+        this.connectivityWatchdog = connectivityWatchdog
+            ?? throw new ArgumentNullException(nameof(connectivityWatchdog));
         this.replayResume = replayResume ?? throw new ArgumentNullException(nameof(replayResume));
         this.replayLoader = replayLoader ?? throw new ArgumentNullException(nameof(replayLoader));
-        this.releaseUpdate =
-            releaseUpdate ?? throw new ArgumentNullException(nameof(releaseUpdate));
+        this.releaseUpdate = releaseUpdate
+            ?? throw new ArgumentNullException(nameof(releaseUpdate));
         recordSession = heartbeat == null ? ServiceHeartbeat.RecordSession : heartbeat.Session;
         this.memoryLog = memoryLog;
         this.streamHold = streamHold;

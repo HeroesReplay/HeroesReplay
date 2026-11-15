@@ -29,10 +29,8 @@ public class ObsStatusJsonTests
         string blockedBy
     )
     {
-        CliResult<ObsStatusDetails> status = ObsCommand.ReadStatus(
-            armed,
-            ArmFile,
-            () => new OBSSettings { StreamingEnabled = streaming, ProfileName = "HeroesReplay" }
+        CliResult<ObsStatusDetails> status = ObsCommand.ReadStatus(armed, ArmFile, () =>
+            new OBSSettings { StreamingEnabled = streaming, ProfileName = "HeroesReplay" }
         );
 
         Assert.True(status.Ok);
@@ -47,10 +45,8 @@ public class ObsStatusJsonTests
     [Fact]
     public void UnreadableSettings_ExitOne()
     {
-        CliResult<ObsStatusDetails> status = ObsCommand.ReadStatus(
-            false,
-            ArmFile,
-            () => throw new InvalidDataException("bad json")
+        CliResult<ObsStatusDetails> status = ObsCommand.ReadStatus(false, ArmFile, () =>
+            throw new InvalidDataException("bad json")
         );
 
         Assert.False(status.Ok);

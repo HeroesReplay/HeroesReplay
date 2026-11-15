@@ -42,9 +42,8 @@ public class YouTubeQuotaPlanTests
 
         IReadOnlyList<string> warnings = YouTubeQuotaPlan.Warnings(Production(), media);
 
-        Assert.Contains(
-            warnings,
-            w => w.Contains("MaxInsertsPerQuotaDay 120", StringComparison.Ordinal)
+        Assert.Contains(warnings, w =>
+            w.Contains("MaxInsertsPerQuotaDay 120", StringComparison.Ordinal)
         );
     }
 
@@ -56,9 +55,8 @@ public class YouTubeQuotaPlanTests
 
         IReadOnlyList<string> warnings = YouTubeQuotaPlan.Warnings(youtube, ProductionMedia());
 
-        Assert.Contains(
-            warnings,
-            w => w.Contains("never confirmed public", StringComparison.Ordinal)
+        Assert.Contains(warnings, w =>
+            w.Contains("never confirmed public", StringComparison.Ordinal)
         );
     }
 
@@ -70,9 +68,8 @@ public class YouTubeQuotaPlanTests
 
         IReadOnlyList<string> warnings = YouTubeQuotaPlan.Warnings(youtube, ProductionMedia());
 
-        Assert.Contains(
-            warnings,
-            w => w.Contains("Playlists fall behind", StringComparison.Ordinal)
+        Assert.Contains(warnings, w =>
+            w.Contains("Playlists fall behind", StringComparison.Ordinal)
         );
     }
 
@@ -129,9 +126,8 @@ public class YouTubeQuotaPlanTests
         (YouTubeSettings youtube, ReplayMediaPolicySettings media) = Released();
         youtube.Playlists.Mode = true;
 
-        Assert.Contains(
-            YouTubeQuotaPlan.Warnings(youtube, media),
-            w => w.Contains("Playlists fall behind", StringComparison.Ordinal)
+        Assert.Contains(YouTubeQuotaPlan.Warnings(youtube, media), w =>
+            w.Contains("Playlists fall behind", StringComparison.Ordinal)
         );
     }
 
@@ -143,9 +139,8 @@ public class YouTubeQuotaPlanTests
 
         IReadOnlyList<string> warnings = YouTubeQuotaPlan.Warnings(Production(), media);
 
-        Assert.Contains(
-            warnings,
-            w => w.Contains("Only viewer requests", StringComparison.Ordinal)
+        Assert.Contains(warnings, w =>
+            w.Contains("Only viewer requests", StringComparison.Ordinal)
         );
     }
 

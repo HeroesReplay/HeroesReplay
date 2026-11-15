@@ -101,19 +101,19 @@ public class Spectator : ISpectator
         this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
         this.context = sessionHolder ?? throw new ArgumentNullException(nameof(sessionHolder));
         this.controller = controller ?? throw new ArgumentNullException(nameof(controller));
-        this.talentsNotifier =
-            talentsNotifier ?? throw new ArgumentNullException(nameof(talentsNotifier));
-        consoleTokenProvider =
-            tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
+        this.talentsNotifier = talentsNotifier
+            ?? throw new ArgumentNullException(nameof(talentsNotifier));
+        consoleTokenProvider = tokenProvider
+            ?? throw new ArgumentNullException(nameof(tokenProvider));
         this.statusStore = statusStore ?? throw new ArgumentNullException(nameof(statusStore));
-        this.panelRequests =
-            panelRequests ?? throw new ArgumentNullException(nameof(panelRequests));
-        this.obsController =
-            obsController ?? throw new ArgumentNullException(nameof(obsController));
+        this.panelRequests = panelRequests
+            ?? throw new ArgumentNullException(nameof(panelRequests));
+        this.obsController = obsController
+            ?? throw new ArgumentNullException(nameof(obsController));
         this.gameTimer = gameTimer ?? throw new ArgumentNullException(nameof(gameTimer));
         this.clockLog = clockLog ?? throw new ArgumentNullException(nameof(clockLog));
-        this.recordingClock =
-            recordingClock ?? throw new ArgumentNullException(nameof(recordingClock));
+        this.recordingClock = recordingClock
+            ?? throw new ArgumentNullException(nameof(recordingClock));
 
         panelTimes = new()
         {
@@ -794,12 +794,11 @@ public class Spectator : ISpectator
                 return;
             }
 
-            status.Map =
-                EnglishMapNames.Prefer(
-                    Data.LoadedReplay.HeroesProfileReplay?.Map,
-                    Data.LoadedReplay.Replay?.Map,
-                    Data.LoadedReplay.Replay?.MapAlternativeName
-                ) ?? status.Map;
+            status.Map = EnglishMapNames.Prefer(
+                Data.LoadedReplay.HeroesProfileReplay?.Map,
+                Data.LoadedReplay.Replay?.Map,
+                Data.LoadedReplay.Replay?.MapAlternativeName
+            ) ?? status.Map;
             status.ReplayPath = Data.LoadedReplay.FileInfo?.FullName ?? status.ReplayPath;
             status.ReplayVersion = Data.LoadedReplay.Replay?.ReplayVersion ?? status.ReplayVersion;
             status.ReplayId = Data.LoadedReplay.ReplayId ?? status.ReplayId;

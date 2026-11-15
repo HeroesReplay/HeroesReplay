@@ -102,18 +102,12 @@ public class AgentDocsTests
             stale.Count == 0,
             "CommandReference.Facts names commands that do not exist: " + string.Join(", ", stale)
         );
-        Assert.All(
-            CommandReference.Facts,
-            fact =>
-            {
-                Assert.False(string.IsNullOrWhiteSpace(fact.Before), fact.Path + " has no Before.");
-                Assert.False(
-                    string.IsNullOrWhiteSpace(fact.Changes),
-                    fact.Path + " has no Changes."
-                );
-                Assert.False(string.IsNullOrWhiteSpace(fact.Exit), fact.Path + " has no Exit.");
-            }
-        );
+        Assert.All(CommandReference.Facts, fact =>
+        {
+            Assert.False(string.IsNullOrWhiteSpace(fact.Before), fact.Path + " has no Before.");
+            Assert.False(string.IsNullOrWhiteSpace(fact.Changes), fact.Path + " has no Changes.");
+            Assert.False(string.IsNullOrWhiteSpace(fact.Exit), fact.Path + " has no Exit.");
+        });
     }
 
     /// <summary>

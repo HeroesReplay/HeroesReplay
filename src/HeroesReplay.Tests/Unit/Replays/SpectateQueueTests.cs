@@ -38,15 +38,11 @@ public class SpectateQueueTests
         int[] notWaiting = { 11 };
         var judged = new List<int>();
 
-        SpectateQueue.CountWaiting(
-            onDisk,
-            notWaiting,
-            id =>
-            {
-                judged.Add(id);
-                return true;
-            }
-        );
+        SpectateQueue.CountWaiting(onDisk, notWaiting, id =>
+        {
+            judged.Add(id);
+            return true;
+        });
 
         Assert.Equal(new[] { 10, 12 }, judged);
     }

@@ -61,17 +61,14 @@ public class ObsCollectionBundleTests
         Assert.NotEmpty(assets);
         Assert.Contains("Ranks/bronze.png", assets, StringComparer.OrdinalIgnoreCase);
         Assert.Contains("countdown/index.html", assets, StringComparer.OrdinalIgnoreCase);
-        Assert.DoesNotContain(
-            assets,
-            asset => asset.StartsWith("Popups/", StringComparison.OrdinalIgnoreCase)
+        Assert.DoesNotContain(assets, asset =>
+            asset.StartsWith("Popups/", StringComparison.OrdinalIgnoreCase)
         );
-        Assert.DoesNotContain(
-            assets,
-            asset => asset.Contains("StormInterface", StringComparison.OrdinalIgnoreCase)
+        Assert.DoesNotContain(assets, asset =>
+            asset.Contains("StormInterface", StringComparison.OrdinalIgnoreCase)
         );
-        Assert.DoesNotContain(
-            assets,
-            asset => asset.EndsWith(".pdn", StringComparison.OrdinalIgnoreCase)
+        Assert.DoesNotContain(assets, asset =>
+            asset.EndsWith(".pdn", StringComparison.OrdinalIgnoreCase)
         );
 
         var expected = new HashSet<string>(assets, StringComparer.OrdinalIgnoreCase)
@@ -148,9 +145,8 @@ public class ObsCollectionBundleTests
             }
         }
 
-        Assert.DoesNotContain(
-            ObsCollectionPaths.SourceNames(json),
-            name => name.Equals("Mic/Aux", StringComparison.OrdinalIgnoreCase)
+        Assert.DoesNotContain(ObsCollectionPaths.SourceNames(json), name =>
+            name.Equals("Mic/Aux", StringComparison.OrdinalIgnoreCase)
         );
         Assert.Equal(
             "wasapi_output_capture",

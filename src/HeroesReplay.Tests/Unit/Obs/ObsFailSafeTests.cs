@@ -74,17 +74,11 @@ public class ObsFailSafeTests
     {
         int opened = 0;
 
-        ObsFailSafe.Apply(
-            action,
-            Settings(streamingEnabled),
-            armed,
-            obsRunning,
-            () =>
-            {
-                opened++;
-                return new FakeSession { Live = true };
-            }
-        );
+        ObsFailSafe.Apply(action, Settings(streamingEnabled), armed, obsRunning, () =>
+        {
+            opened++;
+            return new FakeSession { Live = true };
+        });
 
         Assert.Equal(0, opened);
     }

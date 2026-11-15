@@ -56,17 +56,14 @@ public sealed class ReleaseCacheTests : IDisposable
         // The kept releases lose only their zip and extract\: apply-release.ps1 runs from prepared\.
         foreach (string kept in new[] { "v1.0.0-977", "v1.0.0-978" })
         {
-            Assert.Contains(
-                plan.Items,
-                item => item.Path == Path.Combine(Updates, kept, "extract")
+            Assert.Contains(plan.Items, item =>
+                item.Path == Path.Combine(Updates, kept, "extract")
             );
-            Assert.Contains(
-                plan.Items,
-                item => item.Path == Path.Combine(Updates, kept, ReleaseSettings.DefaultAssetName)
+            Assert.Contains(plan.Items, item =>
+                item.Path == Path.Combine(Updates, kept, ReleaseSettings.DefaultAssetName)
             );
-            Assert.DoesNotContain(
-                plan.Items,
-                item => item.Path.Contains(Path.Combine(kept, "prepared"))
+            Assert.DoesNotContain(plan.Items, item =>
+                item.Path.Contains(Path.Combine(kept, "prepared"))
             );
         }
 
@@ -101,9 +98,8 @@ public sealed class ReleaseCacheTests : IDisposable
             Now
         );
 
-        PruneItem removed = Assert.Single(
-            plan.Items,
-            item => item.IsDirectory && !item.Path.EndsWith("extract")
+        PruneItem removed = Assert.Single(plan.Items, item =>
+            item.IsDirectory && !item.Path.EndsWith("extract")
         );
         Assert.Equal(Path.Combine(Updates, "v1.0.0-979"), removed.Path);
         Assert.Contains("skipped-releases.txt", removed.Reason);

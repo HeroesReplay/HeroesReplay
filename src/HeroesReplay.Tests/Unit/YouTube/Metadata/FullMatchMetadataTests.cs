@@ -715,9 +715,8 @@ public class FullMatchMetadataTests
         Assert.Contains("replayID=123456789", metadata.HeroesProfileUrl);
         Assert.Contains("Full match.", metadata.Description);
         Assert.DoesNotContain("P299", metadata.Description);
-        Assert.All(
-            metadata.Tags,
-            tag => Assert.InRange(tag.Length, 1, FullMatchMetadataBuilder.TagMaxCharacters)
+        Assert.All(metadata.Tags, tag =>
+            Assert.InRange(tag.Length, 1, FullMatchMetadataBuilder.TagMaxCharacters)
         );
         Assert.InRange(
             string.Join(",", metadata.Tags).Length,

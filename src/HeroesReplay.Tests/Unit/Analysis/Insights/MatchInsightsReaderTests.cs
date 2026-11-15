@@ -66,9 +66,8 @@ public class MatchInsightsReaderTests : IClassFixture<ReplayFixture>
             snapshot.KillingBlows.Select(blow => blow.Second).OrderBy(second => second),
             snapshot.KillingBlows.Select(blow => blow.Second)
         );
-        Assert.All(
-            snapshot.KillingBlows,
-            blow => Assert.InRange(blow.KillerIndex, 0, snapshot.Players.Count - 1)
+        Assert.All(snapshot.KillingBlows, blow =>
+            Assert.InRange(blow.KillerIndex, 0, snapshot.Players.Count - 1)
         );
 
         MatchInsights insights = MatchInsightsReader

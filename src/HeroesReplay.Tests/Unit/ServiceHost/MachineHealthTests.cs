@@ -74,9 +74,8 @@ public class MachineHealthTests
         Assert.Equal(5, report.Warnings.Count);
         Assert.Contains(report.Warnings, warning => warning.StartsWith("Physical memory"));
         Assert.Contains(report.Warnings, warning => warning.StartsWith("12 conhost.exe"));
-        Assert.Contains(
-            report.Warnings,
-            warning => warning.StartsWith("1 HeroesOfTheStorm_x64.exe")
+        Assert.Contains(report.Warnings, warning =>
+            warning.StartsWith("1 HeroesOfTheStorm_x64.exe")
         );
     }
 
@@ -138,9 +137,8 @@ public class MachineHealthTests
 
         Assert.Equal(2, reads);
         Assert.Contains(logger.Entries, entry => entry.Message.Contains("obs64 pid 42: 650 MB"));
-        Assert.Contains(
-            logger.Entries,
-            entry => entry.Level == LogLevel.Warning && entry.Message.Contains("9 Battle.net")
+        Assert.Contains(logger.Entries, entry =>
+            entry.Level == LogLevel.Warning && entry.Message.Contains("9 Battle.net")
         );
     }
 
@@ -346,9 +344,8 @@ public class MachineHealthTests
 
         Assert.True(log.Tick(new DateTimeOffset(2026, 10, 9, 3, 4, 0, TimeSpan.Zero)));
 
-        LogEntry top = Assert.Single(
-            logger.Entries,
-            entry => entry.Message.Contains("holding the most commit")
+        LogEntry top = Assert.Single(logger.Entries, entry =>
+            entry.Message.Contains("holding the most commit")
         );
         Assert.Equal(LogLevel.Warning, top.Level);
         Assert.Contains("the 5 processes", top.Message);
@@ -376,9 +373,8 @@ public class MachineHealthTests
 
         Assert.True(log.Tick(new DateTimeOffset(2026, 10, 9, 3, 4, 0, TimeSpan.Zero)));
 
-        Assert.DoesNotContain(
-            logger.Entries,
-            entry => entry.Message.Contains("holding the most commit")
+        Assert.DoesNotContain(logger.Entries, entry =>
+            entry.Message.Contains("holding the most commit")
         );
         Assert.DoesNotContain(logger.Entries, entry => entry.Level == LogLevel.Warning);
     }

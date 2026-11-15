@@ -109,9 +109,8 @@ public class FocusTitleTests
             "Hero focus: Li-Ming (Teleport Build), Ranged Assassin",
             entry.DescriptionLines
         );
-        Assert.DoesNotContain(
-            entry.DescriptionLines,
-            line => line.StartsWith("Featured:", StringComparison.Ordinal)
+        Assert.DoesNotContain(entry.DescriptionLines, line =>
+            line.StartsWith("Featured:", StringComparison.Ordinal)
         );
         Assert.Equal(
             new[] { "Li-Ming", "Li-Ming gameplay", "Teleport Li-Ming", "Ranged Assassin" },
@@ -140,13 +139,11 @@ public class FocusTitleTests
                 line.StartsWith("Blue: ", StringComparison.Ordinal)
             )
         );
-        Assert.DoesNotContain(
-            focus.DescriptionLines,
-            line => line.Contains("Star", StringComparison.Ordinal)
+        Assert.DoesNotContain(focus.DescriptionLines, line =>
+            line.Contains("Star", StringComparison.Ordinal)
         );
-        Assert.Contains(
-            ordinary.DescriptionLines,
-            line => line.StartsWith("Blue: Li-Ming (Star), ", StringComparison.Ordinal)
+        Assert.Contains(ordinary.DescriptionLines, line =>
+            line.StartsWith("Blue: Li-Ming (Star), ", StringComparison.Ordinal)
         );
     }
 
@@ -181,9 +178,8 @@ public class FocusTitleTests
         );
 
         Assert.DoesNotContain("gameplay", entry.Title, StringComparison.Ordinal);
-        Assert.DoesNotContain(
-            entry.DescriptionLines,
-            line => line.StartsWith("Hero focus:", StringComparison.Ordinal)
+        Assert.DoesNotContain(entry.DescriptionLines, line =>
+            line.StartsWith("Hero focus:", StringComparison.Ordinal)
         );
     }
 

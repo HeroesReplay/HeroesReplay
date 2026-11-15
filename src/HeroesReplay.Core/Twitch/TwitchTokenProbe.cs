@@ -29,10 +29,8 @@ public sealed class TwitchTokenProbe : IServiceDependencyProbe
     private readonly Func<string, CancellationToken, Task<TwitchTokenValidation>> validate;
 
     public TwitchTokenProbe(TwitchSettings settings)
-        : this(
-            settings,
-            (token, cancellationToken) =>
-                TwitchTokenScopes.ReadAsync(token, TimeSpan.FromSeconds(60), cancellationToken)
+        : this(settings, (token, cancellationToken) =>
+            TwitchTokenScopes.ReadAsync(token, TimeSpan.FromSeconds(60), cancellationToken)
         ) { }
 
     /// <param name="settings">The token, and which Twitch features this role runs.</param>

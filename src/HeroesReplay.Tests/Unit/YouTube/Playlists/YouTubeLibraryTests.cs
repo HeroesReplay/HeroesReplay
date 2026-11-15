@@ -363,21 +363,17 @@ public sealed class YouTubeLibraryTests : IDisposable
 
         YouTubeLibraryPass pass = await Library(client).RunOnceAsync(true, CancellationToken.None);
 
-        Assert.DoesNotContain(
-            pass.Planned,
-            item => item.VideoId == "video-7" && item.PlaylistTitle is "Garden of Terror" or "ARAM"
+        Assert.DoesNotContain(pass.Planned, item =>
+            item.VideoId == "video-7" && item.PlaylistTitle is "Garden of Terror" or "ARAM"
         );
-        Assert.Contains(
-            pass.Planned,
-            item => item.PlaylistTitle == "Dragon Shire" && item.VideoId == "video-7"
+        Assert.Contains(pass.Planned, item =>
+            item.PlaylistTitle == "Dragon Shire" && item.VideoId == "video-7"
         );
-        Assert.Contains(
-            pass.Planned,
-            item => item.PlaylistTitle == "Garden of Terror" && item.VideoId == "video-8"
+        Assert.Contains(pass.Planned, item =>
+            item.PlaylistTitle == "Garden of Terror" && item.VideoId == "video-8"
         );
-        Assert.Contains(
-            pass.Planned,
-            item => item.PlaylistTitle == "ARAM" && item.VideoId == "video-8"
+        Assert.Contains(pass.Planned, item =>
+            item.PlaylistTitle == "ARAM" && item.VideoId == "video-8"
         );
         Assert.Equal(
             pass.Planned.Count,
@@ -535,13 +531,11 @@ public sealed class YouTubeLibraryTests : IDisposable
         )["v-2"];
         Assert.Equal("Double healer", known.Draft);
         Assert.Equal("Uther", known.FocusHero);
-        Assert.Contains(
-            first.Planned,
-            item => item.PlaylistTitle == YouTubePlaylistNames.UnusualDrafts
+        Assert.Contains(first.Planned, item =>
+            item.PlaylistTitle == YouTubePlaylistNames.UnusualDrafts
         );
-        Assert.Contains(
-            first.Planned,
-            item => item.PlaylistTitle == YouTubePlaylistNames.ViewerReviews
+        Assert.Contains(first.Planned, item =>
+            item.PlaylistTitle == YouTubePlaylistNames.ViewerReviews
         );
         Assert.Equal(
             YouTubeVideoFacts.Version,

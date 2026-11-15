@@ -24,8 +24,8 @@ public sealed class StableGameTimer : IGameTimer
     public StableGameTimer(IGameController controller, SharedClientProcess clientProcess)
     {
         this.controller = controller;
-        this.clientProcess =
-            clientProcess ?? throw new ArgumentNullException(nameof(clientProcess));
+        this.clientProcess = clientProcess
+            ?? throw new ArgumentNullException(nameof(clientProcess));
     }
 
     public void Reset() => clock.BeginMatch();

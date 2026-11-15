@@ -235,8 +235,7 @@ public class CheckCommand : Command
         List<CheckEntry> checks = results.Select(CheckEntry.From).ToList();
         List<CheckEntry> failed = checks.Where(check => check.Status == CheckEntry.Fail).ToList();
         CheckEntry warned = checks.FirstOrDefault(check => check.Status == CheckEntry.Warn);
-        string code =
-            failed.FirstOrDefault()?.Code
+        string code = failed.FirstOrDefault()?.Code
             ?? warned?.Code
             ?? (checks.Count == 1 ? checks[0].Code : CheckCodes.AllOk);
         string message =

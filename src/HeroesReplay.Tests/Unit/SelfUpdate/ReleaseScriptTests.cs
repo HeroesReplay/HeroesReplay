@@ -350,13 +350,11 @@ public class ReleaseScriptTests
         Assert.True(start.Success, "The update log does not start right before the main try.");
         Assert.True(refuse > start.Index && refuse < stop);
         Assert.NotEmpty(exits);
-        Assert.All(
-            exits,
-            exit =>
-                Assert.True(
-                    exit.Index > start.Index && exit.Index < stop,
-                    "An exit outside the try would leave the log open: " + exit.Value
-                )
+        Assert.All(exits, exit =>
+            Assert.True(
+                exit.Index > start.Index && exit.Index < stop,
+                "An exit outside the try would leave the log open: " + exit.Value
+            )
         );
         Assert.Contains("Stop-UpdateLog", script.Substring(stop));
         Assert.Contains("Stop-Transcript", script);

@@ -85,11 +85,10 @@ public sealed class ServiceDependencyMonitor
         try
         {
             // WaitAsync also ends a probe that ignores its token.
-            result =
-                await probe
-                    .CheckAsync(bounded.Token)
-                    .WaitAsync(bound + TimeSpan.FromSeconds(1), time, stop)
-                    .ConfigureAwait(false)
+            result = await probe
+                .CheckAsync(bounded.Token)
+                .WaitAsync(bound + TimeSpan.FromSeconds(1), time, stop)
+                .ConfigureAwait(false)
                 ?? probe.Unreachable($"The {probe.Dependency} probe returned nothing.");
         }
         catch (OperationCanceledException) when (stop.IsCancellationRequested)

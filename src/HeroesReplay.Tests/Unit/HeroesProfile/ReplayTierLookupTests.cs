@@ -70,9 +70,8 @@ public class ReplayTierLookupTests
             .GetTierAsync(1, GameType.ARAM, CancellationToken.None);
 
         Assert.Null(tier);
-        Assert.DoesNotContain(
-            http.Paths,
-            path => path.EndsWith("/mmr/tier", StringComparison.Ordinal)
+        Assert.DoesNotContain(http.Paths, path =>
+            path.EndsWith("/mmr/tier", StringComparison.Ordinal)
         );
     }
 
@@ -121,9 +120,8 @@ public class ReplayTierLookupTests
         var services = new ServiceCollection();
         services.AddLogging();
         services
-            .AddHttpClient(
-                HeroesProfileHttp.ClientName,
-                client => client.Timeout = Timeout.InfiniteTimeSpan
+            .AddHttpClient(HeroesProfileHttp.ClientName, client =>
+                client.Timeout = Timeout.InfiniteTimeSpan
             )
             .ConfigurePrimaryHttpMessageHandler(() => handler)
             .AddResilienceHandler(HeroesProfileHttp.ClientName, HeroesProfileHttp.Configure);

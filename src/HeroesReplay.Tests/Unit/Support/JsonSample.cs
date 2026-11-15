@@ -157,8 +157,7 @@ internal static class JsonSample
 
     private static object Object(Type type, int depth)
     {
-        ConstructorInfo constructor =
-            type.GetConstructor(Type.EmptyTypes)
+        ConstructorInfo constructor = type.GetConstructor(Type.EmptyTypes)
             ?? type.GetConstructors()
                 .OrderByDescending(candidate => candidate.GetParameters().Length)
                 .FirstOrDefault();

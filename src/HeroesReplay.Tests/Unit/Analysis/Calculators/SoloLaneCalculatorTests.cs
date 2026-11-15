@@ -50,14 +50,11 @@ public class SoloLaneCalculatorTests
             new NearEnemyCalculator(Settings()),
             Duels(Settings())
         );
-        Assert.All(
-            Enumerable.Range(0, 40),
-            s =>
-            {
-                Assert.Equal(typeof(SoloLaneCalculator), focus[Second(s)].Calculator);
-                Assert.Equal(blueSolo, focus[Second(s)].Target);
-            }
-        );
+        Assert.All(Enumerable.Range(0, 40), s =>
+        {
+            Assert.Equal(typeof(SoloLaneCalculator), focus[Second(s)].Calculator);
+            Assert.Equal(blueSolo, focus[Second(s)].Target);
+        });
         Assert.Contains("Sonya duels Dehaka in a solo lane", focus[Second(0)].Description);
     }
 

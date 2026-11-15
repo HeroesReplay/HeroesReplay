@@ -67,11 +67,8 @@ public class FfmpegLocatorTests
     [Fact]
     public void Resolve_SkipsABlankConfiguredFolderAndOddPathEntries()
     {
-        var locator = new FfmpegLocator(
-            "  ",
-            null,
-            ";\"C:\\Quoted Tools\";;C:\\Bad|Dir;",
-            path => path == @"C:\Quoted Tools\ffmpeg.exe"
+        var locator = new FfmpegLocator("  ", null, ";\"C:\\Quoted Tools\";;C:\\Bad|Dir;", path =>
+            path == @"C:\Quoted Tools\ffmpeg.exe"
         );
 
         Assert.Null(locator.ConfiguredDirectory);

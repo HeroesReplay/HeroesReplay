@@ -34,13 +34,11 @@ public static class HeroesReplayOpenTelemetry
             return services;
         }
 
-        string endpoint =
-            Environment.GetEnvironmentVariable("OTEL_EXPORTER_OTLP_ENDPOINT")
+        string endpoint = Environment.GetEnvironmentVariable("OTEL_EXPORTER_OTLP_ENDPOINT")
             ?? configuration["OpenTelemetry:OtlpEndpoint"]
             ?? DefaultOtlpEndpoint;
 
-        serviceName =
-            Environment.GetEnvironmentVariable("OTEL_SERVICE_NAME")
+        serviceName = Environment.GetEnvironmentVariable("OTEL_SERVICE_NAME")
             ?? serviceName
             ?? configuration["OpenTelemetry:ServiceName"]
             ?? DefaultServiceName;

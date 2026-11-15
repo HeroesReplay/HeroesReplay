@@ -90,15 +90,13 @@ public sealed class ServiceStatePrunersTests : IDisposable
             plan.Items.Select(item => item.Path).Order()
         );
         // No role log outlives RetainedDays, not even a role's only file: twitch has not run since.
-        Assert.DoesNotContain(
-            plan.Items,
-            item =>
-                item.Path == recentDownload
-                || item.Path == freshConsole
-                || item.Path == release
-                || item.Path == dashboard
-                || item.Path == livePid
-                || item.Path == launching
+        Assert.DoesNotContain(plan.Items, item =>
+            item.Path == recentDownload
+            || item.Path == freshConsole
+            || item.Path == release
+            || item.Path == dashboard
+            || item.Path == livePid
+            || item.Path == launching
         );
         Assert.Contains("RetainedDays", plan.Items.Single(item => item.Path == oldDownload).Reason);
         Assert.Contains(

@@ -116,8 +116,7 @@ public sealed class HeroStatsStore
             throw new ArgumentNullException(nameof(snapshot));
         }
 
-        string path =
-            PathFor(snapshot.Patch, snapshot.GameType)
+        string path = PathFor(snapshot.Patch, snapshot.GameType)
             ?? throw new ArgumentException(
                 "A snapshot needs a major patch and a game type.",
                 nameof(snapshot)

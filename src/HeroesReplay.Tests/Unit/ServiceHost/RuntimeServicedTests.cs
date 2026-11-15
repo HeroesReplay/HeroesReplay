@@ -379,15 +379,11 @@ public class RuntimeServicedTests
         ProcessStartInfo seen = null;
 
         Assert.True(
-            ServiceSupervisorHandOver.StartSuccessor(
-                @"C:\app\heroesreplay.exe",
-                log,
-                start =>
-                {
-                    seen = start;
-                    return 77;
-                }
-            )
+            ServiceSupervisorHandOver.StartSuccessor(@"C:\app\heroesreplay.exe", log, start =>
+            {
+                seen = start;
+                return 77;
+            })
         );
         Assert.Equal($"services supervise --after-pid {Environment.ProcessId}", seen.Arguments);
         Assert.Contains("pid 77", log.Messages[^1], StringComparison.Ordinal);
@@ -396,10 +392,8 @@ public class RuntimeServicedTests
             ServiceSupervisorHandOver.StartSuccessor(@"C:\app\heroesreplay.exe", log, _ => null)
         );
         Assert.False(
-            ServiceSupervisorHandOver.StartSuccessor(
-                @"C:\app\heroesreplay.exe",
-                log,
-                _ => throw new InvalidOperationException("no console")
+            ServiceSupervisorHandOver.StartSuccessor(@"C:\app\heroesreplay.exe", log, _ =>
+                throw new InvalidOperationException("no console")
             )
         );
         Assert.Equal(2, log.Levels.Count(level => level == LogLevel.Error));

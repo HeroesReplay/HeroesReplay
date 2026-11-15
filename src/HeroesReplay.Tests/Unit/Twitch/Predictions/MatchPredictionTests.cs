@@ -45,15 +45,12 @@ public class MatchPredictionTests : IClassFixture<ReplayFixture>
     {
         int? team = TwitchMatchPredictionService.WinningTeam(fixture.Replay);
         Assert.True(team == 0 || team == 1, $"expected team 0 or 1, got {team}");
-        Assert.All(
-            fixture.Replay.Players,
-            player =>
+        Assert.All(fixture.Replay.Players, player =>
+        {
+            if (player.IsWinner)
             {
-                if (player.IsWinner)
-                {
-                    Assert.Equal(team, player.Team);
-                }
+                Assert.Equal(team, player.Team);
             }
-        );
+        });
     }
 }
