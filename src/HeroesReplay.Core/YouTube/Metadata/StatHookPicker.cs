@@ -62,8 +62,7 @@ public static class StatHookPicker
         }
 
         string context = Context(stats, gameMode);
-        StatHook hook =
-            (settings.Counters ? Counter(entries, settings, context) : null)
+        StatHook hook = (settings.Counters ? Counter(entries, settings, context) : null)
             ?? (settings.Duos ? Duo(entries, settings, context) : null)
             ?? (settings.BestMap ? MapEdge(entries, map, settings, context, best: true) : null)
             ?? (settings.SlipsTheBan ? Ban(entries, map, settings, context) : null)
@@ -153,8 +152,8 @@ public static class StatHookPicker
                     continue;
                 }
 
-                HeroPairStats pair =
-                    a.Stats.Ally(b.Stats.AttributeId) ?? b.Stats.Ally(a.Stats.AttributeId);
+                HeroPairStats pair = a.Stats.Ally(b.Stats.AttributeId)
+                    ?? b.Stats.Ally(a.Stats.AttributeId);
                 if (
                     pair == null
                     || pair.Games < settings.DuoMinGames
@@ -386,8 +385,7 @@ public static class StatHookPicker
 
             string display = player.Hero.Trim();
             Hero hero = catalog == null ? null : HeroDraft.Find(catalog, display);
-            HeroStats heroStats =
-                stats.Find(hero?.AttributeId)
+            HeroStats heroStats = stats.Find(hero?.AttributeId)
                 ?? stats.Find(display)
                 ?? stats.Heroes.FirstOrDefault(candidate =>
                     candidate != null && HeroDraft.SameName(candidate.Name, display)

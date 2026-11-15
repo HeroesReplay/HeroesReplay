@@ -246,11 +246,9 @@ public class ObsBundleManifestTests : IDisposable
 
         IReadOnlyList<string> notes = InstallObs(install, appData);
 
-        Assert.Contains(
-            notes,
-            note =>
-                note.StartsWith("OBS bundle: Warning:", StringComparison.Ordinal)
-                && note.Contains("bundle.manifest is missing", StringComparison.Ordinal)
+        Assert.Contains(notes, note =>
+            note.StartsWith("OBS bundle: Warning:", StringComparison.Ordinal)
+            && note.Contains("bundle.manifest is missing", StringComparison.Ordinal)
         );
         Assert.True(File.Exists(ObsNames.CollectionFile(appData, "HeroesReplay")));
     }
@@ -299,9 +297,8 @@ public class ObsBundleManifestTests : IDisposable
         ObsValidation validation = Validate(install, data, obs);
 
         Assert.False(validation.Ok);
-        ObsFinding finding = Assert.Single(
-            validation.Findings,
-            finding => finding.Code == ObsValidator.BundleInvalid
+        ObsFinding finding = Assert.Single(validation.Findings, finding =>
+            finding.Code == ObsValidator.BundleInvalid
         );
         Assert.Equal(ObsValidator.Error, finding.Severity);
         Assert.Equal("Ranks/bronze.png", finding.Subject);
@@ -319,9 +316,8 @@ public class ObsBundleManifestTests : IDisposable
 
         ObsValidation validation = Validate(install, data, obs);
 
-        ObsFinding finding = Assert.Single(
-            validation.Findings,
-            finding => finding.Code == ObsValidator.BundleUnverified
+        ObsFinding finding = Assert.Single(validation.Findings, finding =>
+            finding.Code == ObsValidator.BundleUnverified
         );
         Assert.Equal(ObsValidator.Warning, finding.Severity);
         Assert.DoesNotContain(validation.Findings, f => f.Code == ObsValidator.BundleInvalid);
@@ -338,9 +334,8 @@ public class ObsBundleManifestTests : IDisposable
             FakeObs.InspectionSettings(data)
         );
 
-        Assert.DoesNotContain(
-            validation.Findings,
-            finding => finding.Code.StartsWith("obs.bundle_", StringComparison.Ordinal)
+        Assert.DoesNotContain(validation.Findings, finding =>
+            finding.Code.StartsWith("obs.bundle_", StringComparison.Ordinal)
         );
     }
 

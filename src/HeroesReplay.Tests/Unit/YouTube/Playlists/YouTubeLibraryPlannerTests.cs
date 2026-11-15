@@ -292,14 +292,11 @@ public class YouTubeLibraryPlannerTests
             IReadOnlyList<string> second = YouTubeLibraryPlanner.Titles(video, Groups(true));
 
             Assert.Equal(first, second);
-            Assert.All(
-                first,
-                title =>
-                {
-                    Assert.InRange(title.Length, 1, YouTubePlaylistNames.MaxTitleLength);
-                    Assert.Equal(title.Trim(), title);
-                }
-            );
+            Assert.All(first, title =>
+            {
+                Assert.InRange(title.Length, 1, YouTubePlaylistNames.MaxTitleLength);
+                Assert.Equal(title.Trim(), title);
+            });
         }
     }
 

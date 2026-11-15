@@ -125,8 +125,8 @@ public class HeroesProfileProvider : IReplayProvider
         this.replayLoader = replayLoader ?? throw new ArgumentNullException(nameof(replayLoader));
         this.replayHelper = replayHelper ?? throw new ArgumentNullException(nameof(replayHelper));
         this.requestQueue = requestQueue ?? throw new ArgumentNullException(nameof(requestQueue));
-        this.heroesProfileService =
-            heroesProfileService ?? throw new ArgumentNullException(nameof(heroesProfileService));
+        this.heroesProfileService = heroesProfileService
+            ?? throw new ArgumentNullException(nameof(heroesProfileService));
         this.heroesProfileResume = heroesProfileResume;
         listBackoff = new ReplayListBackoff(
             (settings.ServiceHealth ?? new ServiceHealthSettings()).NextDependencyProbe(
@@ -582,8 +582,8 @@ public class HeroesProfileProvider : IReplayProvider
         await heroesProfileService.EnrichRankAsync(replay, provider.Token).ConfigureAwait(false);
         // The file name carries the rank, which the lookup may fill in differently on a later
         // pass. A replay already in Data\Requests under any name is that request's file.
-        FileInfo requested =
-            ExistingRequestFile(replay.Id) ?? GetFileInfo(RequestsDirectory, replay);
+        FileInfo requested = ExistingRequestFile(replay.Id)
+            ?? GetFileInfo(RequestsDirectory, replay);
         string partial = null;
         if (!requested.Exists)
         {
@@ -1325,10 +1325,8 @@ public class HeroesProfileProvider : IReplayProvider
         }
 
         DateTime now = DateTime.UtcNow;
-        WaitingReplays waiting = SpectateQueue.CountWaiting(
-            onDisk,
-            ReadNotWaitingIds(),
-            id => IsInsideMediaWindow(id, files[id], now)
+        WaitingReplays waiting = SpectateQueue.CountWaiting(onDisk, ReadNotWaitingIds(), id =>
+            IsInsideMediaWindow(id, files[id], now)
         );
         foreach (int gone in mediaFacts.Keys.Where(id => !files.ContainsKey(id)).ToList())
         {

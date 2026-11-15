@@ -125,21 +125,18 @@ public class ServiceSupervisionTests
         // One pass kills download and youtube; spectate plays on to the end of its replay.
         Assert.True(supervision.Tick());
         Assert.Equal(new[] { 101, 102 }, stack.Killed.ToArray());
-        Assert.Contains(
-            stack.Log.Entries,
-            entry =>
-                entry.Level == LogLevel.Warning
-                && entry.Message.Contains(ServiceHealthCodes.RuntimeServiced)
-                && entry.Message.Contains("Killing pid 101")
+        Assert.Contains(stack.Log.Entries, entry =>
+            entry.Level == LogLevel.Warning
+            && entry.Message.Contains(ServiceHealthCodes.RuntimeServiced)
+            && entry.Message.Contains("Killing pid 101")
         );
 
         // No backoff: the next passes start both again on the current runtime.
         DateTimeOffset killed = stack.Clock.Now;
         stack.RunUntil(supervision, () => stack.Launches.Count == 2);
         Assert.Equal(new[] { "download", "youtube" }, stack.Launches.Select(item => item.Role));
-        Assert.All(
-            stack.Launches,
-            launch => Assert.True(launch.At - killed <= TimeSpan.FromSeconds(2))
+        Assert.All(stack.Launches, launch =>
+            Assert.True(launch.At - killed <= TimeSpan.FromSeconds(2))
         );
         Assert.Equal(
             ServiceRestartPolicy.RuntimeServicedReason,
@@ -181,9 +178,8 @@ public class ServiceSupervisionTests
         Assert.Equal(stack.SupervisorRuntime, supervision.HandOverCause);
         Assert.Empty(stack.Launches);
         Assert.Empty(stack.Killed);
-        LogEntry warning = Assert.Single(
-            stack.Log.Entries,
-            entry => entry.Level == LogLevel.Warning
+        LogEntry warning = Assert.Single(stack.Log.Entries, entry =>
+            entry.Level == LogLevel.Warning
         );
         Assert.Contains(ServiceHealthCodes.RuntimeServiced, warning.Message);
         Assert.Contains("services supervise", warning.Message);
@@ -217,12 +213,10 @@ public class ServiceSupervisionTests
 
         Assert.Equal(1, calls);
         Assert.True(supervision.Ledger("spectate").Exhausted);
-        Assert.Contains(
-            stack.Log.Entries,
-            entry =>
-                entry.Level == LogLevel.Warning
-                && entry.Message.Contains("Spectate is down for good")
-                && entry.Message.Contains("waiting scene")
+        Assert.Contains(stack.Log.Entries, entry =>
+            entry.Level == LogLevel.Warning
+            && entry.Message.Contains("Spectate is down for good")
+            && entry.Message.Contains("waiting scene")
         );
     }
 
@@ -239,9 +233,8 @@ public class ServiceSupervisionTests
         Exhaust(stack, supervision, "spectate");
 
         Assert.True(supervision.Tick());
-        Assert.Contains(
-            stack.Log.Entries,
-            entry => entry.Level == LogLevel.Warning && entry.Message.Contains("not made safe")
+        Assert.Contains(stack.Log.Entries, entry =>
+            entry.Level == LogLevel.Warning && entry.Message.Contains("not made safe")
         );
     }
 
@@ -327,12 +320,10 @@ public class ServiceSupervisionTests
         Assert.Equal(asked, ledger.LastResetAt);
         Assert.Single(ledger.Recent);
         Assert.Equal(6, ledger.Count);
-        Assert.Contains(
-            stack.Log.Entries,
-            entry =>
-                entry.Message.Contains(ServiceSupervision.RoleResetCode)
-                && entry.Message.Contains("download")
-                && entry.Message.Contains("it was left down")
+        Assert.Contains(stack.Log.Entries, entry =>
+            entry.Message.Contains(ServiceSupervision.RoleResetCode)
+            && entry.Message.Contains("download")
+            && entry.Message.Contains("it was left down")
         );
 
         // The other roles, spectate and the stream with it, were never touched.
@@ -386,12 +377,10 @@ public class ServiceSupervisionTests
         Assert.True(supervision.Tick());
 
         Assert.Null(supervision.Ledger("twitch"));
-        Assert.Contains(
-            stack.Log.Entries,
-            entry =>
-                entry.Level == LogLevel.Warning
-                && entry.Message.Contains("services reset twitch")
-                && entry.Message.Contains("Nothing was reset")
+        Assert.Contains(stack.Log.Entries, entry =>
+            entry.Level == LogLevel.Warning
+            && entry.Message.Contains("services reset twitch")
+            && entry.Message.Contains("Nothing was reset")
         );
     }
 
@@ -857,12 +846,10 @@ public class ServiceSupervisionTests
         Assert.Equal(0, ledger.Count);
         Assert.Empty(ledger.Recent);
         Assert.Null(ledger.LastFailure);
-        Assert.Contains(
-            stack.Log.Entries,
-            entry =>
-                entry.Level == LogLevel.Warning
-                && entry.Message.Contains(ServiceSupervision.RoleAdoptedCode)
-                && entry.Message.Contains("21960")
+        Assert.Contains(stack.Log.Entries, entry =>
+            entry.Level == LogLevel.Warning
+            && entry.Message.Contains(ServiceSupervision.RoleAdoptedCode)
+            && entry.Message.Contains("21960")
         );
 
         // From then on it is supervised like any role: up, and never started twice.
@@ -896,11 +883,9 @@ public class ServiceSupervisionTests
         Assert.Equal(Start.AddSeconds(10), stack.KilledAt.Single());
         Assert.Equal(stack.Launches.Single().Pid, stack.PidOf("download"));
         Assert.Equal(0, supervision.Ledger("download").Adopted);
-        Assert.Contains(
-            stack.Log.Entries,
-            entry =>
-                entry.Level == LogLevel.Warning
-                && entry.Message.Contains(ServiceSupervision.UntrackedRoleKilledCode)
+        Assert.Contains(stack.Log.Entries, entry =>
+            entry.Level == LogLevel.Warning
+            && entry.Message.Contains(ServiceSupervision.UntrackedRoleKilledCode)
         );
     }
 
@@ -1005,10 +990,8 @@ public class ServiceSupervisionTests
         stack.RunUntil(supervision, () => stack.Launches.Count == 1);
         int child = stack.Launches[0].Pid;
         Assert.Equal(child, stack.PidOf("download"));
-        Assert.Contains(
-            stack.Log.Entries,
-            entry =>
-                entry.Message.Contains("could not be stopped") && entry.Message.Contains("1000")
+        Assert.Contains(stack.Log.Entries, entry =>
+            entry.Message.Contains("could not be stopped") && entry.Message.Contains("1000")
         );
 
         // It writes no heartbeat, so the supervisor kills it as stale, then restarts the role.
@@ -1029,13 +1012,11 @@ public class ServiceSupervisionTests
         stack.RunUntil(supervision, () => stack.Launches.Count == 1);
 
         Assert.Equal(TimeSpan.FromMinutes(3), stack.Requests[0].ReadyTimeout);
-        Assert.Contains(
-            stack.Log.Entries,
-            entry =>
-                entry.Level == LogLevel.Warning
-                && entry.Message.Contains("96.4%")
-                && entry.Message.Contains("3m")
-                && entry.Message.Contains("instead of 45s")
+        Assert.Contains(stack.Log.Entries, entry =>
+            entry.Level == LogLevel.Warning
+            && entry.Message.Contains("96.4%")
+            && entry.Message.Contains("3m")
+            && entry.Message.Contains("instead of 45s")
         );
 
         stack.Commit = 62;

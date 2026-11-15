@@ -253,9 +253,8 @@ public sealed class SampleDownloadTests : IDisposable
         var services = new ServiceCollection();
         services.AddLogging();
         services
-            .AddHttpClient(
-                HeroesProfileHttp.ClientName,
-                client => client.Timeout = Timeout.InfiniteTimeSpan
+            .AddHttpClient(HeroesProfileHttp.ClientName, client =>
+                client.Timeout = Timeout.InfiniteTimeSpan
             )
             .ConfigurePrimaryHttpMessageHandler(() => handler)
             .AddResilienceHandler(HeroesProfileHttp.ClientName, HeroesProfileHttp.Configure);

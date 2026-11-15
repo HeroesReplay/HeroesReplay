@@ -279,8 +279,7 @@ public static class ParkedRecordings
     /// <summary>A send under way is never touched, whatever the mark says.</summary>
     private static bool Sending(string attempts, ParkedRecording parked, YouTubeEntry entry)
     {
-        string attemptId =
-            parked.AttemptId
+        string attemptId = parked.AttemptId
             ?? (
                 entry.ReplayId is int id
                     ? "replay-" + id.ToString(CultureInfo.InvariantCulture)

@@ -181,8 +181,7 @@ public class TwitchExtensionService : ITwitchExtensionService
                 {
                     Reachable = false,
                     StatusCode = (int)response.StatusCode,
-                    Message =
-                        ReadMessage(body)
+                    Message = ReadMessage(body)
                         ?? $"Heroes Profile answered HTTP {(int)response.StatusCode}.",
                 };
             }

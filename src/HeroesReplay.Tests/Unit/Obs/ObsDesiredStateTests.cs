@@ -97,15 +97,11 @@ public class ObsDesiredStateTests
             new ObsFinding(ObsValidator.StreamKeyMissing, ObsValidator.Error, "Twitch", "No key.")
         );
         int runs = 0;
-        Harness harness = Open(
-            Settings(),
-            socket,
-            preflight: () =>
-            {
-                runs++;
-                return result;
-            }
-        );
+        Harness harness = Open(Settings(), socket, preflight: () =>
+        {
+            runs++;
+            return result;
+        });
 
         ObsRuntimeSnapshot blocked = harness.Coordinator.ReconcileStream();
 
@@ -132,18 +128,14 @@ public class ObsDesiredStateTests
             ActivateOnStart = true,
         };
         int runs = 0;
-        Harness harness = Open(
-            Settings(),
-            socket,
-            preflight: () =>
-            {
-                runs++;
-                // An unmuted microphone is an error, but it does not stop the stream.
-                return Preflight(
-                    new ObsFinding(ObsValidator.MicEnabled, ObsValidator.Error, "Mic/Aux", "Mic.")
-                );
-            }
-        );
+        Harness harness = Open(Settings(), socket, preflight: () =>
+        {
+            runs++;
+            // An unmuted microphone is an error, but it does not stop the stream.
+            return Preflight(
+                new ObsFinding(ObsValidator.MicEnabled, ObsValidator.Error, "Mic/Aux", "Mic.")
+            );
+        });
 
         Assert.True(harness.Coordinator.ReconcileStream().Stream.Succeeded);
         socket.Streaming = false;
@@ -162,10 +154,8 @@ public class ObsDesiredStateTests
             IsConnected = true,
             ActivateOnStart = true,
         };
-        Harness harness = Open(
-            Settings(),
-            socket,
-            preflight: () => throw new TimeoutException("OBS did not answer.")
+        Harness harness = Open(Settings(), socket, preflight: () =>
+            throw new TimeoutException("OBS did not answer.")
         );
 
         Assert.True(harness.Coordinator.ReconcileStream().Stream.Succeeded);
@@ -593,10 +583,8 @@ public class ObsDesiredStateTests
     public void SelectScene_StatusWriteFails_TheSceneStaysOnAir()
     {
         var socket = new FakeSession { IsIdentified = true, IsConnected = true };
-        Harness harness = Open(
-            Settings(streaming: false),
-            socket,
-            stateChanged: () => throw new IOException("status.json is held open.")
+        Harness harness = Open(Settings(streaming: false), socket, stateChanged: () =>
+            throw new IOException("status.json is held open.")
         );
 
         harness.Coordinator.SelectScene("game-scene");
@@ -895,11 +883,9 @@ public class ObsDesiredStateTests
         Assert.Equal("game-scene", socket.ProgramScene);
         Assert.Equal("game-scene", started.SceneActual);
         Assert.True(started.StreamActive);
-        Assert.Single(
-            logger.Lines,
-            line =>
-                line.Level == LogLevel.Information
-                && line.Message.Contains("put game-scene back", StringComparison.Ordinal)
+        Assert.Single(logger.Lines, line =>
+            line.Level == LogLevel.Information
+            && line.Message.Contains("put game-scene back", StringComparison.Ordinal)
         );
     }
 
@@ -934,12 +920,10 @@ public class ObsDesiredStateTests
         Assert.Equal("game-scene", socket.ProgramScene);
         Assert.Equal("game-scene", harness.Coordinator.State.SceneDesired);
         Assert.Equal("game-scene", harness.Coordinator.State.SceneActual);
-        Assert.Single(
-            logger.Lines,
-            line =>
-                line.Level == LogLevel.Information
-                && line.Message
-                    == "OBS showed waiting-screen, not the spectator's scene: put game-scene back on the program output."
+        Assert.Single(logger.Lines, line =>
+            line.Level == LogLevel.Information
+            && line.Message
+                == "OBS showed waiting-screen, not the spectator's scene: put game-scene back on the program output."
         );
 
         // On air now: the next tick sends nothing.
@@ -1422,14 +1406,12 @@ public class ObsDesiredStateTests
         Assert.Equal(ObsOutputFailure.IngestUnreachable, refused.Stream.Failure);
         Assert.Equal(ObsIngest.UnreachableCode, refused.Stream.Reason);
         Assert.Equal(ObsIngest.UnreachableCode, refused.StreamBlockedBy);
-        Assert.Single(
-            logger.Lines,
-            line =>
-                line.Level == LogLevel.Warning
-                && line.Message.StartsWith(
-                    "OBS stream was not started (obs.ingest_unreachable). The ingest 127.0.0.1:19350 did not accept a TCP connection within 3 s (ConnectionRefused), so StartStream was not sent. Next attempt in 00:01:00.",
-                    StringComparison.Ordinal
-                )
+        Assert.Single(logger.Lines, line =>
+            line.Level == LogLevel.Warning
+            && line.Message.StartsWith(
+                "OBS stream was not started (obs.ingest_unreachable). The ingest 127.0.0.1:19350 did not accept a TCP connection within 3 s (ConnectionRefused), so StartStream was not sent. Next attempt in 00:01:00.",
+                StringComparison.Ordinal
+            )
         );
 
         // A failed attempt: the next one waits for the backoff, and then needs the ingest.
@@ -1496,14 +1478,12 @@ public class ObsDesiredStateTests
         harness.Coordinator.ReconcileStream();
 
         Assert.Equal(new[] { windows.Windows[0].Handle }, windows.Closed);
-        Assert.Single(
-            logger.Lines,
-            line =>
-                line.Level == LogLevel.Information
-                && line.Message.StartsWith(
-                    "Closed OBS's \"Failed to connect\" dialog",
-                    StringComparison.Ordinal
-                )
+        Assert.Single(logger.Lines, line =>
+            line.Level == LogLevel.Information
+            && line.Message.StartsWith(
+                "Closed OBS's \"Failed to connect\" dialog",
+                StringComparison.Ordinal
+            )
         );
     }
 

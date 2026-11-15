@@ -233,14 +233,12 @@ public class HeroesProfileHttpTests
         var services = new ServiceCollection();
         services.AddLogging();
         services
-            .AddHttpClient(
-                HeroesProfileHttp.ClientName,
-                client => client.Timeout = Timeout.InfiniteTimeSpan
+            .AddHttpClient(HeroesProfileHttp.ClientName, client =>
+                client.Timeout = Timeout.InfiniteTimeSpan
             )
             .ConfigurePrimaryHttpMessageHandler(() => handler)
-            .AddResilienceHandler(
-                "heroes-profile-test",
-                builder => HeroesProfileHttp.Configure(builder, retryDelay ?? TimeSpan.Zero)
+            .AddResilienceHandler("heroes-profile-test", builder =>
+                HeroesProfileHttp.Configure(builder, retryDelay ?? TimeSpan.Zero)
             );
         return services.BuildServiceProvider();
     }

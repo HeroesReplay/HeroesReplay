@@ -42,8 +42,8 @@ public class HeroesProfileService : IHeroesProfileService, IReplayTierLookup, IR
     {
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
         this.cache = cache ?? throw new ArgumentNullException(nameof(cache));
-        this.tokenProvider =
-            tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
+        this.tokenProvider = tokenProvider
+            ?? throw new ArgumentNullException(nameof(tokenProvider));
         this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
         this.kiotaClient = kiotaClient ?? throw new ArgumentNullException(nameof(kiotaClient));
     }
@@ -518,8 +518,8 @@ public class HeroesProfileService : IHeroesProfileService, IReplayTierLookup, IR
 
         async Task<IEnumerable<HeroesProfileReplay>> ReadFilterPage(ResilienceContext ctx)
         {
-            string typeQuery =
-                gameType?.GetQueryValue() ?? settings.HeroesProfileApi.GameTypes?.FirstOrDefault();
+            string typeQuery = gameType?.GetQueryValue()
+                ?? settings.HeroesProfileApi.GameTypes?.FirstOrDefault();
             ctx.Properties.TryGetValue(FilterMinIdKey, out int after);
             ReplaysGetResponse page = await GetReplaysPageAsync(
                     after,

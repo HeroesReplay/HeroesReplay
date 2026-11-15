@@ -82,9 +82,9 @@ public sealed class HeroSignatures
 
     public static HeroSignatures Embedded()
     {
-        using Stream stream =
-            typeof(HeroSignatures).Assembly.GetManifestResourceStream(ResourceName)
-            ?? throw new InvalidOperationException($"{ResourceName} is not embedded.");
+        using Stream stream = typeof(HeroSignatures).Assembly.GetManifestResourceStream(
+            ResourceName
+        ) ?? throw new InvalidOperationException($"{ResourceName} is not embedded.");
         using var reader = new StreamReader(stream);
         return Parse(reader.ReadToEnd());
     }

@@ -142,9 +142,8 @@ public class MatchClipExportTests : IClassFixture<ReplayFixture>
                 logger
             );
 
-            string read = Assert.Single(
-                logger.Lines,
-                line => line.StartsWith("Read duration ", StringComparison.Ordinal)
+            string read = Assert.Single(logger.Lines, line =>
+                line.StartsWith("Read duration ", StringComparison.Ordinal)
             );
             double probed = double.Parse(
                 read.Substring("Read duration ".Length).Split('s')[0],

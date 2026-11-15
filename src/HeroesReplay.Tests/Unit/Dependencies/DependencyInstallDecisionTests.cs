@@ -114,9 +114,7 @@ public class DependencyInstallDecisionTests
         DependencyInstallRecord record,
         IReadOnlyDictionary<string, long?> files
     ) =>
-        DependencyInstallDecision.Decide(
-            Pin,
-            record,
-            name => files.TryGetValue(name, out long? length) ? length : null
+        DependencyInstallDecision.Decide(Pin, record, name =>
+            files.TryGetValue(name, out long? length) ? length : null
         );
 }

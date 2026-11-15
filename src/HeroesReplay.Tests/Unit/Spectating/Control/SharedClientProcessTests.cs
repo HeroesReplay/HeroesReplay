@@ -174,14 +174,11 @@ public class SharedClientProcessTests
     {
         var memory = new FakeClientMemory();
         int attached = 0;
-        using var shared = new SharedClientProcess(
-            null,
-            process =>
-            {
-                attached++;
-                return memory.Attach(ClientProcessKey.Of(process).Value);
-            }
-        );
+        using var shared = new SharedClientProcess(null, process =>
+        {
+            attached++;
+            return memory.Attach(ClientProcessKey.Of(process).Value);
+        });
         using var clock = new MatchClock();
         using Process self = Process.GetCurrentProcess();
 
@@ -198,9 +195,8 @@ public class SharedClientProcessTests
     public async Task TheTimer_ReadsThroughTheClientTheControllerShares()
     {
         var memory = new FakeClientMemory();
-        using var shared = new SharedClientProcess(
-            null,
-            process => memory.Attach(ClientProcessKey.Of(process).Value)
+        using var shared = new SharedClientProcess(null, process =>
+            memory.Attach(ClientProcessKey.Of(process).Value)
         );
         using Process self = Process.GetCurrentProcess();
         var timer = new StableGameTimer(new OneProcess(self), shared);

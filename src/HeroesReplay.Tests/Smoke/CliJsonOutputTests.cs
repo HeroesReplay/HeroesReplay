@@ -138,13 +138,11 @@ public class CliJsonOutputTests
         Assert.Equal(0, code);
         Assert.Equal("storage.report", root.GetProperty("code").GetString());
         JsonElement details = root.GetProperty("details");
-        Assert.Contains(
-            details.GetProperty("categories").EnumerateArray(),
-            row => row.GetProperty("name").GetString() == "recordings"
+        Assert.Contains(details.GetProperty("categories").EnumerateArray(), row =>
+            row.GetProperty("name").GetString() == "recordings"
         );
-        Assert.Contains(
-            details.GetProperty("pruners").EnumerateArray(),
-            row => row.GetProperty("name").GetString() == "media"
+        Assert.Contains(details.GetProperty("pruners").EnumerateArray(), row =>
+            row.GetProperty("name").GetString() == "media"
         );
         Assert.Equal(JsonValueKind.Null, details.GetProperty("applied").ValueKind);
     }
@@ -180,11 +178,9 @@ public class CliJsonOutputTests
             JsonElement root = OwnFields(output, code);
             Assert.True(root.GetProperty("ok").GetBoolean());
             Assert.Equal(JsonValueKind.Null, root.GetProperty("code").ValueKind);
-            Assert.Contains(
-                root.GetProperty("settings").EnumerateArray(),
-                setting =>
-                    setting.GetProperty("key").GetString() == "OBS:ProfileName"
-                    && setting.GetProperty("value").GetString() == "HeroesReplay"
+            Assert.Contains(root.GetProperty("settings").EnumerateArray(), setting =>
+                setting.GetProperty("key").GetString() == "OBS:ProfileName"
+                && setting.GetProperty("value").GetString() == "HeroesReplay"
             );
 
             (int all, string everything, _) = await InvokeAsync(

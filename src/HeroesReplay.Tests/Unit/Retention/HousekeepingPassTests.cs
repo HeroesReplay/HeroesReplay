@@ -210,17 +210,12 @@ public sealed class HousekeepingPassTests : IDisposable
         return path;
     }
 
-    private static IPruner Planning(string name, string path) =>
-        new Pruner(
-            name,
-            name,
-            _ =>
-            {
-                var plan = new PrunePlan(name);
-                plan.Add(PruneItem.ForFile(new FileInfo(path), "test"));
-                return plan;
-            }
-        );
+    private static IPruner Planning(string name, string path) => new Pruner(name, name, _ =>
+        {
+            var plan = new PrunePlan(name);
+            plan.Add(PruneItem.ForFile(new FileInfo(path), "test"));
+            return plan;
+        });
 
     private sealed class ListLogger : ILogger
     {

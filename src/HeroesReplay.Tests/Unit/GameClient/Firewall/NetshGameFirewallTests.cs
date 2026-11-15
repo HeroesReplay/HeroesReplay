@@ -195,9 +195,8 @@ public class NetshGameFirewallTests
         // Another exe is still warned about the first time it is checked.
         firewall.AllowInboundClients(new[] { Exe, OtherExe });
         Assert.Equal(2, logger.Entries.Count(e => e.Level == LogLevel.Warning));
-        Assert.Contains(
-            logger.Entries,
-            e => e.Level == LogLevel.Warning && e.Message.Contains(OtherExe)
+        Assert.Contains(logger.Entries, e =>
+            e.Level == LogLevel.Warning && e.Message.Contains(OtherExe)
         );
     }
 
@@ -224,9 +223,8 @@ public class NetshGameFirewallTests
         IReadOnlyList<FirewallRuleOutcome> outcomes = firewall.AllowInboundClients(new[] { Exe });
 
         Assert.Equal(FirewallRuleState.Added, Assert.Single(outcomes).State);
-        Assert.Contains(
-            netsh.Calls,
-            call => call.Contains("add rule") && call.Contains(OwnName) && call.Contains(Exe)
+        Assert.Contains(netsh.Calls, call =>
+            call.Contains("add rule") && call.Contains(OwnName) && call.Contains(Exe)
         );
     }
 

@@ -64,45 +64,42 @@ public static class ReplaySessionFile
         }
 
         string file = path ?? SharedPath;
-        WithGate(
-            file,
-            () =>
+        WithGate(file, () =>
+        {
+            string directory = Path.GetDirectoryName(file);
+            if (!string.IsNullOrEmpty(directory))
             {
-                string directory = Path.GetDirectoryName(file);
-                if (!string.IsNullOrEmpty(directory))
-                {
-                    Directory.CreateDirectory(directory);
-                }
+                Directory.CreateDirectory(directory);
+            }
 
-                var kept = new List<string>();
-                if (File.Exists(file))
+            var kept = new List<string>();
+            if (File.Exists(file))
+            {
+                foreach (string existing in ReadLines(file))
                 {
-                    foreach (string existing in ReadLines(file))
+                    if (
+                        HeroesReplayTelemetry.TryParseSession(existing, out int id, out _)
+                        && id == replayId
+                    )
                     {
-                        if (
-                            HeroesReplayTelemetry.TryParseSession(existing, out int id, out _)
-                            && id == replayId
-                        )
-                        {
-                            continue;
-                        }
+                        continue;
+                    }
 
-                        if (!string.IsNullOrWhiteSpace(existing))
-                        {
-                            kept.Add(existing.Trim());
-                        }
+                    if (!string.IsNullOrWhiteSpace(existing))
+                    {
+                        kept.Add(existing.Trim());
                     }
                 }
-
-                kept.Add(line);
-                if (kept.Count > MaxSessions)
-                {
-                    kept.RemoveRange(0, kept.Count - MaxSessions);
-                }
-
-                File.WriteAllLines(file, kept);
             }
-        );
+
+            kept.Add(line);
+            if (kept.Count > MaxSessions)
+            {
+                kept.RemoveRange(0, kept.Count - MaxSessions);
+            }
+
+            File.WriteAllLines(file, kept);
+        });
     }
 
     public static string TryRead(int replayId, string path = null)
@@ -114,22 +111,19 @@ public static class ReplaySessionFile
 
         string found = null;
         string file = path ?? SharedPath;
-        WithGate(
-            file,
-            () =>
+        WithGate(file, () =>
+        {
+            foreach (string line in ReadLines(file))
             {
-                foreach (string line in ReadLines(file))
+                if (
+                    HeroesReplayTelemetry.TryParseSession(line, out int id, out _)
+                    && id == replayId
+                )
                 {
-                    if (
-                        HeroesReplayTelemetry.TryParseSession(line, out int id, out _)
-                        && id == replayId
-                    )
-                    {
-                        found = line.Trim();
-                    }
+                    found = line.Trim();
                 }
             }
-        );
+        });
         return found;
     }
 
@@ -138,22 +132,16 @@ public static class ReplaySessionFile
         var ids = new List<int>();
         var seen = new HashSet<int>();
         string file = path ?? SharedPath;
-        WithGate(
-            file,
-            () =>
+        WithGate(file, () =>
+        {
+            foreach (string line in ReadLines(file))
             {
-                foreach (string line in ReadLines(file))
+                if (HeroesReplayTelemetry.TryParseSession(line, out int id, out _) && seen.Add(id))
                 {
-                    if (
-                        HeroesReplayTelemetry.TryParseSession(line, out int id, out _)
-                        && seen.Add(id)
-                    )
-                    {
-                        ids.Add(id);
-                    }
+                    ids.Add(id);
                 }
             }
-        );
+        });
         return ids;
     }
 

@@ -53,8 +53,8 @@ public static class ObsLiveCommands
             settings,
             ObsInspector.Inspect
         );
-        ObsInspection inspection =
-            run.Value ?? ObsInspector.Unavailable(run.Settings, run.Code, run.Message);
+        ObsInspection inspection = run.Value
+            ?? ObsInspector.Unavailable(run.Settings, run.Code, run.Message);
         if (json)
         {
             output.WriteLine(CliOutput.Serialize(inspection));
@@ -79,8 +79,8 @@ public static class ObsLiveCommands
             settings,
             ObsValidator.Validate
         );
-        ObsValidation validation =
-            run.Value ?? ObsValidator.Unavailable(run.Settings, run.Code, run.Message);
+        ObsValidation validation = run.Value
+            ?? ObsValidator.Unavailable(run.Settings, run.Code, run.Message);
         if (json)
         {
             output.WriteLine(CliOutput.Serialize(validation));

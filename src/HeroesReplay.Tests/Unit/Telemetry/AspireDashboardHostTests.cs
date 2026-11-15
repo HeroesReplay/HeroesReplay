@@ -645,9 +645,8 @@ public class AspireDashboardHostTests
 
         Assert.True(result.Listening);
         Assert.True(result.Launched);
-        Assert.Contains(
-            lines,
-            line => line.Contains("Could not open http://127.0.0.1:18888. browser blocked")
+        Assert.Contains(lines, line =>
+            line.Contains("Could not open http://127.0.0.1:18888. browser blocked")
         );
     }
 

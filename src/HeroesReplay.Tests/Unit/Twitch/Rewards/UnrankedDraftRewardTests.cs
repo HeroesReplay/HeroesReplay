@@ -57,9 +57,8 @@ public class UnrankedDraftRewardTests
         Assert.Contains(holder.Rewards, reward => reward.Title == "Cursed Hollow (SL)");
         Assert.Contains(holder.Rewards, reward => reward.Title == "Lost Cavern (ARAM)");
         Assert.DoesNotContain(holder.Rewards, reward => reward.Mode == GameType.UnrankedDraft);
-        Assert.DoesNotContain(
-            holder.Rewards,
-            reward => UnrankedDraftRewardTitles.IsUnrankedDraft(reward.Title)
+        Assert.DoesNotContain(holder.Rewards, reward =>
+            UnrankedDraftRewardTitles.IsUnrankedDraft(reward.Title)
         );
     }
 

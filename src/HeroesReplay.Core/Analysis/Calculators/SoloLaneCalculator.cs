@@ -34,15 +34,13 @@ public class SoloLaneCalculator : IFocusCalculator
         IGameData gameData,
         ILogger<SoloLaneCalculator> logger
     )
-        : this(
-            settings,
-            replay =>
-                SoloLaners(
-                    replay,
-                    gameData?.Heroes,
-                    settings?.Insights,
-                    logger ?? NullLogger<SoloLaneCalculator>.Instance
-                )
+        : this(settings, replay =>
+            SoloLaners(
+                replay,
+                gameData?.Heroes,
+                settings?.Insights,
+                logger ?? NullLogger<SoloLaneCalculator>.Instance
+            )
         ) { }
 
     internal SoloLaneCalculator(

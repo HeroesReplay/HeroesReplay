@@ -106,9 +106,8 @@ public class MediaRetentionTests
             Assert.False(File.Exists(stuck));
             Assert.True(File.Exists(Path.Combine(contexts, "21", "current.mp4")));
             Assert.Equal(40, sweep.FreedBytes);
-            Assert.Contains(
-                sweep.Warnings,
-                warning => warning.Contains("never uploaded") && warning.Contains("stuck.mp4")
+            Assert.Contains(sweep.Warnings, warning =>
+                warning.Contains("never uploaded") && warning.Contains("stuck.mp4")
             );
         }
         finally
@@ -245,9 +244,8 @@ public class MediaRetentionTests
         Assert.True(File.Exists(Path.Combine(dryRun, "mid.StormReplay")));
         Assert.False(File.Exists(Path.Combine(dryRun, "old.mp4")));
         Assert.False(File.Exists(Path.Combine(dryRun, "old.StormReplay")));
-        Assert.Contains(
-            sweep.Warnings,
-            warning => warning.Contains("never uploaded") && warning.Contains("old.mp4")
+        Assert.Contains(sweep.Warnings, warning =>
+            warning.Contains("never uploaded") && warning.Contains("old.mp4")
         );
         Assert.True(File.Exists(Path.Combine(live, "current.mp4")));
     }
@@ -273,9 +271,8 @@ public class MediaRetentionTests
         Assert.True(File.Exists(Path.Combine(simulated, "young.mp4")));
         Assert.True(File.Exists(Path.Combine(simulated, "mid.mp4")));
         Assert.False(File.Exists(Path.Combine(simulated, "old.mp4")));
-        Assert.Contains(
-            sweep.Warnings,
-            warning => warning.Contains("never uploaded") && warning.Contains("old.mp4")
+        Assert.Contains(sweep.Warnings, warning =>
+            warning.Contains("never uploaded") && warning.Contains("old.mp4")
         );
     }
 
@@ -332,9 +329,8 @@ public class MediaRetentionTests
         Assert.True(File.Exists(Path.Combine(reused, "match.mp4")));
         Assert.False(File.Exists(Path.Combine(finished, "match.mp4")));
         Assert.False(File.Exists(Path.Combine(abandoned, "match.mp4")));
-        Assert.Contains(
-            sweep.Warnings,
-            warning => warning.Contains("never uploaded") && warning.Contains("abandoned")
+        Assert.Contains(sweep.Warnings, warning =>
+            warning.Contains("never uploaded") && warning.Contains("abandoned")
         );
         Assert.DoesNotContain(sweep.Warnings, warning => warning.Contains("active"));
     }

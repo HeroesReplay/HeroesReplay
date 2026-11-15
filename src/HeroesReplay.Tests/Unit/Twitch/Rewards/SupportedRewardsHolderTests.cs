@@ -26,9 +26,8 @@ public class SupportedRewardsHolderTests
             )
         );
 
-        Assert.DoesNotContain(
-            holder.Rewards,
-            reward => reward.Title == "Warhead Junction (Rank QM)"
+        Assert.DoesNotContain(holder.Rewards, reward =>
+            reward.Title == "Warhead Junction (Rank QM)"
         );
         Assert.DoesNotContain(holder.Rewards, reward => reward.Title == "Warhead Junction (QM)");
         Assert.Contains(holder.Rewards, reward => reward.Title == "Warhead Junction (Rank SL)");
@@ -134,9 +133,8 @@ public class SupportedRewardsHolderTests
     {
         var holder = new SupportedRewardsHolder(new MapOnlyGameData(LoadCatalog().ToArray()));
 
-        SupportedReward blind = Assert.Single(
-            holder.Rewards,
-            reward => reward.RewardType.HasFlag(RewardType.Blind)
+        SupportedReward blind = Assert.Single(holder.Rewards, reward =>
+            reward.RewardType.HasFlag(RewardType.Blind)
         );
         Assert.Equal(SupportedRewardsHolder.BlindRatingTitle, blind.Title);
         Assert.Equal(RewardType.SL | RewardType.Blind, blind.RewardType);

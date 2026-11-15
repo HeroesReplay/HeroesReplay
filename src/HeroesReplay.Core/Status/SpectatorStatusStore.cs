@@ -137,9 +137,9 @@ public sealed class SpectatorStatusStore
         lock (gate)
         {
             return JsonSerializer.Deserialize(
-                    JsonSerializer.Serialize(current, JsonOptions.SpectatorStatus),
-                    JsonOptions.SpectatorStatus
-                ) ?? Idle();
+                JsonSerializer.Serialize(current, JsonOptions.SpectatorStatus),
+                JsonOptions.SpectatorStatus
+            ) ?? Idle();
         }
     }
 

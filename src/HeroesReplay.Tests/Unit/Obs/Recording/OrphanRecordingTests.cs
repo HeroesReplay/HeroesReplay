@@ -248,16 +248,14 @@ public class OrphanRecordingTests : IDisposable
 
         Assert.Equal(
             running,
-            OrphanRecording.ClaimantRunning(
-                claim,
-                pid =>
-                    pid == 4242
-                        ? Process(
-                            pid,
-                            ClaimantStarted.AddSeconds(liveStartedAfterClaimantSeconds),
-                            liveName
-                        )
-                        : null
+            OrphanRecording.ClaimantRunning(claim, pid =>
+                pid == 4242
+                    ? Process(
+                        pid,
+                        ClaimantStarted.AddSeconds(liveStartedAfterClaimantSeconds),
+                        liveName
+                    )
+                    : null
             )
         );
     }
@@ -274,12 +272,8 @@ public class OrphanRecordingTests : IDisposable
 
         Assert.False(OrphanRecording.ClaimantRunning(claim, _ => null));
         Assert.False(
-            OrphanRecording.ClaimantRunning(
-                claim with
-                {
-                    ProcessId = 0,
-                },
-                pid => Process(pid, ClaimantStarted)
+            OrphanRecording.ClaimantRunning(claim with { ProcessId = 0 }, pid =>
+                Process(pid, ClaimantStarted)
             )
         );
     }

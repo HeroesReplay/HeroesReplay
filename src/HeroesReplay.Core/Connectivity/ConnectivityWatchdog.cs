@@ -41,8 +41,8 @@ public sealed class ConnectivityWatchdog : IConnectivityWatchdog
         this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
         this.probe = probe ?? throw new ArgumentNullException(nameof(probe));
         this.statusStore = statusStore ?? throw new ArgumentNullException(nameof(statusStore));
-        this.tokenProvider =
-            tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
+        this.tokenProvider = tokenProvider
+            ?? throw new ArgumentNullException(nameof(tokenProvider));
         this.obsController = obsController;
         this.heroesProfileResume = heroesProfileResume;
         this.replayResume = replayResume;

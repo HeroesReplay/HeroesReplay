@@ -17,24 +17,16 @@ public class MemoryCacheLookupTests
         using var cache = new MemoryCache(new MemoryCacheOptions());
         int calls = 0;
 
-        string first = await Read(
-            cache,
-            "tier",
-            () =>
-            {
-                calls++;
-                return "Diamond";
-            }
-        );
-        string second = await Read(
-            cache,
-            "tier",
-            () =>
-            {
-                calls++;
-                return "Gold";
-            }
-        );
+        string first = await Read(cache, "tier", () =>
+        {
+            calls++;
+            return "Diamond";
+        });
+        string second = await Read(cache, "tier", () =>
+        {
+            calls++;
+            return "Gold";
+        });
 
         Assert.Equal("Diamond", first);
         Assert.Equal("Diamond", second);

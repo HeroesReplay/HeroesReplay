@@ -135,8 +135,7 @@ public static class ReleaseUnzip
     private static void ExtractWithTar(string zip, string folder)
     {
         Directory.CreateDirectory(folder);
-        using Process tar =
-            Process.Start(TarStart(zip, folder))
+        using Process tar = Process.Start(TarStart(zip, folder))
             ?? throw new IOException($"{TarPath} did not start.");
         Task<string> error = tar.StandardError.ReadToEndAsync();
         if (!tar.WaitForExit(ChildTimeout))

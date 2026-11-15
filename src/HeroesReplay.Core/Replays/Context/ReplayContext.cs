@@ -34,8 +34,8 @@ public class ReplayContext : IReplayContext, IReplayContextSetter
     {
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
         this.contextFileManager = contextFileManager;
-        this.replayAnalyzer =
-            replayAnalyzer ?? throw new ArgumentNullException(nameof(replayAnalyzer));
+        this.replayAnalyzer = replayAnalyzer
+            ?? throw new ArgumentNullException(nameof(replayAnalyzer));
         this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
     }
 

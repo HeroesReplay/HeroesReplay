@@ -25,10 +25,8 @@ public class ResilienceRetryTests
     {
         int calls = 0;
         bool result = await ResilienceRetry
-            .Constant<bool>(
-                retries: 3,
-                delay: TimeSpan.Zero,
-                retry: outcome => ResilienceRetry.Failed(outcome, value => value == false)
+            .Constant<bool>(retries: 3, delay: TimeSpan.Zero, retry: outcome =>
+                ResilienceRetry.Failed(outcome, value => value == false)
             )
             .ExecuteAsync(_ =>
             {
@@ -46,10 +44,8 @@ public class ResilienceRetryTests
         int calls = 0;
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             ResilienceRetry
-                .Constant<bool>(
-                    retries: 5,
-                    delay: TimeSpan.Zero,
-                    retry: outcome => outcome.Exception is HttpRequestException
+                .Constant<bool>(retries: 5, delay: TimeSpan.Zero, retry: outcome =>
+                    outcome.Exception is HttpRequestException
                 )
                 .ExecuteAsync(_ =>
                 {
@@ -68,10 +64,8 @@ public class ResilienceRetryTests
         int calls = 0;
         await Assert.ThrowsAsync<OperationCanceledException>(() =>
             ResilienceRetry
-                .Constant<bool>(
-                    retries: 4,
-                    delay: TimeSpan.Zero,
-                    retry: outcome => ResilienceRetry.Failed(outcome, _ => true)
+                .Constant<bool>(retries: 4, delay: TimeSpan.Zero, retry: outcome =>
+                    ResilienceRetry.Failed(outcome, _ => true)
                 )
                 .ExecuteAsync(_ =>
                 {

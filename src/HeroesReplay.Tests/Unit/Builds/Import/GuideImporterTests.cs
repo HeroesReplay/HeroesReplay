@@ -48,11 +48,9 @@ public class GuideImporterTests
         GuideTier tier = result.Reference.Heroes[0].Builds[0].Tiers[3];
         Assert.True(tier.Stale);
         Assert.Empty(tier.Recommended);
-        Assert.Contains(
-            result.Warnings,
-            warning =>
-                warning.Contains("tier 4", StringComparison.Ordinal)
-                && warning.Contains("stale", StringComparison.Ordinal)
+        Assert.Contains(result.Warnings, warning =>
+            warning.Contains("tier 4", StringComparison.Ordinal)
+            && warning.Contains("stale", StringComparison.Ordinal)
         );
     }
 

@@ -77,14 +77,11 @@ public class HeroesProfileApiProbeTests
     public async Task AnEmptyKey_IsRejectedWithoutACall()
     {
         bool called = false;
-        var probe = new HeroesProfileApiProbe(
-            new HeroesProfileApiSettings { ApiKey = " " },
-            _ =>
-            {
-                called = true;
-                return Task.FromResult<int?>(1);
-            }
-        );
+        var probe = new HeroesProfileApiProbe(new HeroesProfileApiSettings { ApiKey = " " }, _ =>
+        {
+            called = true;
+            return Task.FromResult<int?>(1);
+        });
 
         ServiceDependencyResult result = await probe.CheckAsync(CancellationToken.None);
 

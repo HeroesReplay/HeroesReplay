@@ -84,18 +84,12 @@ public class RecordingOwnershipTests
         RecordingSession session = Session(socket);
         int prepared = 0;
 
-        ObsRecordingResult started = session.StartRecording(
-            Record,
-            Noop,
-            7,
-            "unit",
-            () =>
-            {
-                prepared++;
-                Assert.Equal(1, socket.StopCalls);
-                Assert.Equal(0, socket.StartCalls);
-            }
-        );
+        ObsRecordingResult started = session.StartRecording(Record, Noop, 7, "unit", () =>
+        {
+            prepared++;
+            Assert.Equal(1, socket.StopCalls);
+            Assert.Equal(0, socket.StartCalls);
+        });
 
         Assert.True(started.Owned);
         Assert.Equal(1, prepared);
@@ -109,12 +103,8 @@ public class RecordingOwnershipTests
         RecordingSession session = Session(socket);
         int prepared = 0;
 
-        ObsRecordingResult started = session.StartRecording(
-            Record,
-            Noop,
-            7,
-            "unit",
-            () => prepared++
+        ObsRecordingResult started = session.StartRecording(Record, Noop, 7, "unit", () =>
+            prepared++
         );
 
         Assert.Equal(ObsOutputFailure.AlreadyRecording, started.Failure);

@@ -95,9 +95,8 @@ public class UploadOutboxTests
         Assert.Equal(missingPath, missing.MediaPath);
         Assert.Equal(localPath, local.MediaPath);
         Assert.Equal(2, open.Count);
-        Assert.DoesNotContain(
-            open,
-            item => item.MediaPath.EndsWith("newest.mp4", StringComparison.Ordinal)
+        Assert.DoesNotContain(open, item =>
+            item.MediaPath.EndsWith("newest.mp4", StringComparison.Ordinal)
         );
         Assert.Equal(
             missingPath,
@@ -715,9 +714,8 @@ public class UploadOutboxTests
         );
         string manifestPath = outbox.ManifestPath(attemptId);
         string directory = outbox.AttemptDirectory(attemptId);
-        Assert.DoesNotContain(
-            Directory.GetFiles(directory),
-            path => Path.GetFileName(path).EndsWith(".tmp", StringComparison.Ordinal)
+        Assert.DoesNotContain(Directory.GetFiles(directory), path =>
+            Path.GetFileName(path).EndsWith(".tmp", StringComparison.Ordinal)
         );
 
         string planted = manifestPath + ".planted.tmp";

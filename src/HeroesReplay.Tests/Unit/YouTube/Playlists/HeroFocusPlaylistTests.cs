@@ -126,9 +126,8 @@ public class HeroFocusPlaylistTests
         Assert.Contains("Hero gameplay - Ranged Assassin", role);
         Assert.Contains(YouTubePlaylistNames.HeroGameplay, noRole);
         Assert.DoesNotContain(noRole, title => title.StartsWith("Hero gameplay - "));
-        Assert.DoesNotContain(
-            ordinary,
-            title => title.StartsWith(YouTubePlaylistNames.HeroGameplay)
+        Assert.DoesNotContain(ordinary, title =>
+            title.StartsWith(YouTubePlaylistNames.HeroGameplay)
         );
         Assert.Null(YouTubePlaylistNames.HeroFocusRole("Wizard"));
         Assert.Equal("Hero gameplay - Healer", YouTubePlaylistNames.HeroFocusRole("healer"));

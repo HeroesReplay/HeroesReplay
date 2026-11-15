@@ -18,26 +18,20 @@ public class GuideCatalogTests
         Assert.Equal("https://www.icy-veins.com/heroes/", reference.SourceUrl);
         Assert.Equal(91, reference.Heroes.Count);
         Assert.Equal(296, reference.Heroes.Sum(guide => guide.Builds.Count));
-        Assert.All(
-            reference.Heroes,
-            guide =>
+        Assert.All(reference.Heroes, guide =>
+        {
+            Assert.StartsWith("Hero", guide.UnitId, StringComparison.Ordinal);
+            Assert.Equal(
+                "https://www.icy-veins.com/heroes/" + guide.Slug + "-build-guide",
+                guide.GuideUrl
+            );
+            Assert.All(guide.Builds, build =>
             {
-                Assert.StartsWith("Hero", guide.UnitId, StringComparison.Ordinal);
-                Assert.Equal(
-                    "https://www.icy-veins.com/heroes/" + guide.Slug + "-build-guide",
-                    guide.GuideUrl
-                );
-                Assert.All(
-                    guide.Builds,
-                    build =>
-                    {
-                        Assert.EndsWith("Build", build.Name, StringComparison.OrdinalIgnoreCase);
-                        Assert.Equal(7, build.Tiers.Count);
-                        Assert.All(build.Tiers, tier => Assert.NotEmpty(tier.Recommended));
-                    }
-                );
-            }
-        );
+                Assert.EndsWith("Build", build.Name, StringComparison.OrdinalIgnoreCase);
+                Assert.Equal(7, build.Tiers.Count);
+                Assert.All(build.Tiers, tier => Assert.NotEmpty(tier.Recommended));
+            });
+        });
     }
 
     [Fact]

@@ -274,14 +274,11 @@ public sealed class UploadSessionKeyTests : IDisposable
         Assert.Equal(UploadStatus.Completed, progress.Status);
         Assert.Equal("vid-368", uploaded?.Id);
         Assert.Equal(new[] { "bytes */1000", "bytes 400-999/1000" }, youtube.Ranges);
-        Assert.All(
-            youtube.SessionQueries,
-            query =>
-            {
-                Assert.Contains(UploadId, query, StringComparison.Ordinal);
-                Assert.Contains("key=" + FakeKey, query, StringComparison.Ordinal);
-            }
-        );
+        Assert.All(youtube.SessionQueries, query =>
+        {
+            Assert.Contains(UploadId, query, StringComparison.Ordinal);
+            Assert.Contains("key=" + FakeKey, query, StringComparison.Ordinal);
+        });
         AssertNoKeyOnDisk();
     }
 

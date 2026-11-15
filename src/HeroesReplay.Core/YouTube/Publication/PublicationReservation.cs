@@ -151,8 +151,7 @@ public static class PublicationReservation
                 );
             }
 
-            PublicationSendFacts send =
-                facts
+            PublicationSendFacts send = facts
                 ?? new PublicationSendFacts
                 {
                     Criteria = requested

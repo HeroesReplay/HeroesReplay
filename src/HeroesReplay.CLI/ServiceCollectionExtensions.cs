@@ -300,8 +300,7 @@ public static class ServiceCollectionExtensions
     public static AppSettings BindSettings(IConfiguration configuration)
     {
         ReplayMediaPolicySettings media = ReplayMediaPolicyStartup.Require(configuration);
-        AppSettings settings =
-            configuration.Get<AppSettings>()
+        AppSettings settings = configuration.Get<AppSettings>()
             ?? throw new InvalidOperationException(
                 "Could not bind AppSettings from configuration."
             );
@@ -800,9 +799,8 @@ public static class ServiceCollectionExtensions
     /// </summary>
     private static IServiceCollection AddHeroStatsApi(this IServiceCollection services)
     {
-        services.AddHttpClient(
-            HeroStatsApi.HttpClientName,
-            client => client.Timeout = HeroesProfileHttp.AttemptTimeout
+        services.AddHttpClient(HeroStatsApi.HttpClientName, client =>
+            client.Timeout = HeroesProfileHttp.AttemptTimeout
         );
         services.TryAddSingleton(sp => new HeroesProfilePacer(
             (
@@ -840,9 +838,8 @@ public static class ServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddHeroesProfileMapRefresh(this IServiceCollection services)
     {
-        services.AddHttpClient(
-            HeroStatsApi.HttpClientName,
-            client => client.Timeout = HeroesProfileHttp.AttemptTimeout
+        services.AddHttpClient(HeroStatsApi.HttpClientName, client =>
+            client.Timeout = HeroesProfileHttp.AttemptTimeout
         );
         return services.AddSingleton(sp =>
         {
@@ -867,9 +864,8 @@ public static class ServiceCollectionExtensions
     private static IServiceCollection AddHeroesProfileKiotaClient(this IServiceCollection services)
     {
         services
-            .AddHttpClient(
-                HeroesProfileHttp.ClientName,
-                client => client.Timeout = Timeout.InfiniteTimeSpan
+            .AddHttpClient(HeroesProfileHttp.ClientName, client =>
+                client.Timeout = Timeout.InfiniteTimeSpan
             )
             .AddResilienceHandler(HeroesProfileHttp.ClientName, HeroesProfileHttp.Configure);
         services.Configure<TelemetryOptions>(options =>

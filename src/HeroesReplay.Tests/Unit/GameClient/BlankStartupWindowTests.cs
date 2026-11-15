@@ -62,10 +62,8 @@ public class BlankStartupWindowTests
     public void Measure_ASmallMarkOnABlackFrameIsStillUniform()
     {
         // A cursor or a small spinner: under 2% of the frame.
-        WindowFrame frame = Grid(
-            1920,
-            1080,
-            (x, y) => x > 940 && x < 980 && y > 520 && y < 560 ? Color.White : Color.Black
+        WindowFrame frame = Grid(1920, 1080, (x, y) =>
+            x > 940 && x < 980 && y > 520 && y < 560 ? Color.White : Color.Black
         );
 
         Assert.True(frame.Uniform);
@@ -76,16 +74,12 @@ public class BlankStartupWindowTests
     public void Measure_TheBootSplashOrAMenuIsNotUniform()
     {
         // A logo and "LOADING" over a dark background, a gradient, and a checkerboard.
-        WindowFrame splash = Grid(
-            1920,
-            1080,
-            (x, y) => x > 560 && x < 1360 && y > 300 && y < 700 ? Color.SteelBlue : Color.Black
+        WindowFrame splash = Grid(1920, 1080, (x, y) =>
+            x > 560 && x < 1360 && y > 300 && y < 700 ? Color.SteelBlue : Color.Black
         );
         WindowFrame gradient = Grid(1920, 1080, (x, _) => Color.FromArgb(x * 255 / 1920, 0, 0));
-        WindowFrame checker = Grid(
-            1920,
-            1080,
-            (x, y) => (x / 30 + y / 30) % 2 == 0 ? Color.White : Color.Black
+        WindowFrame checker = Grid(1920, 1080, (x, y) =>
+            (x / 30 + y / 30) % 2 == 0 ? Color.White : Color.Black
         );
 
         Assert.False(splash.Uniform);

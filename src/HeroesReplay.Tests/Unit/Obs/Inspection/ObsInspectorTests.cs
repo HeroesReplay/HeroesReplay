@@ -145,9 +145,8 @@ public class ObsInspectorTests : IDisposable
         Assert.True(inspection.Ok);
         Assert.Null(inspection.Stats);
         Assert.NotNull(inspection.Video);
-        Assert.Contains(
-            inspection.Unread,
-            line => line.StartsWith("GetStats failed", StringComparison.Ordinal)
+        Assert.Contains(inspection.Unread, line =>
+            line.StartsWith("GetStats failed", StringComparison.Ordinal)
         );
     }
 

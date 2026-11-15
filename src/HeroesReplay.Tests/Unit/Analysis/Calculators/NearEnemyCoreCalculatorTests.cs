@@ -41,9 +41,8 @@ public class NearEnemyCoreCalculatorTests
         ReplayUnit core = Core();
         IReadOnlyDictionary<TimeSpan, Focus> focus = Analyze(ReplayOf(hero, core), false);
 
-        Assert.DoesNotContain(
-            focus.Values,
-            value => value.Calculator == typeof(NearEnemyCoreCalculator)
+        Assert.DoesNotContain(focus.Values, value =>
+            value.Calculator == typeof(NearEnemyCoreCalculator)
         );
     }
 
@@ -95,15 +94,13 @@ public class NearEnemyCoreCalculatorTests
         );
 
         IReadOnlyDictionary<TimeSpan, Focus> focus = analyzer.GetPlayers(replay);
-        Assert.Contains(
-            focus.Values,
-            value =>
-                value.Calculator == typeof(NearMapUnitCalculator)
-                && (
-                    value.Description.Contains("RavenLordTribute")
-                    || value.Description.Contains("XelNagaWatchTower")
-                    || value.Description.Contains("RegenGlobe")
-                )
+        Assert.Contains(focus.Values, value =>
+            value.Calculator == typeof(NearMapUnitCalculator)
+            && (
+                value.Description.Contains("RavenLordTribute")
+                || value.Description.Contains("XelNagaWatchTower")
+                || value.Description.Contains("RegenGlobe")
+            )
         );
     }
 

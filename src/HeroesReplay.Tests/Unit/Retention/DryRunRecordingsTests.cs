@@ -207,10 +207,10 @@ public sealed class DryRunRecordingsTests : IDisposable
         }
 
         return builder
-                .Build()
-                .GetSection("Retention")
-                .Get<RetentionSettings>()
-                ?.DryRunRecordingMaxAge
+            .Build()
+            .GetSection("Retention")
+            .Get<RetentionSettings>()
+            ?.DryRunRecordingMaxAge
             ?? TimeSpan.Zero;
     }
 

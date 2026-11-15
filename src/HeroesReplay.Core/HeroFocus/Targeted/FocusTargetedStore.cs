@@ -96,9 +96,10 @@ public sealed class FocusTargetedStore
                 return new FocusTargetedState();
             }
 
-            FocusTargetedState state =
-                JsonSerializer.Deserialize(File.ReadAllText(FilePath), Json.FocusTargetedState)
-                ?? new FocusTargetedState();
+            FocusTargetedState state = JsonSerializer.Deserialize(
+                File.ReadAllText(FilePath),
+                Json.FocusTargetedState
+            ) ?? new FocusTargetedState();
             state.Seen ??= new();
             state.Tried ??= new();
             state.Fetched ??= new();

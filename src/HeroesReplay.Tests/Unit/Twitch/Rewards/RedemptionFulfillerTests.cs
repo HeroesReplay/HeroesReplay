@@ -211,9 +211,8 @@ public sealed class RedemptionFulfillerTests : IDisposable
 
         Assert.Equal(3, twitch.Calls.Count);
         Assert.Single(twitch.Calls, call => call.RedemptionId == refused);
-        Assert.All(
-            twitch.Calls,
-            call => Assert.Equal(RewardRedemptionStatus.Canceled, call.Status)
+        Assert.All(twitch.Calls, call =>
+            Assert.Equal(RewardRedemptionStatus.Canceled, call.Status)
         );
     }
 

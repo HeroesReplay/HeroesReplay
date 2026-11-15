@@ -47,8 +47,7 @@ public static class PlayedHero
 
         if (LobbyHeroIsPlayed(replay))
         {
-            Hero lobby =
-                HeroDraft.Find(catalog, player.HeroAttributeId)
+            Hero lobby = HeroDraft.Find(catalog, player.HeroAttributeId)
                 ?? HeroDraft.Find(catalog, player.HeroId);
             if (lobby != null)
             {

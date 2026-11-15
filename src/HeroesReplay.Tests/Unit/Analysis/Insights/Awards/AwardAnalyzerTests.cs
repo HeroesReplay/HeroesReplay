@@ -61,9 +61,8 @@ public class AwardAnalyzerTests
                 (AwardKind.Avenger, "Genji", 6),
                 (AwardKind.EscapeArtist, "Valla", 7),
             },
-            System.Linq.Enumerable.Select(
-                insights.Awards,
-                award => (award.Kind, award.Hero, award.Value)
+            System.Linq.Enumerable.Select(insights.Awards, award =>
+                (award.Kind, award.Hero, award.Value)
             )
         );
     }

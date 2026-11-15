@@ -76,26 +76,26 @@ public class GameManager : IGameManager
     )
     {
         this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
-        this.contextSetter =
-            contextSetter ?? throw new ArgumentNullException(nameof(contextSetter));
+        this.contextSetter = contextSetter
+            ?? throw new ArgumentNullException(nameof(contextSetter));
         this.spectator = spectator ?? throw new ArgumentNullException(nameof(spectator));
-        this.gameController =
-            gameController ?? throw new ArgumentNullException(nameof(gameController));
-        this.obsController =
-            obsController ?? throw new ArgumentNullException(nameof(obsController));
+        this.gameController = gameController
+            ?? throw new ArgumentNullException(nameof(gameController));
+        this.obsController = obsController
+            ?? throw new ArgumentNullException(nameof(obsController));
         this.context = context ?? throw new ArgumentNullException(nameof(context));
         this.statusStore = statusStore ?? throw new ArgumentNullException(nameof(statusStore));
-        this.clientConfigurator =
-            clientConfigurator ?? throw new ArgumentNullException(nameof(clientConfigurator));
-        this.youTubeReplayLookup =
-            youTubeReplayLookup ?? throw new ArgumentNullException(nameof(youTubeReplayLookup));
-        this.recordingClock =
-            recordingClock ?? throw new ArgumentNullException(nameof(recordingClock));
+        this.clientConfigurator = clientConfigurator
+            ?? throw new ArgumentNullException(nameof(clientConfigurator));
+        this.youTubeReplayLookup = youTubeReplayLookup
+            ?? throw new ArgumentNullException(nameof(youTubeReplayLookup));
+        this.recordingClock = recordingClock
+            ?? throw new ArgumentNullException(nameof(recordingClock));
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
         this.mediaPolicy = mediaPolicy ?? throw new ArgumentNullException(nameof(mediaPolicy));
         this.gameData = gameData ?? throw new ArgumentNullException(nameof(gameData));
-        this.tokenProvider =
-            tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
+        this.tokenProvider = tokenProvider
+            ?? throw new ArgumentNullException(nameof(tokenProvider));
         this.streamHold = streamHold;
         this.insightsRecorder = insightsRecorder;
     }

@@ -60,8 +60,8 @@ public sealed class YouTubeOAuthProbe : IServiceDependencyProbe
     )
     {
         this.settings = settings;
-        this.readStoredToken =
-            readStoredToken ?? throw new ArgumentNullException(nameof(readStoredToken));
+        this.readStoredToken = readStoredToken
+            ?? throw new ArgumentNullException(nameof(readStoredToken));
         this.readSecrets = readSecrets ?? throw new ArgumentNullException(nameof(readSecrets));
         this.refresh = refresh ?? throw new ArgumentNullException(nameof(refresh));
     }

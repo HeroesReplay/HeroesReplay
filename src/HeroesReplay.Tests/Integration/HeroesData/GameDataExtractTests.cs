@@ -22,8 +22,7 @@ public class GameDataExtractTests
     [Fact]
     public async Task Load_ReadsTheExtractedHeroesData2CatalogWhenPresent()
     {
-        string extract =
-            Environment.GetEnvironmentVariable("HEROESREPLAY_HEROES_DATA2_EXTRACT")
+        string extract = Environment.GetEnvironmentVariable("HEROESREPLAY_HEROES_DATA2_EXTRACT")
             ?? Path.Combine(Path.GetTempPath(), "heroes-data2-2.57.0.98304", "extract");
         string heroFile = Path.Combine(extract, "data", "herodata_98304.json");
         string unitFile = Path.Combine(extract, "data", "unitdata_98304.json");

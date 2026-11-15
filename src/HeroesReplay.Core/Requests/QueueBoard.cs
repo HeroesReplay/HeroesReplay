@@ -161,8 +161,9 @@ public static class QueueBoard
         TimeSpan? ratingPrediction
     )
     {
-        List<SupportedReward> known =
-            rewards?.Where(reward => !string.IsNullOrWhiteSpace(reward?.Title)).ToList()
+        List<SupportedReward> known = rewards
+            ?.Where(reward => !string.IsNullOrWhiteSpace(reward?.Title))
+            .ToList()
             ?? new List<SupportedReward>();
         List<string> randoms = known
             .Where(reward =>

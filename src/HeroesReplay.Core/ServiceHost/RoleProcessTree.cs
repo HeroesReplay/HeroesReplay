@@ -99,8 +99,7 @@ public sealed class RoleProcessTree
     /// </summary>
     public RoleTreeKill Kill(int pid)
     {
-        RoleTreePlan plan =
-            Plan(table.Snapshot(), pid)
+        RoleTreePlan plan = Plan(table.Snapshot(), pid)
             ?? throw new ArgumentException(
                 $"Process with an Id of {pid} is not running.",
                 nameof(pid)

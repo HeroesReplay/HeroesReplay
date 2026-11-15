@@ -580,15 +580,11 @@ public sealed class RequestDownloadFailureTests : IDisposable
         public Task<RequestCompletion> CompleteDownloadAsync(
             RewardQueueItem item,
             Action publish
-        ) =>
-            inner.CompleteDownloadAsync(
-                item,
-                () =>
-                {
-                    publish?.Invoke();
-                    throw new ProcessKilled();
-                }
-            );
+        ) => inner.CompleteDownloadAsync(item, () =>
+            {
+                publish?.Invoke();
+                throw new ProcessKilled();
+            });
 
         public Task<RewardQueueItem> PeekDownloadAsync(DateTimeOffset now) =>
             inner.PeekDownloadAsync(now);

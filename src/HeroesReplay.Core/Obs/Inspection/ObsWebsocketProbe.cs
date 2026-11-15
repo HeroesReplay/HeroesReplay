@@ -48,8 +48,8 @@ public sealed class ObsWebsocketProbe : IServiceDependencyProbe
         this.obs = obs;
         this.probeOn = probeOn;
         this.sessions = sessions ?? new ObsWebsocketReadSessionFactory();
-        this.obsRunning =
-            obsRunning ?? (() => NamedProcess.IsRunning(ObsLaunchDecision.ProcessName));
+        this.obsRunning = obsRunning
+            ?? (() => NamedProcess.IsRunning(ObsLaunchDecision.ProcessName));
     }
 
     public string Dependency => Name;

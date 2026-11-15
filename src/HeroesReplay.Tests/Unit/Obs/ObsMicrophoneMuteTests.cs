@@ -70,9 +70,8 @@ public class ObsMicrophoneMuteTests
         Assert.True(obs.MicMuted);
         Assert.True(obs.MicSources["Headset"]);
         Assert.DoesNotContain(FakeObs.DesktopAudio, obs.MutedInputs);
-        Assert.All(
-            obs.Sent.Where(sent => sent.Type == "SetInputMute"),
-            sent => Assert.True((bool)sent.Data["inputMuted"])
+        Assert.All(obs.Sent.Where(sent => sent.Type == "SetInputMute"), sent =>
+            Assert.True((bool)sent.Data["inputMuted"])
         );
     }
 
@@ -134,9 +133,8 @@ public class ObsMicrophoneMuteTests
         Assert.Equal(new[] { "Headset" }, first);
         Assert.True(obs.MicSources["Headset"]);
         Assert.False(obs.MicMuted);
-        Assert.Single(
-            log.Warnings,
-            line => line.StartsWith("Could not mute", StringComparison.Ordinal)
+        Assert.Single(log.Warnings, line =>
+            line.StartsWith("Could not mute", StringComparison.Ordinal)
         );
         Assert.Contains(log.Warnings, line => line.Contains("Mic/Aux", StringComparison.Ordinal));
     }
