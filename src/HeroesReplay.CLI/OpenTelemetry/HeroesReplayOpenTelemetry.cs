@@ -29,8 +29,9 @@ public static class HeroesReplayOpenTelemetry
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(configuration);
 
-        TelemetrySettings settings =
-            configuration.GetSection(TelemetrySettings.SectionName).Get<TelemetrySettings>()
+        TelemetrySettings settings = configuration
+            .GetSection(TelemetrySettings.SectionName)
+            .Get<TelemetrySettings>()
             ?? new TelemetrySettings();
         if (!settings.Enabled)
         {

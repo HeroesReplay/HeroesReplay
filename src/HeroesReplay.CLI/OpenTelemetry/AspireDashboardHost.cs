@@ -12,11 +12,7 @@ using HeroesReplay.Core.Telemetry;
 
 namespace HeroesReplay.CLI.OpenTelemetry;
 
-public sealed record AspireCliInvocation(
-    string FileName,
-    string Arguments,
-    string WorkingDirectory
-)
+public sealed record AspireCliInvocation(string FileName, string Arguments, string WorkingDirectory)
 {
     /// <summary>Variables set for the dashboard process only: its GC settings (#538).</summary>
     public IReadOnlyDictionary<string, string> Environment { get; init; }
@@ -138,7 +134,9 @@ public static class AspireDashboardHost
                 && ProcessAlive(pid)
             )
             {
-                Log($"Aspire dashboard pid {pid} runs but {OtlpGrpcEndpoint} is not listening. Stopping it before the relaunch.");
+                Log(
+                    $"Aspire dashboard pid {pid} runs but {OtlpGrpcEndpoint} is not listening. Stopping it before the relaunch."
+                );
                 StopRunning();
             }
         }

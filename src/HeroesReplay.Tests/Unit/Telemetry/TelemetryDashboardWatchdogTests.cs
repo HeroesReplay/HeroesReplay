@@ -114,7 +114,10 @@ public class TelemetryDashboardWatchdogTests
     [Fact]
     public void Tick_WhenARelaunchThrows_RecordsTheFailureAndDoesNotThrow()
     {
-        var fixture = new Fixture { OnRelaunch = () => throw new InvalidOperationException("boom") };
+        var fixture = new Fixture
+        {
+            OnRelaunch = () => throw new InvalidOperationException("boom"),
+        };
 
         fixture.Watchdog.Tick(T0);
         fixture.Watchdog.Tick(T0 + TimeSpan.FromSeconds(1));

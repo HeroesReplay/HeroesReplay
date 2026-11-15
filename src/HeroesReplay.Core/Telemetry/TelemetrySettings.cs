@@ -211,7 +211,8 @@ public sealed class TelemetryDashboardSettings
         {
             long bytes = GcHeapHardLimitMb * 1024L * 1024L;
             // The runtime reads this variable as hexadecimal.
-            environment["DOTNET_GCHeapHardLimit"] = "0x" + bytes.ToString("X", CultureInfo.InvariantCulture);
+            environment["DOTNET_GCHeapHardLimit"] =
+                "0x" + bytes.ToString("X", CultureInfo.InvariantCulture);
         }
 
         return environment;

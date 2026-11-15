@@ -472,8 +472,8 @@ public class ServicesCommand : Command
     private static TelemetryDashboardWatchdog CreateTelemetryWatchdog(ILogger logger)
     {
         TelemetrySettings telemetry = ServiceCollectionExtensions.LoadTelemetrySettings();
-        TelemetryDashboardSettings dashboard =
-            telemetry.Dashboard ?? new TelemetryDashboardSettings();
+        TelemetryDashboardSettings dashboard = telemetry.Dashboard
+            ?? new TelemetryDashboardSettings();
         return new TelemetryDashboardWatchdog(dashboard, telemetry.Enabled)
         {
             Listening = () => AspireDashboardHost.IsPortListening(AspireDashboardHost.OtlpGrpcPort),

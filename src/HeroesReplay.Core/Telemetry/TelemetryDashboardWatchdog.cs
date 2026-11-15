@@ -75,7 +75,8 @@ public sealed class TelemetryDashboardState
             facts.Add("last: " + LastFailure);
         }
 
-        return string.Join("; ", facts) + ". Traces, logs, and metrics are dropped while it is down.";
+        return string.Join("; ", facts)
+            + ". Traces, logs, and metrics are dropped while it is down.";
     }
 
     private static string Since(DateTimeOffset? at, DateTimeOffset now) =>

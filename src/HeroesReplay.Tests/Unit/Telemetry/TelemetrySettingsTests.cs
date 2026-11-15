@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using HeroesReplay.CLI.OpenTelemetry;
 using HeroesReplay.Core.Telemetry;
 using Microsoft.Extensions.Configuration;
