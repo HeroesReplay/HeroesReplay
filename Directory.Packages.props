@@ -44,7 +44,7 @@
         <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="1.14.0" />
         <PackageVersion Include="OpenTelemetry.Instrumentation.Runtime" Version="1.14.0" />
 
-        <PackageVersion Include="Google.Apis.YouTube.v3" Version="1.76.0.4262" />
+        <PackageVersion Include="Google.Apis.YouTube.v3" Version="1.78.0.4325" />
         <PackageVersion Include="Heroes.Element" Version="1.0.3" />
         <PackageVersion Include="Heroes.ReplayParser" Version="1.2.18" />
         <PackageVersion Include="Microsoft.Kiota.Bundle" Version="1.22.2" />
