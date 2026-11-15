@@ -132,7 +132,143 @@ public class TeamKillClipTests
             }
         );
 
-        Assert.Empty(clips);
+        // The fifth blow is outside the window: the first four are a quadra kill, not a pentakill.
+        TeamKillClip clip = Assert.Single(clips);
+        Assert.Equal(TeamKillClips.TripleKillKind, clip.Kind);
+        Assert.Equal("Artanis quadra kill", clip.Description);
+        Assert.Equal(9, clip.LastDeathSecond);
+        Assert.False(clip.WipedTeam);
+    }
+
+    [Fact]
+    public void Select_FourBlowsChainedLikeAPentakill_AreAQuadraKill()
+    {
+        // No three of them within 3 s, so no triple-kill burst: before, this was no clip at all.
+        IReadOnlyList<TeamKillClip> clips = TeamKillClips.Select(
+            new[]
+            {
+                Death(600, "Kael'thas", "Artanis"),
+                Death(605, "Kael'thas", "Butcher"),
+                Death(612, "Kael'thas", "Chromie"),
+                Death(620, "Kael'thas", "Diablo"),
+            }
+        );
+
+        TeamKillClip clip = Assert.Single(clips);
+        Assert.Equal(TeamKillClips.TripleKillKind, clip.Kind);
+        Assert.Equal("Kael'thas quadra kill", clip.Description);
+        Assert.Equal("quadra kill", TeamKillClips.Title(clip));
+        Assert.Equal(600, clip.FirstDeathSecond);
+        Assert.Equal(620, clip.LastDeathSecond);
+        Assert.Equal(588, clip.HudStartSecond);
+        Assert.Equal(628, clip.HudEndSecond);
+        Assert.Equal(4, clip.Kills.Count);
+    }
+
+    [Fact]
+    public void Select_ATripleKillFollowedByAFourthBlow_IsOneQuadraKill()
+    {
+        // The triple-kill burst must not swallow the fourth blow and cut the clip short.
+        IReadOnlyList<TeamKillClip> clips = TeamKillClips.Select(
+            new[]
+            {
+                Death(600, "Jaina", "Artanis"),
+                Death(601, "Jaina", "Butcher"),
+                Death(602, "Jaina", "Chromie"),
+                Death(610, "Jaina", "Diablo"),
+            }
+        );
+
+        TeamKillClip clip = Assert.Single(clips);
+        Assert.Equal("Jaina quadra kill", clip.Description);
+        Assert.Equal("quadra kill", TeamKillClips.Title(clip));
+        Assert.Equal(610, clip.LastDeathSecond);
+        Assert.Equal(618, clip.HudEndSecond);
+    }
+
+    [Fact]
+    public void Select_ABlowBeforeATripleKill_MakesItAQuadraKill()
+    {
+        IReadOnlyList<TeamKillClip> clips = TeamKillClips.Select(
+            new[]
+            {
+                Death(590, "Jaina", "Artanis"),
+                Death(600, "Jaina", "Butcher"),
+                Death(601, "Jaina", "Chromie"),
+                Death(602, "Jaina", "Diablo"),
+            }
+        );
+
+        TeamKillClip clip = Assert.Single(clips);
+        Assert.Equal("Jaina quadra kill", clip.Description);
+        Assert.Equal(590, clip.FirstDeathSecond);
+    }
+
+    [Fact]
+    public void Select_FourBlowsAndAFifth_IsAPentakillNotAQuadraKill()
+    {
+        IReadOnlyList<TeamKillClip> clips = TeamKillClips.Select(
+            new[]
+            {
+                Death(600, "Jaina", "Artanis"),
+                Death(601, "Jaina", "Butcher"),
+                Death(602, "Jaina", "Chromie"),
+                Death(603, "Jaina", "Diablo"),
+                Death(614, "Jaina", "E.T.C."),
+            }
+        );
+
+        TeamKillClip clip = Assert.Single(clips);
+        Assert.Equal(TeamKillClips.PentakillKind, clip.Kind);
+        Assert.Equal(614, clip.LastDeathSecond);
+    }
+
+    [Fact]
+    public void Select_AQuadraKill_IsKeptOverEarlierTripleKills()
+    {
+        var deaths = new List<TeamKillDeath>();
+        foreach (int start in new[] { 100, 400 })
+        {
+            deaths.Add(Death(start, "Valla", "Artanis"));
+            deaths.Add(Death(start + 1, "Valla", "Butcher"));
+            deaths.Add(Death(start + 2, "Valla", "Chromie"));
+        }
+
+        deaths.Add(Death(700, "Valla", "Artanis"));
+        deaths.Add(Death(705, "Valla", "Butcher"));
+        deaths.Add(Death(710, "Valla", "Chromie"));
+        deaths.Add(Death(715, "Valla", "Diablo"));
+
+        IReadOnlyList<TeamKillClip> clips = TeamKillClips.Select(deaths);
+
+        Assert.Equal(TeamKillClips.MaxTripleKills, clips.Count);
+        Assert.Equal(
+            new[] { 100, 700 },
+            new[] { clips[0].FirstDeathSecond, clips[1].FirstDeathSecond }
+        );
+        Assert.Equal("quadra kill", TeamKillClips.Title(clips[1]));
+    }
+
+    [Fact]
+    public void Select_ATripleKillTheCameraMissed_DoesNotTakeTheLimit()
+    {
+        var deaths = new List<TeamKillDeath>();
+        foreach (int start in new[] { 100, 400, 700 })
+        {
+            deaths.Add(Death(start, "Valla", "Artanis"));
+            deaths.Add(Death(start + 1, "Valla", "Butcher"));
+            deaths.Add(Death(start + 2, "Valla", "Chromie"));
+        }
+
+        IReadOnlyList<TeamKillClip> clips = TeamKillClips.Select(
+            deaths,
+            shown: clip => clip.FirstDeathSecond != 100
+        );
+
+        Assert.Equal(
+            new[] { 400, 700 },
+            new[] { clips[0].FirstDeathSecond, clips[1].FirstDeathSecond }
+        );
     }
 
     [Fact]

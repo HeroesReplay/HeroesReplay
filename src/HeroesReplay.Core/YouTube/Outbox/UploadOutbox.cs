@@ -21,7 +21,7 @@ public sealed class SavedDispatch
 
 public sealed class UploadOutbox
 {
-    /// <summary>A full match and its clips: at most two pentakills and two triple kills (#511) and room to spare.</summary>
+    /// <summary>A full match and its clips: at most two pentakills and two triple or quadra kills (#511) and room to spare.</summary>
     public const int MaxAttemptsPerSecond = 16;
 
     private readonly UploadAttemptStore store;

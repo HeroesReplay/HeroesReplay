@@ -64,17 +64,11 @@ public static class MatchClipExporter
         insights ??= new InsightsSettings();
         ReplaySnapshot snapshot = Snapshot(replay, heroes, insights, logger);
         Func<TeamKillClip, bool> shown = OnCamera(camera, snapshot?.Positions, settings, logger);
-        var kills = new List<TeamKillClip>();
-        foreach (
-            TeamKillClip kill in TeamKillClips.Select(TeamKillDeaths.FromReplay(replay, heroes))
-        )
-        {
-            if (shown(kill))
-            {
-                kills.Add(kill);
-            }
-        }
-
+        // The camera check runs before the triple and quadra kill limit (Select's shown).
+        IReadOnlyList<TeamKillClip> kills = TeamKillClips.Select(
+            TeamKillDeaths.FromReplay(replay, heroes),
+            shown: shown
+        );
         var clips = new List<TeamKillClip>(kills);
         clips.AddRange(BossClips(snapshot, insights, kills, shown, logger));
         await ExportAsync(
