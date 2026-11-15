@@ -75,6 +75,7 @@ public sealed class BossFightAnalyzer : IInsightAnalyzer<BossFightInsights>
                 {
                     Team = team,
                     HeroSeconds = counts.Sum(Heroes),
+                    PresentSeconds = counts.Count(row => Heroes(row) > 0),
                     GroupSeconds = counts.Count(row => Heroes(row) >= minGroup),
                     MostHeroes = counts.Select(Heroes).DefaultIfEmpty().Max(),
                     FirstHeroSecond = counts
@@ -85,6 +86,10 @@ public sealed class BossFightAnalyzer : IInsightAnalyzer<BossFightInsights>
                         .Where(row => Heroes(row) >= minGroup)
                         .Select(row => (int?)row.Second)
                         .FirstOrDefault(),
+                    LastHeroSecond = counts
+                        .Where(row => Heroes(row) > 0)
+                        .Select(row => (int?)row.Second)
+                        .LastOrDefault(),
                     Deaths = snapshot.HeroDeaths.Count(death =>
                         death.Team == team
                         && death.Time.FloorSeconds() >= start
@@ -113,10 +118,14 @@ public sealed class BossFightAnalyzer : IInsightAnalyzer<BossFightInsights>
             KillerTeam = killer?.Team,
             Teams = teams,
             TogetherSeconds = together,
+            CaptureDelaySeconds =
+                starter is int taking && taking != capture.Team
+                    ? end - teams[taking].LastHeroSecond
+                    : null,
             Kind =
                 killer != null && killer.Team != capture.Team
                     ? KilledByOtherTeam(capture.Team, starter, teams)
-                    : Kind(capture.Team, starter, teams, together),
+                    : Kind(capture.Team, starter, teams, together, end),
         };
     }
 
@@ -186,7 +195,13 @@ public sealed class BossFightAnalyzer : IInsightAnalyzer<BossFightInsights>
         return null;
     }
 
-    private BossFightKind Kind(int capturer, int? starter, BossFightTeam[] teams, int together)
+    private BossFightKind Kind(
+        int capturer,
+        int? starter,
+        BossFightTeam[] teams,
+        int together,
+        int end
+    )
     {
         if (starter == null)
         {
@@ -202,9 +217,14 @@ public sealed class BossFightAnalyzer : IInsightAnalyzer<BossFightInsights>
 
         if (starter != capturer)
         {
-            return taking.GroupSeconds >= settings.StealMinGroupSeconds
-                ? BossFightKind.Steal
-                : BossFightKind.Take;
+            if (taking.GroupSeconds < settings.StealMinGroupSeconds)
+            {
+                return BossFightKind.Take;
+            }
+
+            return Denied(taking, teams[capturer], end)
+                ? BossFightKind.Denied
+                : BossFightKind.Steal;
         }
 
         return
@@ -212,6 +232,26 @@ public sealed class BossFightAnalyzer : IInsightAnalyzer<BossFightInsights>
             && teams.Sum(team => team.Deaths) >= settings.ContestMinDeaths
             ? BossFightKind.Defended
             : BossFightKind.Take;
+    }
+
+    /// <summary>
+    /// The replay does not record the boss's health, so how far the starting team had brought it
+    /// down is read from time. A steal takes a boss the other team had worn down: the capture comes
+    /// soon after the starting team's last hero died at the pit or left it
+    /// (<see cref="BossFightInsightSettings.StealMaxCaptureDelaySeconds"/>), and the capturing team
+    /// spent not much longer on it than the starting team did
+    /// (<see cref="BossFightInsightSettings.StealMaxPresenceRatio"/>). Otherwise the boss had reset
+    /// or the capturing team did most of the work after chasing the starting team off: denied.
+    /// </summary>
+    private bool Denied(BossFightTeam taking, BossFightTeam capturing, int end)
+    {
+        int left = taking.LastHeroSecond ?? end;
+        if (end - left > settings.StealMaxCaptureDelaySeconds)
+        {
+            return true;
+        }
+
+        return capturing.PresentSeconds > taking.PresentSeconds * settings.StealMaxPresenceRatio;
     }
 
     /// <summary>The team whose core <paramref name="point"/> is nearer by <see cref="BossFightInsightSettings.SideRatio"/>, or -1.</summary>
