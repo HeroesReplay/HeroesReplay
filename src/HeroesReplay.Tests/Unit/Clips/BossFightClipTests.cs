@@ -92,6 +92,12 @@ public class BossFightClipTests
     }
 
     [Fact]
+    public void DeniedBosses_AreNotClips()
+    {
+        Assert.Empty(BossFightClips.Select(Insights(Fight(BossFightKind.Denied, 600, 560))));
+    }
+
+    [Fact]
     public void StealsComeFirst_AtMostTwo_EarliestShownFirst()
     {
         IReadOnlyList<TeamKillClip> clips = BossFightClips.Select(

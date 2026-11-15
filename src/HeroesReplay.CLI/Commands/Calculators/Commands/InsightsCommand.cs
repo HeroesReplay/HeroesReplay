@@ -34,7 +34,7 @@ public class InsightsCommand : Command
     public InsightsCommand()
         : base(
             "insights",
-            "Read every .StormReplay in a folder, one file at a time, with units, events and statistics, and print each replay's match insights: each team's solo laner and its confidence, positive standouts, the MVP, camps (and how many on the enemy side), forts and keeps lost, a core race, a comeback, each player's closest guide build, each hero's kill bursts (3 killing blows within 3 s), the map objective's leader with its share and award, the standout awards (clutch heals, vengeances, escapes), and each boss capture with the fight at the pit before it (who started it, who killed and who captured the boss, time grouped at the pit, deaths there; a steal or a defended boss). Then how often each appears per game, per team or per player, to tune the Insights thresholds. Reads the heroes-data2 catalog under Location:DataDirectory and the shipped talent-build reference. Read-only."
+            "Read every .StormReplay in a folder, one file at a time, with units, events and statistics, and print each replay's match insights: each team's solo laner and its confidence, positive standouts, the MVP, camps (and how many on the enemy side), forts and keeps lost, a core race, a comeback, each player's closest guide build, each hero's kill bursts (3 killing blows within 3 s), the map objective's leader with its share and award, the standout awards (clutch heals, vengeances, escapes), and each boss capture with the fight at the pit before it (who started it, who killed and who captured the boss, time grouped at the pit, deaths there; a steal, a denied boss or a defended boss). Then how often each appears per game, per team or per player, to tune the Insights thresholds. Reads the heroes-data2 catalog under Location:DataDirectory and the shipped talent-build reference. Read-only."
         )
     {
         var directoryOption = new Option<string>("--directory")
@@ -460,10 +460,13 @@ public class InsightsCommand : Command
             string teams = string.Join(
                 " ",
                 fight.Teams.Select(team =>
-                    $"{Team(team.Team)}[{team.HeroSeconds}hs {team.GroupSeconds}g max{team.MostHeroes} first {Clock(team.FirstHeroSecond)}/{Clock(team.FirstGroupSecond)} {team.Deaths}d]"
+                    $"{Team(team.Team)}[{team.HeroSeconds}hs {team.PresentSeconds}p {team.GroupSeconds}g max{team.MostHeroes} first {Clock(team.FirstHeroSecond)}/{Clock(team.FirstGroupSecond)} {team.Deaths}d]"
                 )
             );
-            return $"boss {Clock(fight.Second)} {fight.Kind}: {Team(fight.Team)} took it ({fight.KillerHero ?? "-"}{(fight.KilledByOtherTeam ? ", killed by " + Team(fight.KillerTeam.Value) : string.Empty)}), started {starter}, {side}, from {Clock(fight.StartSecond)}, together {fight.TogetherSeconds}s, {teams}";
+            string delay = fight.CaptureDelaySeconds is int seconds
+                ? $"captured {seconds}s after the starter left, "
+                : string.Empty;
+            return $"boss {Clock(fight.Second)} {fight.Kind}: {Team(fight.Team)} took it ({fight.KillerHero ?? "-"}{(fight.KilledByOtherTeam ? ", killed by " + Team(fight.KillerTeam.Value) : string.Empty)}), started {starter}, {side}, from {Clock(fight.StartSecond)}, together {fight.TogetherSeconds}s, {delay}{teams}";
         }
 
         private static string Clock(int? second) => second is int value ? Clock(value) : "-";

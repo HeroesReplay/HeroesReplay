@@ -63,6 +63,49 @@ public class BossFightAnalyzerTests
     }
 
     [Fact]
+    public void RedWipesBlueOffAWornDownBoss_AndTakesItSoonAfter_IsASteal()
+    {
+        // Blue on the boss from 100 until its last hero dies at 125; Red arrives at 118, wins the
+        // fight and captures at 132, 7 s after Blue was gone.
+        ScriptedPositions positions = Red(Blue(4, from: 100, to: 125), 3, from: 118, to: 132);
+
+        BossFight fight = Single(positions, Capture(132, team: 1, killer: 5));
+
+        Assert.Equal(BossFightKind.Steal, fight.Kind);
+        Assert.Equal(0, fight.Starter);
+        Assert.Equal(7, fight.CaptureDelaySeconds);
+        Assert.Equal(125, fight.Teams[0].LastHeroSecond);
+        Assert.Equal(26, fight.Teams[0].PresentSeconds);
+        Assert.Equal(15, fight.Teams[1].PresentSeconds);
+    }
+
+    [Fact]
+    public void RedChasesBlueOff_AndTakesTheResetBossLongAfter_IsDenied()
+    {
+        // Blue starts the boss at 100, Red arrives at 108 and pushes Blue off at 112. The boss
+        // resets and Red takes it from fresh, capturing at 150: Red bullied Blue off, it stole nothing.
+        ScriptedPositions positions = Red(Blue(4, from: 100, to: 112), 3, from: 108, to: 150);
+
+        BossFight fight = Single(positions, Capture(150, team: 1, killer: 5));
+
+        Assert.Equal(BossFightKind.Denied, fight.Kind);
+        Assert.Equal(0, fight.Starter);
+        Assert.Equal(38, fight.CaptureDelaySeconds);
+    }
+
+    [Fact]
+    public void RedOnTheBossMuchLongerThanBlue_IsDenied_EvenSoonAfterBlueLeft()
+    {
+        // Blue grouped 100 to 110 (11 s), Red 105 to 125 (21 s): Red did most of the work.
+        ScriptedPositions positions = Red(Blue(4, from: 100, to: 110), 3, from: 105, to: 125);
+
+        BossFight fight = Single(positions, Capture(125, team: 1, killer: 5));
+
+        Assert.Equal(BossFightKind.Denied, fight.Kind);
+        Assert.Equal(15, fight.CaptureDelaySeconds);
+    }
+
+    [Fact]
     public void RedThereWithinSecondsOfBlue_IsNotASteal()
     {
         ScriptedPositions positions = Blue(4, from: 100, to: 130)
@@ -168,6 +211,20 @@ public class BossFightAnalyzerTests
     {
         var positions = new ScriptedPositions();
         for (int player = 0; player < count; player++)
+        {
+            positions.Path(
+                player,
+                time => Seconds(time) >= from && Seconds(time) <= to ? BluePit : Away
+            );
+        }
+
+        return positions;
+    }
+
+    /// <summary>Red players 5 to 5 + <paramref name="count"/> - 1 at the pit from one second to another.</summary>
+    private static ScriptedPositions Red(ScriptedPositions positions, int count, int from, int to)
+    {
+        for (int player = 5; player < 5 + count; player++)
         {
             positions.Path(
                 player,

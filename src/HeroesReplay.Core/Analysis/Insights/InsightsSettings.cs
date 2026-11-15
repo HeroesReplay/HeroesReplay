@@ -64,6 +64,19 @@ public class BossFightInsightSettings
     /// <summary>A steal by position: the team that started it had a group at the pit at least this many seconds.</summary>
     public int StealMinGroupSeconds { get; set; } = 8;
 
+    /// <summary>
+    /// A steal by position: the capture came at most this long after the starting team's last hero
+    /// left the pit or died there. Later, the boss had reset (it heals once its attackers leave)
+    /// and the capturing team took it from fresh: denied, not stolen.
+    /// </summary>
+    public int StealMaxCaptureDelaySeconds { get; set; } = 15;
+
+    /// <summary>
+    /// A steal by position: the capturing team was at the pit at most this many times as long as
+    /// the starting team. Longer, and it did the work itself: denied, not stolen.
+    /// </summary>
+    public double StealMaxPresenceRatio { get; set; } = 1.5;
+
     /// <summary>Defended: both teams had a group at the pit together at least this many seconds.</summary>
     public int ContestMinSeconds { get; set; } = 6;
 

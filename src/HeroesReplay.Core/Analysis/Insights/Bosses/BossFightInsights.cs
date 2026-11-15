@@ -23,7 +23,8 @@ public enum BossFightKind
     /// The team that captured the boss is not the team that was taking it: the other team landed
     /// the boss's killing blow (the replay records both) and the capturing team had not clearly
     /// started it, or a group of the other team's heroes was at the pit well before the capturing
-    /// team arrived.
+    /// team arrived, had worn the boss down (it was still on it, or died there, shortly before the
+    /// capture) and had not spent much less time on it than the capturing team.
     /// </summary>
     Steal,
 
@@ -33,6 +34,14 @@ public enum BossFightKind
     /// killing blow (a steal that failed at the circle).
     /// </summary>
     Defended,
+
+    /// <summary>
+    /// The other team started the boss, but the capturing team chased it off and then did most of
+    /// the work itself: the capture came long after the starting team's last hero left or died at
+    /// the pit (the boss reset), or the capturing team stood on it much longer than the starting
+    /// team. Not a steal, and not cut as a clip.
+    /// </summary>
+    Denied,
 }
 
 /// <summary>
@@ -78,6 +87,12 @@ public sealed record BossFight
     /// <summary>Seconds in which both teams had a group at the pit.</summary>
     public int TogetherSeconds { get; init; }
 
+    /// <summary>
+    /// When the other team started the boss: seconds from its last hero at the pit (alive) to the
+    /// capture. Null when the capturing team started it or no team did.
+    /// </summary>
+    public int? CaptureDelaySeconds { get; init; }
+
     public BossFightKind Kind { get; init; }
 }
 
@@ -88,6 +103,9 @@ public sealed record BossFightTeam
 
     /// <summary>Each second, the team's heroes at the pit, added up.</summary>
     public int HeroSeconds { get; init; }
+
+    /// <summary>Seconds in which at least one of the team's heroes was at the pit.</summary>
+    public int PresentSeconds { get; init; }
 
     /// <summary>Seconds in which the team had a group at the pit.</summary>
     public int GroupSeconds { get; init; }
@@ -100,6 +118,9 @@ public sealed record BossFightTeam
 
     /// <summary>When the team first had a group at the pit, or null.</summary>
     public int? FirstGroupSecond { get; init; }
+
+    /// <summary>The last second one of the team's heroes was at the pit alive, or null.</summary>
+    public int? LastHeroSecond { get; init; }
 
     /// <summary>The team's heroes who died at the pit during the fight.</summary>
     public int Deaths { get; init; }
