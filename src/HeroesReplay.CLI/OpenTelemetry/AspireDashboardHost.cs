@@ -8,6 +8,7 @@ using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 using HeroesReplay.Core.Shared;
+using HeroesReplay.Core.Telemetry;
 
 namespace HeroesReplay.CLI.OpenTelemetry;
 
@@ -15,7 +16,11 @@ public sealed record AspireCliInvocation(
     string FileName,
     string Arguments,
     string WorkingDirectory
-);
+)
+{
+    /// <summary>Variables set for the dashboard process only: its GC settings (#538).</summary>
+    public IReadOnlyDictionary<string, string> Environment { get; init; }
+}
 
 public sealed record AspireProcessStart(int? Pid, string Error, string LogPath);
 
@@ -32,18 +37,31 @@ public static class AspireDashboardHost
     public const int OtlpGrpcPort = 4317;
     public const int OtlpHttpPort = 4318;
 
-    /// <summary>
-    /// The arguments after <c>--</c> go to the dashboard itself. It keeps 2,000 traces in memory
-    /// instead of its default 10,000, because it runs for days on the stream PC.
-    /// </summary>
-    public const string RunArguments =
+    private const string BaseRunArguments =
         "dashboard run --allow-anonymous --non-interactive --nologo --frontend-url "
         + UiUrl
         + " --otlp-grpc-url "
         + OtlpGrpcEndpoint
         + " --otlp-http-url "
-        + OtlpHttpEndpoint
-        + " -- --Dashboard:TelemetryLimits:MaxTraceCount=2000";
+        + OtlpHttpEndpoint;
+
+    /// <summary>The run arguments with the default <see cref="TelemetryDashboardSettings"/>.</summary>
+    public static string RunArguments => RunArgumentsFor(null);
+
+    /// <summary>
+    /// The arguments after <c>--</c> go to the dashboard itself: its telemetry limits
+    /// (<c>OpenTelemetry:Dashboard</c>), far below its defaults, because it runs for days on the
+    /// stream PC (8.5 GB with the default 10,000 traces, 2026-10-08).
+    /// </summary>
+    public static string RunArgumentsFor(TelemetryDashboardSettings settings)
+    {
+        IReadOnlyList<string> limits = (
+            settings ?? new TelemetryDashboardSettings()
+        ).DashboardArguments();
+        return limits.Count == 0
+            ? BaseRunArguments
+            : BaseRunArguments + " -- " + string.Join(" ", limits);
+    }
 
     public static readonly TimeSpan StartupBudget = TimeSpan.FromSeconds(30);
 
@@ -96,10 +114,51 @@ public static class AspireDashboardHost
     /// <paramref name="openBrowser"/>. The supervisor and spectate start it headless and only log
     /// its URL, because a dashboard tab left open on the stream PC grows without bound (#478).
     /// </summary>
-    public static bool EnsureRunning(bool openBrowser = false)
+    public static bool EnsureRunning(
+        bool openBrowser = false,
+        TelemetryDashboardSettings settings = null
+    ) => EnsureRunningResult(openBrowser, settings).Listening;
+
+    /// <summary>
+    /// The supervisor's relaunch (#538): stops a recorded dashboard that runs but no longer
+    /// listens, then starts one. Null when OTLP answers, otherwise why it does not.
+    /// </summary>
+    public static string Relaunch(TelemetryDashboardSettings settings)
+    {
+        if (IsPortListening(OtlpGrpcPort))
+        {
+            return null;
+        }
+
+        try
+        {
+            if (
+                File.Exists(PidPath)
+                && int.TryParse(File.ReadAllText(PidPath).Trim(), out int pid)
+                && ProcessAlive(pid)
+            )
+            {
+                Log($"Aspire dashboard pid {pid} runs but {OtlpGrpcEndpoint} is not listening. Stopping it before the relaunch.");
+                StopRunning();
+            }
+        }
+        catch (Exception e)
+        {
+            Log($"Could not stop the old Aspire dashboard before the relaunch: {e.Message}");
+        }
+
+        DashboardEnsureResult result = EnsureRunningResult(false, settings);
+        return result.Listening ? null : result.Detail;
+    }
+
+    private static DashboardEnsureResult EnsureRunningResult(
+        bool openBrowser,
+        TelemetryDashboardSettings settings
+    )
     {
         try
         {
+            settings ??= LoadSettings();
             Action<string> opener = BrowserOpener(openBrowser);
             ApplyExporterEnvironment();
             using var mutex = new Mutex(false, @"Local\HeroesReplay.AspireDashboard");
@@ -125,18 +184,18 @@ public static class AspireDashboardHost
                         TryOpenDashboard(opener, Log);
                     }
 
-                    return true;
+                    return new DashboardEnsureResult(true, false, "already listening");
                 }
 
-                Console.Error.WriteLine(
-                    "Aspire dashboard lock is held and OTLP is not listening yet. Continuing without the dashboard."
-                );
-                return false;
+                const string held =
+                    "Aspire dashboard lock is held and OTLP is not listening yet. Continuing without the dashboard.";
+                Console.Error.WriteLine(held);
+                return new DashboardEnsureResult(false, false, held);
             }
 
             try
             {
-                DashboardEnsureResult result = Ensure(
+                return Ensure(
                     () => IsPortListening(OtlpGrpcPort),
                     Launch,
                     ProcessAlive,
@@ -148,9 +207,9 @@ public static class AspireDashboardHost
                     Thread.Sleep,
                     StartupBudget,
                     openBrowser,
-                    opener
+                    opener,
+                    settings
                 );
-                return result.Listening;
             }
             finally
             {
@@ -163,10 +222,30 @@ public static class AspireDashboardHost
         }
         catch (Exception e)
         {
+            string failed =
+                $"Aspire dashboard was not started. Continuing without the dashboard. {e.Message}";
+            Console.Error.WriteLine(failed);
+            return new DashboardEnsureResult(false, false, failed);
+        }
+    }
+
+    /// <summary>
+    /// <c>OpenTelemetry:Dashboard</c> from the effective appsettings. Defaults when it cannot be
+    /// read, so a bad file never keeps the dashboard down.
+    /// </summary>
+    public static TelemetryDashboardSettings LoadSettings()
+    {
+        try
+        {
+            return ServiceCollectionExtensions.LoadTelemetrySettings().Dashboard
+                ?? new TelemetryDashboardSettings();
+        }
+        catch (Exception e)
+        {
             Console.Error.WriteLine(
-                $"Aspire dashboard was not started. Continuing without the dashboard. {e.Message}"
+                $"Could not read OpenTelemetry:Dashboard. Using its defaults. {e.Message}"
             );
-            return false;
+            return new TelemetryDashboardSettings();
         }
     }
 
@@ -182,7 +261,8 @@ public static class AspireDashboardHost
         Action<TimeSpan> wait,
         TimeSpan startupBudget,
         bool openWhenAlreadyListening = false,
-        Action<string> openBrowser = null
+        Action<string> openBrowser = null,
+        TelemetryDashboardSettings settings = null
     )
     {
         ArgumentNullException.ThrowIfNull(otlpListening);
@@ -207,7 +287,8 @@ public static class AspireDashboardHost
             searchStarts,
             manifestDeclaresAspire,
             aspireOnPath,
-            pathFallbackDirectory
+            pathFallbackDirectory,
+            settings
         );
         if (invocation == null)
         {
@@ -282,9 +363,13 @@ public static class AspireDashboardHost
         IEnumerable<string> searchStarts,
         Func<string, bool> manifestDeclaresAspire,
         bool aspireOnPath,
-        string pathFallbackDirectory
+        string pathFallbackDirectory,
+        TelemetryDashboardSettings settings = null
     )
     {
+        settings ??= new TelemetryDashboardSettings();
+        string run = RunArgumentsFor(settings);
+        IReadOnlyDictionary<string, string> environment = settings.ProcessEnvironment();
         if (searchStarts != null && manifestDeclaresAspire != null)
         {
             foreach (string start in searchStarts)
@@ -292,7 +377,10 @@ public static class AspireDashboardHost
                 string directory = FindToolDirectory(start, manifestDeclaresAspire);
                 if (!string.IsNullOrWhiteSpace(directory))
                 {
-                    return new AspireCliInvocation("dotnet", "aspire " + RunArguments, directory);
+                    return new AspireCliInvocation("dotnet", "aspire " + run, directory)
+                    {
+                        Environment = environment,
+                    };
                 }
             }
         }
@@ -305,7 +393,7 @@ public static class AspireDashboardHost
         string working = string.IsNullOrWhiteSpace(pathFallbackDirectory)
             ? Directory.GetCurrentDirectory()
             : pathFallbackDirectory;
-        return new AspireCliInvocation("aspire", RunArguments, working);
+        return new AspireCliInvocation("aspire", run, working) { Environment = environment };
     }
 
     public static string FindToolDirectory(string start, Func<string, bool> manifestDeclaresAspire)
@@ -564,14 +652,23 @@ public static class AspireDashboardHost
         string workingDirectory,
         string stdoutLog,
         string stderrLog,
-        string pidFile
+        string pidFile,
+        IReadOnlyDictionary<string, string> environment = null
     )
     {
         string argList = string.Join(
             ",",
             (arguments ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries).Select(PsQuote)
         );
-        return "$ProgressPreference = 'SilentlyContinue'; $p = Start-Process -FilePath "
+        // Set in this powershell only; Start-Process hands them to the dashboard and its children.
+        string variables = string.Concat(
+            (environment ?? new Dictionary<string, string>())
+                .Where(pair => IsVariableName(pair.Key))
+                .Select(pair => $"$env:{pair.Key} = {PsQuote(pair.Value)}; ")
+        );
+        return "$ProgressPreference = 'SilentlyContinue'; "
+            + variables
+            + "$p = Start-Process -FilePath "
             + PsQuote(fileName)
             + " -ArgumentList "
             + argList
@@ -646,7 +743,8 @@ public static class AspireDashboardHost
                 invocation.WorkingDirectory,
                 StdoutLogPath,
                 StderrLogPath,
-                PidPath
+                PidPath,
+                invocation.Environment
             );
             string encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(script));
             using Process process = Process.Start(
@@ -889,6 +987,9 @@ public static class AspireDashboardHost
         }
         catch (Exception) { }
     }
+
+    private static bool IsVariableName(string name) =>
+        !string.IsNullOrWhiteSpace(name) && name.All(c => char.IsAsciiLetterOrDigit(c) || c == '_');
 
     private static string PsQuote(string value) => "'" + (value ?? "").Replace("'", "''") + "'";
 }

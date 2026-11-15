@@ -564,6 +564,7 @@ public static class ServiceHealthClassifier
                 BudgetWindowSeconds = state?.BudgetWindowSeconds ?? 0,
                 StaleRestartAfterSeconds = state?.StaleRestartAfterSeconds ?? 0,
                 Obs = state?.Obs,
+                Telemetry = state?.Telemetry,
             },
         };
     }

@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Threading;
 using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.Shared;
+using HeroesReplay.Core.Telemetry;
 
 namespace HeroesReplay.Core.ServiceHost;
 
@@ -41,6 +42,9 @@ public sealed class ServiceSupervisorState
 
     /// <summary>The OBS watchdog (#398): its state, restarts, and last cause. Null in older files.</summary>
     public ObsWatchdogState Obs { get; set; }
+
+    /// <summary>The Aspire dashboard watchdog (#538). Null in older files.</summary>
+    public TelemetryDashboardState Telemetry { get; set; }
 }
 
 public static class ServiceSupervisorFile

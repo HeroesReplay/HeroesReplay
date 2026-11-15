@@ -4,6 +4,7 @@ using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using HeroesReplay.CLI.OpenTelemetry;
+using HeroesReplay.Core.Telemetry;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.Telemetry;
@@ -37,10 +38,58 @@ public class AspireDashboardHostTests
 
         Assert.True(separator > 0);
         Assert.Contains(
-            "--Dashboard:TelemetryLimits:MaxTraceCount=2000",
+            "--Dashboard:TelemetryLimits:MaxTraceCount=1000",
             run[separator..],
             StringComparison.Ordinal
         );
+        Assert.Contains("--Dashboard:TelemetryLimits:MaxLogCount=2000", run[separator..]);
+    }
+
+    [Fact]
+    public void Resolve_CarriesTheConfiguredLimitsAndGcVariables()
+    {
+        var settings = new TelemetryDashboardSettings
+        {
+            MaxTraceCount = 300,
+            GcHeapHardLimitMb = 512,
+        };
+
+        AspireCliInvocation invocation = AspireDashboardHost.Resolve(
+            Array.Empty<string>(),
+            path => false,
+            aspireOnPath: true,
+            @"C:\heroesreplay",
+            settings
+        );
+
+        Assert.Contains("--Dashboard:TelemetryLimits:MaxTraceCount=300", invocation.Arguments);
+        Assert.Equal("0", invocation.Environment["DOTNET_gcServer"]);
+        Assert.Equal("0x20000000", invocation.Environment["DOTNET_GCHeapHardLimit"]);
+    }
+
+    [Fact]
+    public void PowerShellStartCommand_SetsTheDashboardVariablesBeforeStartProcess()
+    {
+        string script = AspireDashboardHost.PowerShellStartCommand(
+            "aspire",
+            AspireDashboardHost.RunArguments,
+            @"C:\heroesreplay",
+            @"C:\logs\aspire-dashboard.log",
+            @"C:\logs\aspire-dashboard.err.log",
+            @"C:\logs\aspire-dashboard.pid",
+            new Dictionary<string, string>
+            {
+                ["DOTNET_gcServer"] = "0",
+                ["DOTNET_GCConserveMemory"] = "5",
+                ["BAD NAME; rm"] = "x",
+            }
+        );
+
+        int start = script.IndexOf("Start-Process", StringComparison.Ordinal);
+        int variable = script.IndexOf("$env:DOTNET_gcServer = '0';", StringComparison.Ordinal);
+        Assert.InRange(variable, 0, start);
+        Assert.Contains("$env:DOTNET_GCConserveMemory = '5';", script);
+        Assert.DoesNotContain("BAD NAME", script);
     }
 
     [Fact]
