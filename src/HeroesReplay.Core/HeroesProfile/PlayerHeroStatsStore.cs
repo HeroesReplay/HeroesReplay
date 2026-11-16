@@ -124,8 +124,7 @@ public sealed class PlayerHeroStatsStore
             return;
         }
 
-        StoredPlayer player =
-            Read(battleTag, region)
+        StoredPlayer player = Read(battleTag, region)
             ?? new StoredPlayer { BattleTag = battleTag.Trim(), Region = region };
         player.Heroes ??= new Dictionary<string, StoredHero>(StringComparer.OrdinalIgnoreCase);
         if (lookup.Status is PlayerHeroLookupStatus.Private or PlayerHeroLookupStatus.NotFound)

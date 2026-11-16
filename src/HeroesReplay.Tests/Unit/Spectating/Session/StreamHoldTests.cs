@@ -151,9 +151,8 @@ public sealed class StreamHoldTests : IDisposable
         Assert.Equal((T0, true), (rig.Holds.First().Since.Value, rig.Holds.First().Reason != null));
         Assert.Null(rig.Holds.Last().Since);
         Assert.Single(rig.Log.Where(line => line.Level == LogLevel.Warning));
-        Assert.Contains(
-            rig.Log,
-            line => line.Level == LogLevel.Information && line.Text.Contains("ends after")
+        Assert.Contains(rig.Log, line =>
+            line.Level == LogLevel.Information && line.Text.Contains("ends after")
         );
     }
 

@@ -434,8 +434,7 @@ public class UpdateCommand : Command
         );
         var check = new ReleaseHealthCheck
         {
-            Health =
-                settings?.GetSection("ServiceHealth").Get<ServiceHealthSettings>()
+            Health = settings?.GetSection("ServiceHealth").Get<ServiceHealthSettings>()
                 ?? new ServiceHealthSettings(),
         };
         ReleaseHealthResult result = wait

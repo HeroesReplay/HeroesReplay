@@ -114,9 +114,8 @@ public sealed class RejectedKeyListingTests : IDisposable
         Assert.Single(Directory.GetFiles(Path.Combine(root, "Standard")));
         Assert.Equal(
             "The Heroes Profile probe passed. Replay listing resumes.",
-            Assert.Single(
-                log.Lines,
-                line => line.Contains("listing resumes", StringComparison.Ordinal)
+            Assert.Single(log.Lines, line =>
+                line.Contains("listing resumes", StringComparison.Ordinal)
             )
         );
     }
@@ -145,9 +144,8 @@ public sealed class RejectedKeyListingTests : IDisposable
         Assert.Equal(new[] { ReplayId, ReplayId + 1 }, http.Downloads);
         Assert.Equal(
             "Heroes Profile answered the replay list. Replay listing resumes.",
-            Assert.Single(
-                log.Lines,
-                line => line.Contains("listing resumes", StringComparison.Ordinal)
+            Assert.Single(log.Lines, line =>
+                line.Contains("listing resumes", StringComparison.Ordinal)
             )
         );
     }
@@ -299,14 +297,12 @@ public sealed class RejectedKeyListingTests : IDisposable
         var services = new ServiceCollection();
         services.AddLogging();
         services
-            .AddHttpClient(
-                HeroesProfileHttp.ClientName,
-                client => client.Timeout = Timeout.InfiniteTimeSpan
+            .AddHttpClient(HeroesProfileHttp.ClientName, client =>
+                client.Timeout = Timeout.InfiniteTimeSpan
             )
             .ConfigurePrimaryHttpMessageHandler(() => handler)
-            .AddResilienceHandler(
-                HeroesProfileHttp.ClientName,
-                builder => HeroesProfileHttp.Configure(builder, TimeSpan.Zero)
+            .AddResilienceHandler(HeroesProfileHttp.ClientName, builder =>
+                HeroesProfileHttp.Configure(builder, TimeSpan.Zero)
             );
         return services.BuildServiceProvider();
     }

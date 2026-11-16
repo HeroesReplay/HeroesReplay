@@ -68,13 +68,11 @@ public sealed class ObsCollectionRollbackTests : IDisposable
     {
         IReadOnlyList<string> notes = InstallFailedRelease(obsIsRunning: false);
         Assert.Contains("queue-browser", File.ReadAllText(Live));
-        Assert.Contains(
-            notes,
-            note =>
-                note.StartsWith(
-                    "OBS rollback: A rollback of this release puts back",
-                    StringComparison.Ordinal
-                )
+        Assert.Contains(notes, note =>
+            note.StartsWith(
+                "OBS rollback: A rollback of this release puts back",
+                StringComparison.Ordinal
+            )
         );
 
         ObsRollbackResult result = Rollback(obsIsRunning: false);
@@ -87,9 +85,8 @@ public sealed class ObsCollectionRollbackTests : IDisposable
         Assert.Equal(["rank-image"], Managed.Read(Live).Sources);
         Assert.Null(Managed.ReadRollback());
         // The failed release's collection is kept as a backup too.
-        Assert.Contains(
-            ObsFileTransaction.Backups(Managed.BackupDirectory, Live),
-            backup => File.ReadAllText(backup).Contains("queue-browser", StringComparison.Ordinal)
+        Assert.Contains(ObsFileTransaction.Backups(Managed.BackupDirectory, Live), backup =>
+            File.ReadAllText(backup).Contains("queue-browser", StringComparison.Ordinal)
         );
 
         // apply-release.ps1 then runs the restored build's install-obs: it keeps the file.
@@ -187,13 +184,11 @@ public sealed class ObsCollectionRollbackTests : IDisposable
         InstallFailedRelease(obsIsRunning: false);
         byte[] failed = File.ReadAllBytes(Live);
 
-        ObsRollbackResult result = Rollback(
-            obsIsRunning: true,
-            () =>
-                throw new ObsUnavailableException(
-                    ObsUnavailableException.Unreachable,
-                    "OBS did not answer."
-                )
+        ObsRollbackResult result = Rollback(obsIsRunning: true, () =>
+            throw new ObsUnavailableException(
+                ObsUnavailableException.Unreachable,
+                "OBS did not answer."
+            )
         );
 
         Assert.Equal(ObsRollbackOutcome.Deferred, result.Outcome);
@@ -384,10 +379,8 @@ public sealed class ObsCollectionRollbackTests : IDisposable
             "{\"name\":\"HeroesReplay\",\"sources\":["
                 + string.Join(
                     ",",
-                    Array.ConvertAll(
-                        sources,
-                        name =>
-                            "{\"name\":\"" + name + "\",\"id\":\"image_source\",\"settings\":{}}"
+                    Array.ConvertAll(sources, name =>
+                        "{\"name\":\"" + name + "\",\"id\":\"image_source\",\"settings\":{}}"
                     )
                 )
                 + "]}"

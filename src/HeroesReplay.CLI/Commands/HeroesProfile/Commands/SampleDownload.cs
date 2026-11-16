@@ -55,8 +55,8 @@ public sealed class SampleDownload
 
     public SampleDownload(IHeroesProfileService heroesProfile, ILogger logger, TextWriter output)
     {
-        this.heroesProfile =
-            heroesProfile ?? throw new ArgumentNullException(nameof(heroesProfile));
+        this.heroesProfile = heroesProfile
+            ?? throw new ArgumentNullException(nameof(heroesProfile));
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
         this.output = output ?? throw new ArgumentNullException(nameof(output));
     }

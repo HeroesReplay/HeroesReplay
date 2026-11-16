@@ -260,9 +260,8 @@ public class TeamKillClipTests
             deaths.Add(Death(start + 2, "Valla", "Chromie"));
         }
 
-        IReadOnlyList<TeamKillClip> clips = TeamKillClips.Select(
-            deaths,
-            shown: clip => clip.FirstDeathSecond != 100
+        IReadOnlyList<TeamKillClip> clips = TeamKillClips.Select(deaths, shown: clip =>
+            clip.FirstDeathSecond != 100
         );
 
         Assert.Equal(

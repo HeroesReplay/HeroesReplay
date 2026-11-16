@@ -175,15 +175,11 @@ public sealed class DependencyInstaller
     }
 
     private static DependencyInstallDecision Decide(DependencyPin pin, string target) =>
-        DependencyInstallDecision.Decide(
-            pin,
-            DependencyInstallRecord.Read(target),
-            name =>
-            {
-                var file = new FileInfo(Path.Combine(target, name));
-                return file.Exists ? file.Length : null;
-            }
-        );
+        DependencyInstallDecision.Decide(pin, DependencyInstallRecord.Read(target), name =>
+        {
+            var file = new FileInfo(Path.Combine(target, name));
+            return file.Exists ? file.Length : null;
+        });
 
     /// <summary>A dropped connection or a server error is tried again; a hash mismatch is not.</summary>
     private async Task DownloadWithRetryAsync(

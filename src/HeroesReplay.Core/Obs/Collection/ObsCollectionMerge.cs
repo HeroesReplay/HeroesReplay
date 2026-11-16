@@ -530,13 +530,12 @@ public static class ObsCollectionMerge
 
         private void AddFilter(string sourceName, string filterName)
         {
-            JsonObject source =
-                Find(live, sourceName).Source ?? throw Missing("source", sourceName);
+            JsonObject source = Find(live, sourceName).Source
+                ?? throw Missing("source", sourceName);
             JsonArray templateFilters =
                 Find(template, sourceName).Source?["filters"] as JsonArray
                 ?? throw Missing("template filters of", sourceName);
-            JsonObject filter =
-                Filter(template, sourceName, filterName)
+            JsonObject filter = Filter(template, sourceName, filterName)
                 ?? throw Missing("template filter", filterName);
             if (source["filters"] is not JsonArray filters)
             {
@@ -583,10 +582,10 @@ public static class ObsCollectionMerge
             int occurrence
         )
         {
-            JsonArray templateItems =
-                Items(templateScene) ?? throw Missing("template items of", NameOf(templateScene));
-            JsonObject item =
-                Nth(templateItems, source, occurrence) ?? throw Missing("template item", source);
+            JsonArray templateItems = Items(templateScene)
+                ?? throw Missing("template items of", NameOf(templateScene));
+            JsonObject item = Nth(templateItems, source, occurrence)
+                ?? throw Missing("template item", source);
             if (liveScene["settings"] is not JsonObject settings)
             {
                 settings = [];
@@ -695,8 +694,7 @@ public static class ObsCollectionMerge
         /// <summary>Sets a dotted property to the template's value, making the objects on the way.</summary>
         private static void Set(JsonObject liveEntity, JsonObject templateEntity, string property)
         {
-            List<string> path =
-                Resolve(templateEntity, property)
+            List<string> path = Resolve(templateEntity, property)
                 ?? throw new InvalidOperationException("the template has no " + property);
             JsonNode value = At(templateEntity, path);
             JsonObject current = liveEntity;

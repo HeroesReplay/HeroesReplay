@@ -138,16 +138,10 @@ public sealed class ObsLiveCollectionSwapTests : IDisposable
         var onSpare = new FakeCollectionSwitch(Scenes, "HeroesReplay-next", "HeroesReplay");
         var onMain = new FakeCollectionSwitch(Scenes, "HeroesReplay", "HeroesReplay-next");
 
-        ObsLiveSwapResult recovered = ObsLiveCollectionSwap.Recover(
-            onSpare,
-            "HeroesReplay",
-            _ => { }
-        );
-        ObsLiveSwapResult untouched = ObsLiveCollectionSwap.Recover(
-            onMain,
-            "HeroesReplay",
-            _ => { }
-        );
+        ObsLiveSwapResult recovered = ObsLiveCollectionSwap.Recover(onSpare, "HeroesReplay", _ =>
+        { });
+        ObsLiveSwapResult untouched = ObsLiveCollectionSwap.Recover(onMain, "HeroesReplay", _ =>
+        { });
 
         Assert.False(recovered.Stranded);
         Assert.Equal("HeroesReplay", onSpare.Current);

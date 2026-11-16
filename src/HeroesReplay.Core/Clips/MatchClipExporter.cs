@@ -124,14 +124,16 @@ public static class MatchClipExporter
 
             ClipCoverage coverage = ClipCamera.Coverage(clip, camera, positions, settings);
             logger?.LogInformation(
-                "Not on camera: {Kind} {Hero} at HUD {First}-{Last}, shown {Shown}/{Seconds}s, end shown {Moment}. Not cut.",
+                "Not on camera: {Kind} {Hero} at HUD {First}-{Last}, shown {Shown}/{Seconds}s, end shown {Moment}, blows on screen {BlowsShown}/{Blows}. Not cut.",
                 clip.Kind,
                 clip.Hero,
                 clip.FirstDeathSecond,
                 clip.LastDeathSecond,
                 coverage.Shown,
                 coverage.Seconds,
-                coverage.Moment
+                coverage.Moment,
+                coverage.BlowsShown,
+                coverage.Blows
             );
             return false;
         };

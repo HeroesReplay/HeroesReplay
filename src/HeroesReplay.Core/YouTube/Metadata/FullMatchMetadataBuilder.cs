@@ -219,9 +219,8 @@ public static class FullMatchMetadataBuilder
         Highlight highlight =
             highlights == null || focusTitle != null
                 ? null
-                : HighlightPicker.Default.Pick(
-                    highlights,
-                    candidate => !namedLead || candidate.Hero == null
+                : HighlightPicker.Default.Pick(highlights, candidate =>
+                    !namedLead || candidate.Hero == null
                 );
         string highlightTitle = HighlightTitle.Compose(
             highlight,
@@ -239,8 +238,7 @@ public static class FullMatchMetadataBuilder
             highlight = null;
         }
 
-        string title =
-            focusTitle
+        string title = focusTitle
             ?? highlightTitle
             ?? TitleFor(
                 titles,

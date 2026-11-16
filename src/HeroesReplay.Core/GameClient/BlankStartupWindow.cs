@@ -90,10 +90,8 @@ public static class BlankStartupWindow
         );
         try
         {
-            return Measure(
-                frame.Width,
-                frame.Height,
-                (x, y) => Marshal.ReadInt32(data.Scan0, y * data.Stride + x * 4)
+            return Measure(frame.Width, frame.Height, (x, y) =>
+                Marshal.ReadInt32(data.Scan0, y * data.Stride + x * 4)
             );
         }
         finally

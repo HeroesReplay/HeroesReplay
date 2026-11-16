@@ -127,9 +127,8 @@ public class PredictionVerdictTests
         {
             PredictionVerdictLine line = PredictionVerdict.Compose(report, null, new Random(seed));
 
-            Assert.Contains(
-                PredictionVerdict.StreakCallouts,
-                template => template == line.Templates[1]
+            Assert.Contains(PredictionVerdict.StreakCallouts, template =>
+                template == line.Templates[1]
             );
             Assert.Contains("Ana", line.Text, StringComparison.Ordinal);
             Assert.Contains("4", line.Text, StringComparison.Ordinal);
@@ -245,9 +244,8 @@ public class PredictionVerdictTests
             PredictionVerdict.Fill(template, values).Length
         );
 
-        Assert.All(
-            openings.Concat(callouts),
-            template => Assert.True(PredictionVerdict.Fits(template, values), template)
+        Assert.All(openings.Concat(callouts), template =>
+            Assert.True(PredictionVerdict.Fits(template, values), template)
         );
         Assert.True(
             longestOpening + 1 + longestCallout <= PredictionVerdict.ChatLimit,

@@ -286,10 +286,9 @@ public static class ObsValidator
         {
             if (!read.TryGetValue(scene, out IReadOnlyList<ObsSceneItemInfo> items))
             {
-                items =
-                    ObsInspector.SceneItems(
-                        session.Get("GetSceneItemList", new JObject { ["sceneName"] = scene })
-                    ) ?? [];
+                items = ObsInspector.SceneItems(
+                    session.Get("GetSceneItemList", new JObject { ["sceneName"] = scene })
+                ) ?? [];
                 read[scene] = items;
             }
 
@@ -1357,8 +1356,8 @@ public static class ObsValidator
         List<ObsFinding> findings
     )
     {
-        IReadOnlyDictionary<string, IReadOnlyList<ObsFilterInfo>> packagedFilters =
-            packaged.Filters ?? new Dictionary<string, IReadOnlyList<ObsFilterInfo>>();
+        IReadOnlyDictionary<string, IReadOnlyList<ObsFilterInfo>> packagedFilters = packaged.Filters
+            ?? new Dictionary<string, IReadOnlyList<ObsFilterInfo>>();
         IEnumerable<string> browserSources = (packaged.Kinds ?? new Dictionary<string, string>())
             .Where(pair => string.Equals(pair.Value, BrowserSourceKind, StringComparison.Ordinal))
             .Select(pair => pair.Key);

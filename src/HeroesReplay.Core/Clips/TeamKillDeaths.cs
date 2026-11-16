@@ -65,7 +65,8 @@ public static class TeamKillDeaths
                         unit.TimeSpanDied.Value.FloorSeconds(),
                         killerName,
                         victim,
-                        killerKey
+                        killerKey,
+                        indexOf[player]
                     )
                 );
             }

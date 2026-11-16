@@ -15,9 +15,8 @@ public class TwitchTokenProbeTests
     [Fact]
     public void ARoleWithChatRedemptionsAndPredictionsOff_DoesNotUseTheProbe()
     {
-        var probe = new TwitchTokenProbe(
-            new TwitchSettings { AccessToken = Token },
-            (_, _) => Task.FromResult(new TwitchTokenValidation(200, "chat:read"))
+        var probe = new TwitchTokenProbe(new TwitchSettings { AccessToken = Token }, (_, _) =>
+            Task.FromResult(new TwitchTokenValidation(200, "chat:read"))
         );
 
         Assert.Contains("are off", probe.NotUsedReason);
@@ -62,12 +61,9 @@ public class TwitchTokenProbeTests
     }
 
     private static TwitchTokenProbe Probe(TwitchTokenValidation answer) =>
-        new(
-            new TwitchSettings { AccessToken = Token, EnableChatBot = true },
-            (token, _) =>
-            {
-                Assert.Equal(Token, token);
-                return Task.FromResult(answer);
-            }
-        );
+        new(new TwitchSettings { AccessToken = Token, EnableChatBot = true }, (token, _) =>
+        {
+            Assert.Equal(Token, token);
+            return Task.FromResult(answer);
+        });
 }

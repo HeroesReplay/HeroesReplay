@@ -37,9 +37,8 @@ public class ObsValidatorTests : IDisposable
         Assert.Null(validation.Code);
         Assert.Equal(0, validation.Errors);
         Assert.Equal(FakeObs.RepoObsDirectory(), validation.AssetRoot);
-        Assert.All(
-            validation.Findings,
-            finding => Assert.Equal(ObsValidator.RuntimeFileMissing, finding.Code)
+        Assert.All(validation.Findings, finding =>
+            Assert.Equal(ObsValidator.RuntimeFileMissing, finding.Code)
         );
         Assert.Contains(validation.Findings, finding => finding.Subject == "current-replay.file");
     }
@@ -444,22 +443,17 @@ public class ObsValidatorTests : IDisposable
         );
 
         Assert.True(validation.Ok, Describe(validation));
-        Assert.DoesNotContain(
-            validation.Findings,
-            finding => finding.Code is ObsValidator.FileMissing or ObsValidator.RuntimeFileMissing
+        Assert.DoesNotContain(validation.Findings, finding =>
+            finding.Code is ObsValidator.FileMissing or ObsValidator.RuntimeFileMissing
         );
-        Assert.Contains(
-            validation.Findings,
-            finding =>
-                finding.Code == ObsValidator.FileUnverifiable
-                && finding.Subject == "current-replay.file"
+        Assert.Contains(validation.Findings, finding =>
+            finding.Code == ObsValidator.FileUnverifiable
+            && finding.Subject == "current-replay.file"
         );
-        Assert.Contains(
-            validation.Findings,
-            finding =>
-                finding.Code == ObsValidator.FileUnverifiable
-                && finding.Subject != "current-replay.file"
-                && finding.Message.Contains(@"C:\heroesreplay\app\obs", StringComparison.Ordinal)
+        Assert.Contains(validation.Findings, finding =>
+            finding.Code == ObsValidator.FileUnverifiable
+            && finding.Subject != "current-replay.file"
+            && finding.Message.Contains(@"C:\heroesreplay\app\obs", StringComparison.Ordinal)
         );
     }
 
@@ -559,9 +553,8 @@ public class ObsValidatorTests : IDisposable
         FakeObs obs = FakeObs.Installed(data);
         obs.WebSocketVersion = "6.0.0";
 
-        Assert.DoesNotContain(
-            Validate(obs).Findings,
-            finding => finding.Code == ObsValidator.RequestUnavailable
+        Assert.DoesNotContain(Validate(obs).Findings, finding =>
+            finding.Code == ObsValidator.RequestUnavailable
         );
     }
 
@@ -614,9 +607,8 @@ public class ObsValidatorTests : IDisposable
         obs.Video["outputWidth"] = 1280;
         obs.Video["outputHeight"] = 720;
 
-        Assert.DoesNotContain(
-            Validate(obs).Findings,
-            finding => finding.Code == ObsValidator.CanvasMismatch
+        Assert.DoesNotContain(Validate(obs).Findings, finding =>
+            finding.Code == ObsValidator.CanvasMismatch
         );
     }
 
@@ -707,9 +699,8 @@ public class ObsValidatorTests : IDisposable
             finding.Message,
             StringComparison.Ordinal
         );
-        Assert.DoesNotContain(
-            validation.Findings,
-            found => found.Code == ObsValidator.RecordingFormat
+        Assert.DoesNotContain(validation.Findings, found =>
+            found.Code == ObsValidator.RecordingFormat
         );
         Assert.True(validation.Ok, Describe(validation));
     }
@@ -723,13 +714,11 @@ public class ObsValidatorTests : IDisposable
             ObsProfileInfo.Read(obs.Open(null, null)).RecordsCrashSafe,
             "FakeObs answers as the packaged basic.ini sets it."
         );
-        Assert.DoesNotContain(
-            Validate(obs).Findings,
-            finding =>
-                finding.Code
-                    is ObsValidator.RecordingNotCrashSafe
-                        or ObsValidator.RecordingFormat
-                        or ObsValidator.RecordingFormatInvalid
+        Assert.DoesNotContain(Validate(obs).Findings, finding =>
+            finding.Code
+                is ObsValidator.RecordingNotCrashSafe
+                    or ObsValidator.RecordingFormat
+                    or ObsValidator.RecordingFormatInvalid
         );
     }
 
@@ -742,9 +731,8 @@ public class ObsValidatorTests : IDisposable
         ObsValidation validation = Validate(obs);
 
         Single(validation, ObsValidator.RecordingFormat);
-        Assert.DoesNotContain(
-            validation.Findings,
-            finding => finding.Code == ObsValidator.RecordingNotCrashSafe
+        Assert.DoesNotContain(validation.Findings, finding =>
+            finding.Code == ObsValidator.RecordingNotCrashSafe
         );
     }
 
@@ -851,9 +839,8 @@ public class ObsValidatorTests : IDisposable
 
         ObsValidation validation = Validate(obs);
 
-        Assert.DoesNotContain(
-            validation.Findings,
-            finding => finding.Code == ObsValidator.StreamKeyMissing
+        Assert.DoesNotContain(validation.Findings, finding =>
+            finding.Code == ObsValidator.StreamKeyMissing
         );
         Assert.DoesNotContain(obs.Requests, request => request == "GetStreamServiceSettings");
     }
@@ -902,9 +889,8 @@ public class ObsValidatorTests : IDisposable
             }
         );
 
-        Assert.DoesNotContain(
-            Validate(obs).Findings,
-            finding => finding.Code == ObsValidator.FilterStale
+        Assert.DoesNotContain(Validate(obs).Findings, finding =>
+            finding.Code == ObsValidator.FilterStale
         );
     }
 
@@ -1006,9 +992,8 @@ public class ObsValidatorTests : IDisposable
         item["pos"]["y"] = 1060 - ObsPlacement.PixelTolerance;
         item["scale"]["x"] = (double)item["scale"]["x"] + ObsPlacement.ScaleTolerance / 2;
 
-        Assert.DoesNotContain(
-            Validate(obs).Findings,
-            finding => finding.Code == ObsValidator.SceneItemMisplaced
+        Assert.DoesNotContain(Validate(obs).Findings, finding =>
+            finding.Code == ObsValidator.SceneItemMisplaced
         );
     }
 
@@ -1070,9 +1055,8 @@ public class ObsValidatorTests : IDisposable
 
         ObsValidation validation = Validate(obs);
 
-        Assert.DoesNotContain(
-            validation.Findings,
-            finding => finding.Code == ObsValidator.SceneItemMisplaced
+        Assert.DoesNotContain(validation.Findings, finding =>
+            finding.Code == ObsValidator.SceneItemMisplaced
         );
         Assert.True(validation.Ok, Describe(validation));
     }
@@ -1104,9 +1088,8 @@ public class ObsValidatorTests : IDisposable
         obs.Video["outputHeight"] = 1080;
         obs.ProfileParameters[("SimpleOutput", "VBitrate")] = "6000";
 
-        Assert.DoesNotContain(
-            Validate(obs).Findings,
-            finding => finding.Code == ObsValidator.BitrateLow
+        Assert.DoesNotContain(Validate(obs).Findings, finding =>
+            finding.Code == ObsValidator.BitrateLow
         );
     }
 
@@ -1123,9 +1106,8 @@ public class ObsValidatorTests : IDisposable
         foreach (FakeObs obs in new[] { simple, advanced })
         {
             ObsValidation validation = Validate(obs);
-            Assert.DoesNotContain(
-                validation.Findings,
-                finding => finding.Code == ObsValidator.BitrateLow
+            Assert.DoesNotContain(validation.Findings, finding =>
+                finding.Code == ObsValidator.BitrateLow
             );
             Assert.True(validation.Ok, Describe(validation));
         }
@@ -1188,9 +1170,8 @@ public class ObsValidatorTests : IDisposable
         Assert.Single(validation.Findings, finding => finding.Code == code);
 
     private static ObsFinding Misplaced(ObsValidation validation, string subject) =>
-        Assert.Single(
-            validation.Findings,
-            finding => finding.Code == ObsValidator.SceneItemMisplaced && finding.Subject == subject
+        Assert.Single(validation.Findings, finding =>
+            finding.Code == ObsValidator.SceneItemMisplaced && finding.Subject == subject
         );
 
     private static string Describe(ObsValidation validation) =>

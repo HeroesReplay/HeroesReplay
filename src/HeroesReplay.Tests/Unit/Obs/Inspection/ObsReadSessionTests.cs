@@ -15,9 +15,8 @@ public class ObsReadSessionTests
     public void AllowList_HasOnlyGetRequests()
     {
         Assert.NotEmpty(ObsReadOnly.Requests);
-        Assert.All(
-            ObsReadOnly.Requests,
-            request => Assert.StartsWith("Get", request, StringComparison.Ordinal)
+        Assert.All(ObsReadOnly.Requests, request =>
+            Assert.StartsWith("Get", request, StringComparison.Ordinal)
         );
     }
 

@@ -48,8 +48,8 @@ public sealed class HeroesProfileApiProbe : IServiceDependencyProbe
     )
     {
         this.settings = settings;
-        this.readMaxReplayId =
-            readMaxReplayId ?? throw new ArgumentNullException(nameof(readMaxReplayId));
+        this.readMaxReplayId = readMaxReplayId
+            ?? throw new ArgumentNullException(nameof(readMaxReplayId));
     }
 
     public string Dependency => DependencyName;

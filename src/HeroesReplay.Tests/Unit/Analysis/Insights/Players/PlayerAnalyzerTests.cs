@@ -67,9 +67,8 @@ public class PlayerAnalyzerTests
         Standout teamKills = insights.Standouts[2];
         Assert.Equal(StandoutKind.TeamKillLeader, teamKills.Kind);
         Assert.Equal("Genji", teamKills.Player.Hero);
-        Assert.DoesNotContain(
-            insights.Standouts,
-            standout => standout.Player.IsAi || standout.Player.Hero == "Muradin"
+        Assert.DoesNotContain(insights.Standouts, standout =>
+            standout.Player.IsAi || standout.Player.Hero == "Muradin"
         );
         Assert.Equal("Li-Ming", insights.Mvp.Hero);
         Assert.Equal("8/0/9", insights.Mvp.Kda);

@@ -45,16 +45,13 @@ public class YouTubeEntryBuilderTests
             entry.Title,
             System.StringComparison.OrdinalIgnoreCase
         );
-        Assert.Contains(
-            entry.DescriptionLines,
-            line => line.Contains("replayID=65389750", System.StringComparison.Ordinal)
+        Assert.Contains(entry.DescriptionLines, line =>
+            line.Contains("replayID=65389750", System.StringComparison.Ordinal)
         );
         Assert.Equal("public", entry.PrivacyStatus);
-        Assert.DoesNotContain(
-            entry.DescriptionLines,
-            line =>
-                line.StartsWith("Blue:", System.StringComparison.Ordinal)
-                || line.StartsWith("Red:", System.StringComparison.Ordinal)
+        Assert.DoesNotContain(entry.DescriptionLines, line =>
+            line.StartsWith("Blue:", System.StringComparison.Ordinal)
+            || line.StartsWith("Red:", System.StringComparison.Ordinal)
         );
     }
 
@@ -94,9 +91,8 @@ public class YouTubeEntryBuilderTests
         Assert.Equal("Ranged Assassin", entry.HeroFocus.Role);
         Assert.Equal("Teleport Build", entry.HeroFocus.Build);
         Assert.DoesNotContain("focus", entry.Title, System.StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain(
-            entry.DescriptionLines,
-            line => line.StartsWith("Featured:", System.StringComparison.Ordinal)
+        Assert.DoesNotContain(entry.DescriptionLines, line =>
+            line.StartsWith("Featured:", System.StringComparison.Ordinal)
         );
         Assert.Null(
             YouTubeEntryBuilder
@@ -191,22 +187,18 @@ public class YouTubeEntryBuilderTests
             "Red: Lunara (AI), Muradin (Plain), NoHero, Illidan",
             entry.DescriptionLines
         );
-        Assert.DoesNotContain(
-            entry.DescriptionLines,
-            line =>
-                line.Contains("Abathur", System.StringComparison.Ordinal)
-                || line.Contains("#55", System.StringComparison.Ordinal)
-                || line.Contains("#0", System.StringComparison.Ordinal)
+        Assert.DoesNotContain(entry.DescriptionLines, line =>
+            line.Contains("Abathur", System.StringComparison.Ordinal)
+            || line.Contains("#55", System.StringComparison.Ordinal)
+            || line.Contains("#0", System.StringComparison.Ordinal)
         );
-        int roster = System.Array.FindIndex(
-            entry.DescriptionLines,
-            line => line.StartsWith("Blue:", System.StringComparison.Ordinal)
+        int roster = System.Array.FindIndex(entry.DescriptionLines, line =>
+            line.StartsWith("Blue:", System.StringComparison.Ordinal)
         );
         Assert.Equal("Twitch: https://twitch.tv/saltysadism", entry.DescriptionLines[0]);
         Assert.True(roster > 0);
-        Assert.DoesNotContain(
-            entry.DescriptionLines,
-            line => line.Contains("Hashtags:", System.StringComparison.Ordinal)
+        Assert.DoesNotContain(entry.DescriptionLines, line =>
+            line.Contains("Hashtags:", System.StringComparison.Ordinal)
         );
         Assert.Equal(FullMatchMetadataBuilder.TemplateVersion, entry.TemplateVersion);
     }
@@ -228,9 +220,8 @@ public class YouTubeEntryBuilderTests
 
         Assert.Equal(FullMatchMetadataBuilder.TemplateVersion, entry.TemplateVersion);
         Assert.Contains("Full match.", entry.DescriptionLines);
-        Assert.DoesNotContain(
-            entry.DescriptionLines,
-            line => line.Contains('#', System.StringComparison.Ordinal)
+        Assert.DoesNotContain(entry.DescriptionLines, line =>
+            line.Contains('#', System.StringComparison.Ordinal)
         );
     }
 
@@ -339,9 +330,8 @@ public class YouTubeEntryBuilderTests
         Assert.Equal("Diablo", YouTubeVideoFacts.FocusHero(entry.DescriptionLines));
         Assert.Equal("Diablo", entry.Hero);
         Assert.Contains("Diablo", entry.Heroes);
-        Assert.DoesNotContain(
-            entry.DescriptionLines,
-            line => line.Contains("Диабло", System.StringComparison.Ordinal)
+        Assert.DoesNotContain(entry.DescriptionLines, line =>
+            line.Contains("Диабло", System.StringComparison.Ordinal)
         );
         Assert.DoesNotContain("Диабло", entry.Title, System.StringComparison.Ordinal);
     }
@@ -371,9 +361,8 @@ public class YouTubeEntryBuilderTests
         Assert.True(withCatalog.Requested);
         Assert.Null(withCatalog.Hero);
         Assert.Null(YouTubeVideoFacts.FocusHero(withCatalog.DescriptionLines));
-        Assert.DoesNotContain(
-            withCatalog.DescriptionLines,
-            line => line.StartsWith("Featured:", System.StringComparison.Ordinal)
+        Assert.DoesNotContain(withCatalog.DescriptionLines, line =>
+            line.StartsWith("Featured:", System.StringComparison.Ordinal)
         );
     }
 
@@ -426,13 +415,11 @@ public class YouTubeEntryBuilderTests
 
         Assert.Equal("Illidan focus - Dragon Shire - Storm League - Diamond 3 - 1", entry.Title);
         Assert.DoesNotContain("MMR", entry.Title, System.StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain(
-            entry.DescriptionLines,
-            line => line.Contains("MMR", System.StringComparison.OrdinalIgnoreCase)
+        Assert.DoesNotContain(entry.DescriptionLines, line =>
+            line.Contains("MMR", System.StringComparison.OrdinalIgnoreCase)
         );
-        Assert.Contains(
-            entry.DescriptionLines,
-            line => line.Contains("Requested by: ViewerZZ", System.StringComparison.Ordinal)
+        Assert.Contains(entry.DescriptionLines, line =>
+            line.Contains("Requested by: ViewerZZ", System.StringComparison.Ordinal)
         );
         Assert.Contains("Illidan", entry.Heroes);
     }
@@ -466,9 +453,8 @@ public class YouTubeEntryBuilderTests
         YouTubeEntry entry = YouTubeEntryBuilder.Create(loaded, new YouTubeSettings());
 
         Assert.True(entry.Requested);
-        Assert.Contains(
-            entry.DescriptionLines,
-            line => line.Contains("Requested by: Zemill", System.StringComparison.Ordinal)
+        Assert.Contains(entry.DescriptionLines, line =>
+            line.Contains("Requested by: Zemill", System.StringComparison.Ordinal)
         );
         Assert.DoesNotContain("Zemill", entry.Title, System.StringComparison.Ordinal);
     }

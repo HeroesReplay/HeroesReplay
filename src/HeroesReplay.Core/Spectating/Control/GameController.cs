@@ -104,18 +104,18 @@ public class GameController : IGameController
     )
     {
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        this.clientProcess =
-            clientProcess ?? throw new ArgumentNullException(nameof(clientProcess));
+        this.clientProcess = clientProcess
+            ?? throw new ArgumentNullException(nameof(clientProcess));
         this.context = context ?? throw new ArgumentNullException(nameof(context));
         this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
-        this.obsController =
-            obsController ?? throw new ArgumentNullException(nameof(obsController));
+        this.obsController = obsController
+            ?? throw new ArgumentNullException(nameof(obsController));
         this.capture = capture ?? throw new ArgumentNullException(nameof(capture));
         this.replayOpener = replayOpener ?? throw new ArgumentNullException(nameof(replayOpener));
-        this.clientConfigurator =
-            clientConfigurator ?? throw new ArgumentNullException(nameof(clientConfigurator));
-        this.tokenProvider =
-            tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
+        this.clientConfigurator = clientConfigurator
+            ?? throw new ArgumentNullException(nameof(clientConfigurator));
+        this.tokenProvider = tokenProvider
+            ?? throw new ArgumentNullException(nameof(tokenProvider));
     }
 
     public async Task<ClientHoldReason> LaunchAsync()
@@ -630,8 +630,8 @@ public class GameController : IGameController
         );
         bool checkedLaunchFile = false;
         int defaultHudCorrections = 0;
-        string expectedInterface =
-            settings.Client?.ReplayInterface ?? ClientSettings.AhliObsInterfaceFile;
+        string expectedInterface = settings.Client?.ReplayInterface
+            ?? ClientSettings.AhliObsInterfaceFile;
 
         // A Wait step is bounded (#249): it re-checks the client every pass and recovers it once
         // when nothing usable has been on screen for Spectate:LaunchWaitLimit.
@@ -1701,9 +1701,8 @@ public class GameController : IGameController
     /// (<see cref="MatchClock.ReadRunningAsync"/>).
     /// </summary>
     public Task<TimeSpan?> TryReadRunningMatchClockAsync() =>
-        MatchClock.ReadRunningAsync(
-            ReadMatchClockSample,
-            () => Task.Delay(MatchClock.RunningProbe)
+        MatchClock.ReadRunningAsync(ReadMatchClockSample, () =>
+            Task.Delay(MatchClock.RunningProbe)
         );
 
     /// <summary>
@@ -1728,9 +1727,8 @@ public class GameController : IGameController
 
         try
         {
-            LoadingScreenSample sample = clientProcess.Read(
-                process,
-                client => loadingScreen.Read(client)
+            LoadingScreenSample sample = clientProcess.Read(process, client =>
+                loadingScreen.Read(client)
             );
             if (sample.Screen != lastScreen.Screen || sample.MenuSeen != lastScreen.MenuSeen)
             {
@@ -1766,9 +1764,8 @@ public class GameController : IGameController
 
         try
         {
-            ClientScreenSample sample = clientProcess.Read(
-                process,
-                client => clientScreens.Read(client)
+            ClientScreenSample sample = clientProcess.Read(process, client =>
+                clientScreens.Read(client)
             );
             if (
                 sample.Screen != lastClientScreen.Screen
@@ -1806,9 +1803,8 @@ public class GameController : IGameController
 
         try
         {
-            MatchClockSample sample = clientProcess.Read(
-                process,
-                client => matchClock.Read(client)
+            MatchClockSample sample = clientProcess.Read(process, client =>
+                matchClock.Read(client)
             );
             lastClockReason = sample.Reason;
             return sample;

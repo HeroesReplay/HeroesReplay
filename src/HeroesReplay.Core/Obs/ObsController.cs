@@ -53,8 +53,8 @@ public class ObsController : IObsController
         this.context = context ?? throw new ArgumentNullException(nameof(context));
         this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
         this.obs = obs ?? throw new ArgumentNullException(nameof(obs));
-        this.tokenProvider =
-            tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
+        this.tokenProvider = tokenProvider
+            ?? throw new ArgumentNullException(nameof(tokenProvider));
         var socket = new ObsWebsocketRecordSocket(this.obs);
         var arm = new ObsStreamArm();
         coordinator = new ObsCoordinator(
@@ -317,11 +317,8 @@ public class ObsController : IObsController
         string reason = SessionMedia.HasRequestor(context.Current?.LoadedReplay)
             ? "viewer request"
             : "every replay";
-        return coordinator.StartRecording(
-            ShouldRecord,
-            CurrentReplayId,
-            reason,
-            () => PrepareRecordingOutput()
+        return coordinator.StartRecording(ShouldRecord, CurrentReplayId, reason, () =>
+            PrepareRecordingOutput()
         );
     }
 

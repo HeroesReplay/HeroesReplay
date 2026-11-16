@@ -119,8 +119,7 @@ internal sealed class ObsWebsocketRecordSocket : IObsSession
 
     public ObsStreamSample ReadStream()
     {
-        OutputStatus status =
-            obs.GetStreamStatus()
+        OutputStatus status = obs.GetStreamStatus()
             ?? throw new InvalidOperationException("GetStreamStatus returned no status.");
         return new ObsStreamSample(status.IsActive, status.IsReconnecting, status.BytesSent);
     }

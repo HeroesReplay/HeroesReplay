@@ -818,9 +818,8 @@ public static class ServiceSupervisor
         DateOnly today = DateOnly.FromDateTime(
             TimeZoneInfo.ConvertTime(now, time.LocalTimeZone).DateTime
         );
-        report = ServiceHealthClassifier.WithLogPaths(
-            report,
-            role => ServiceRoleLog.LatestPath(logs, role, today)
+        report = ServiceHealthClassifier.WithLogPaths(report, role =>
+            ServiceRoleLog.LatestPath(logs, role, today)
         );
         report = ServiceHealthClassifier.WithSupervisor(
             report,
@@ -1078,8 +1077,8 @@ public static class ServiceSupervisor
         }
 
         // Above the memory or commit limit only, whoever owns them (#399). Report only.
-        IReadOnlyList<MachineProcessMemory> top =
-            machine.TopConsumers ?? Array.Empty<MachineProcessMemory>();
+        IReadOnlyList<MachineProcessMemory> top = machine.TopConsumers
+            ?? Array.Empty<MachineProcessMemory>();
         if (top.Count > 0)
         {
             output.WriteLine(

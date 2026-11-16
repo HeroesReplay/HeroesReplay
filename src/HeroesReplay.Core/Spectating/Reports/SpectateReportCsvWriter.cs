@@ -42,8 +42,8 @@ public class SpectateReportCsvWriter : ISpectateReportWriter
         this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
         this.provider = provider ?? throw new ArgumentNullException(nameof(provider));
         this.analyzer = analyzer ?? throw new ArgumentNullException(nameof(analyzer));
-        this.tokenProvider =
-            tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
+        this.tokenProvider = tokenProvider
+            ?? throw new ArgumentNullException(nameof(tokenProvider));
     }
 
     public async Task OutputReportAsync()

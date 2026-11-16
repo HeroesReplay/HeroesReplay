@@ -175,9 +175,8 @@ public sealed class UploaderPassTests : IDisposable
 
         Assert.True(File.Exists(clip));
         // The clip is the only recording left, and the pass counts it as waiting for the cap.
-        Assert.Contains(
-            log.Lines,
-            line => line.StartsWith("1 recording(s) wait", StringComparison.Ordinal)
+        Assert.Contains(log.Lines, line =>
+            line.StartsWith("1 recording(s) wait", StringComparison.Ordinal)
         );
 
         YouTubeUploader uploader(AppSettings s) => Uploader(s);
@@ -379,9 +378,8 @@ public sealed class UploaderPassTests : IDisposable
         await uploader.RunUploadPassAsync();
         timer.Stop();
 
-        Assert.Single(
-            log.Lines,
-            line => line.StartsWith("Upload of") && line.Contains("publication-full")
+        Assert.Single(log.Lines, line =>
+            line.StartsWith("Upload of") && line.Contains("publication-full")
         );
         Assert.Contains(
             "Waiting: publication-full 1",

@@ -61,12 +61,10 @@ public sealed class ObsCrashSentinelTests : IDisposable
                 .LastWriteUtc
         );
         Assert.Equal(2, logger.Entries.Count(e => e.Level == LogLevel.Information));
-        Assert.Contains(
-            logger.Entries,
-            e =>
-                e.Level == LogLevel.Information
-                && e.Message.Contains("run_81b110f2", StringComparison.Ordinal)
-                && e.Message.Contains("2026-10-03 09:15:00Z", StringComparison.Ordinal)
+        Assert.Contains(logger.Entries, e =>
+            e.Level == LogLevel.Information
+            && e.Message.Contains("run_81b110f2", StringComparison.Ordinal)
+            && e.Message.Contains("2026-10-03 09:15:00Z", StringComparison.Ordinal)
         );
     }
 

@@ -128,9 +128,8 @@ public sealed class FocusTargetedFetchTests : IDisposable
         Assert.Equal("2", matches.Query["region"]);
         Assert.Equal("Murky", matches.Query["hero"]);
         Assert.Equal("2026-10-03", matches.Query["start_date"]);
-        Assert.Contains(
-            api.Calls,
-            call => call.Path == "leaderboard" && call.Query.GetValueOrDefault("season") == "29"
+        Assert.Contains(api.Calls, call =>
+            call.Path == "leaderboard" && call.Query.GetValueOrDefault("season") == "29"
         );
         FocusTargetedState state = fetch.Store.Read();
         Assert.Equal("Murk", state.Fetched.Single().AttributeId);

@@ -90,11 +90,9 @@ public class ObsWatchdogTests
             Assert.Equal(new[] { Launched }, obs.Steps);
             Assert.True(gateHeld);
             Assert.False(sentinelLeft);
-            Assert.Contains(
-                obs.Log.Entries,
-                entry =>
-                    entry.Level == LogLevel.Information
-                    && entry.Message.Contains("Started OBS detached: obs64 pid 9000")
+            Assert.Contains(obs.Log.Entries, entry =>
+                entry.Level == LogLevel.Information
+                && entry.Message.Contains("Started OBS detached: obs64 pid 9000")
             );
         }
         finally
@@ -153,12 +151,10 @@ public class ObsWatchdogTests
         );
         Assert.Equal(Start.AddMinutes(3), obs.Starts.Single());
         Assert.Equal(ObsWatchdogState.WebsocketHungCode, watchdog.State.LastCause);
-        Assert.Contains(
-            obs.Log.Entries,
-            entry =>
-                entry.Level == LogLevel.Warning
-                && entry.Message.Contains(ObsWatchdogState.WebsocketHungCode)
-                && entry.Message.Contains("3m (limit 3m)")
+        Assert.Contains(obs.Log.Entries, entry =>
+            entry.Level == LogLevel.Warning
+            && entry.Message.Contains(ObsWatchdogState.WebsocketHungCode)
+            && entry.Message.Contains("3m (limit 3m)")
         );
         Assert.Equal(1, obs.Saves);
     }
@@ -314,9 +310,8 @@ public class ObsWatchdogTests
         service.Ticks(suppressed, 600);
         Assert.Empty(service.Steps);
         Assert.Equal(ObsWatchdogStates.Suppressed, suppressed.State.State);
-        Assert.Single(
-            service.Log.Entries,
-            entry => entry.Level == LogLevel.Warning && entry.Message.Contains("session 0")
+        Assert.Single(service.Log.Entries, entry =>
+            entry.Level == LogLevel.Warning && entry.Message.Contains("session 0")
         );
     }
 

@@ -212,9 +212,8 @@ public class BossFightAnalyzerTests
         var positions = new ScriptedPositions();
         for (int player = 0; player < count; player++)
         {
-            positions.Path(
-                player,
-                time => Seconds(time) >= from && Seconds(time) <= to ? BluePit : Away
+            positions.Path(player, time =>
+                Seconds(time) >= from && Seconds(time) <= to ? BluePit : Away
             );
         }
 
@@ -226,9 +225,8 @@ public class BossFightAnalyzerTests
     {
         for (int player = 5; player < 5 + count; player++)
         {
-            positions.Path(
-                player,
-                time => Seconds(time) >= from && Seconds(time) <= to ? BluePit : Away
+            positions.Path(player, time =>
+                Seconds(time) >= from && Seconds(time) <= to ? BluePit : Away
             );
         }
 

@@ -74,16 +74,13 @@ public static class ObsCollectionPaths
         }
 
         using JsonDocument document = JsonDocument.Parse(json);
-        Walk(
-            document.RootElement,
-            (_, element) =>
+        Walk(document.RootElement, (_, element) =>
+        {
+            if (TryRelativeAsset(element.GetString(), out string relative))
             {
-                if (TryRelativeAsset(element.GetString(), out string relative))
-                {
-                    found.Add(relative);
-                }
+                found.Add(relative);
             }
-        );
+        });
         return found.ToList();
     }
 
@@ -395,34 +392,22 @@ public static class ObsCollectionPaths
         var replacements = new List<(string Old, string New)>();
         using (JsonDocument document = JsonDocument.Parse(json))
         {
-            Walk(
-                document.RootElement,
-                (name, element) =>
+            Walk(document.RootElement, (name, element) =>
+            {
+                string logical = element.GetString();
+                string updated = RewriteValue(name, logical, assetRoot, dataDirectory, movedFrom);
+                if (string.Equals(updated, logical, StringComparison.Ordinal))
                 {
-                    string logical = element.GetString();
-                    string updated = RewriteValue(
-                        name,
-                        logical,
-                        assetRoot,
-                        dataDirectory,
-                        movedFrom
-                    );
-                    if (string.Equals(updated, logical, StringComparison.Ordinal))
-                    {
-                        return;
-                    }
-
-                    string raw = element.GetRawText();
-                    string encoded = JsonSerializer.Serialize(
-                        updated,
-                        ObsJsonContext.Default.String
-                    );
-                    if (!string.Equals(raw, encoded, StringComparison.Ordinal))
-                    {
-                        replacements.Add((raw, encoded));
-                    }
+                    return;
                 }
-            );
+
+                string raw = element.GetRawText();
+                string encoded = JsonSerializer.Serialize(updated, ObsJsonContext.Default.String);
+                if (!string.Equals(raw, encoded, StringComparison.Ordinal))
+                {
+                    replacements.Add((raw, encoded));
+                }
+            });
         }
 
         string result = json;

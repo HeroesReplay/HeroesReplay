@@ -28,20 +28,14 @@ public static class ObsBackupCommands
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 return Task.FromResult(
-                    Run(
-                        parseResult,
-                        format,
-                        collection =>
-                            parseResult.GetValue(list)
-                                ? ObsCollectionBackups.List(
-                                    ObsManagedFiles.ForThisUser(),
-                                    collection
-                                )
-                                : ObsCollectionBackups.Take(
-                                    ObsManagedFiles.ForThisUser(),
-                                    collection,
-                                    DateTime.UtcNow
-                                )
+                    Run(parseResult, format, collection =>
+                        parseResult.GetValue(list)
+                            ? ObsCollectionBackups.List(ObsManagedFiles.ForThisUser(), collection)
+                            : ObsCollectionBackups.Take(
+                                ObsManagedFiles.ForThisUser(),
+                                collection,
+                                DateTime.UtcNow
+                            )
                     )
                 );
             }
@@ -68,17 +62,14 @@ public static class ObsBackupCommands
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 return Task.FromResult(
-                    Run(
-                        parseResult,
-                        format,
-                        collection =>
-                            ObsCollectionBackups.Restore(
-                                ObsManagedFiles.ForThisUser(),
-                                collection,
-                                parseResult.GetValue(backup),
-                                NamedProcess.IsRunning(ObsLaunchDecision.ProcessName),
-                                DateTime.UtcNow
-                            )
+                    Run(parseResult, format, collection =>
+                        ObsCollectionBackups.Restore(
+                            ObsManagedFiles.ForThisUser(),
+                            collection,
+                            parseResult.GetValue(backup),
+                            NamedProcess.IsRunning(ObsLaunchDecision.ProcessName),
+                            DateTime.UtcNow
+                        )
                     )
                 );
             }

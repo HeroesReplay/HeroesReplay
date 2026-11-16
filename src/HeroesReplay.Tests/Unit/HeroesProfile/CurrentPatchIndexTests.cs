@@ -23,10 +23,8 @@ public class CurrentPatchIndexTests
             rows.Add(new CurrentPatchIndex.Row(id, "2.55.17.98025"));
         }
 
-        int first = CurrentPatchIndex.FindFirst(
-            20,
-            "2.55.17.98025",
-            after => rows.FirstOrDefault(row => row.Id > after)
+        int first = CurrentPatchIndex.FindFirst(20, "2.55.17.98025", after =>
+            rows.FirstOrDefault(row => row.Id > after)
         );
 
         Assert.Equal(11, first);
@@ -43,15 +41,11 @@ public class CurrentPatchIndexTests
             new(4, "2.57.0.98304"),
         };
 
-        int exact = CurrentPatchIndex.FindFirst(
-            4,
-            "2.57.0.98304",
-            after => rows.FirstOrDefault(row => row.Id > after)
+        int exact = CurrentPatchIndex.FindFirst(4, "2.57.0.98304", after =>
+            rows.FirstOrDefault(row => row.Id > after)
         );
-        int line = CurrentPatchIndex.FindFirstOnLine(
-            4,
-            "2.57.0.98304",
-            after => rows.FirstOrDefault(row => row.Id > after)
+        int line = CurrentPatchIndex.FindFirstOnLine(4, "2.57.0.98304", after =>
+            rows.FirstOrDefault(row => row.Id > after)
         );
 
         Assert.Equal(4, exact);

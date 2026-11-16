@@ -69,13 +69,11 @@ public class PlayedHeroTests
         IReadOnlyList<Hero> catalog = Captured.Value.Catalog;
         Replay replay = Build(replayId, units: true, spawnEvents: true);
 
-        Assert.All(
-            replay.Players,
-            player =>
-                Assert.Same(
-                    HeroDraft.Find(catalog, player.HeroAttributeId),
-                    PlayedHero.Find(catalog, replay, player)
-                )
+        Assert.All(replay.Players, player =>
+            Assert.Same(
+                HeroDraft.Find(catalog, player.HeroAttributeId),
+                PlayedHero.Find(catalog, replay, player)
+            )
         );
     }
 

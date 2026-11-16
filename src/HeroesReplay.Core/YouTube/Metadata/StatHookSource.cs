@@ -30,10 +30,10 @@ public static class StatHookSource
             return null;
         }
 
-        string version =
-            Text(loaded.Replay?.ReplayVersion) ?? Text(loaded.HeroesProfileReplay?.GameVersion);
-        string gameType =
-            Text(loaded.HeroesProfileReplay?.GameType) ?? Text(loaded.Replay?.GameMode.ToString());
+        string version = Text(loaded.Replay?.ReplayVersion)
+            ?? Text(loaded.HeroesProfileReplay?.GameVersion);
+        string gameType = Text(loaded.HeroesProfileReplay?.GameType)
+            ?? Text(loaded.Replay?.GameMode.ToString());
         TimeSpan maxAge = (settings.HeroesProfileApi?.HeroStats ?? new HeroStatsSettings()).MaxAge;
         try
         {

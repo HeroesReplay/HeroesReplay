@@ -84,9 +84,8 @@ public class GameDataCatalogTests
 
         Map map = Assert.Single(data.Maps);
         Assert.Equal("Silver City", map.Name);
-        Assert.Contains(
-            new SupportedRewardsHolder(data).Rewards,
-            reward => reward.Title == "Silver City (ARAM)"
+        Assert.Contains(new SupportedRewardsHolder(data).Rewards, reward =>
+            reward.Title == "Silver City (ARAM)"
         );
     }
 

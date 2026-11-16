@@ -62,8 +62,8 @@ public sealed class ServiceEnsure
     {
         DateTimeOffset now = Time.GetUtcNow();
         bool stopRequested = StopRequested?.Invoke() == true;
-        ServiceSupervisorLiveness liveness =
-            SupervisorLiveness?.Invoke() ?? ServiceSupervisorLiveness.None;
+        ServiceSupervisorLiveness liveness = SupervisorLiveness?.Invoke()
+            ?? ServiceSupervisorLiveness.None;
         ServiceStatusReport status = ServiceHealthClassifier.Build(
             ServiceLockStore.TryLoad(LockPath),
             ProcessNameOrNull,
@@ -114,8 +114,7 @@ public sealed class ServiceEnsure
             ServiceLaunch launch;
             try
             {
-                launch =
-                    Launch?.Invoke(role, Record)
+                launch = Launch?.Invoke(role, Record)
                     ?? new ServiceLaunch(null, false, false, "No launcher was given.");
             }
             catch (Exception e)
@@ -274,8 +273,8 @@ public sealed class ServiceEnsure
             return;
         }
 
-        ServiceLock snapshot =
-            ServiceLockStore.TryLoad(LockPath) ?? new ServiceLock { StartedAt = Time.GetUtcNow() };
+        ServiceLock snapshot = ServiceLockStore.TryLoad(LockPath)
+            ?? new ServiceLock { StartedAt = Time.GetUtcNow() };
         snapshot.Processes ??= new List<ServiceProcessRecord>();
         int index = snapshot.Processes.FindIndex(item =>
             string.Equals(item?.Name, record.Name, StringComparison.OrdinalIgnoreCase)

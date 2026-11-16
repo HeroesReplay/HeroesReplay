@@ -188,14 +188,10 @@ public static class ServiceEnsurePlan
                 ServiceEnsureCodes.Mismatch,
                 $"Builds are not mixed: {which}, not this install ({executablePath}, version {version}).",
                 $"Run ensure from the install that runs, or replace that stack: {StopThenEnsure}",
-                Describe(
-                    status,
-                    requested,
-                    role =>
-                        foreign.Contains(role) ? ServiceEnsureActions.Blocked
-                        : Up(role) ? ServiceEnsureActions.Running
-                        : ServiceEnsureActions.Start
-                ),
+                Describe(status, requested, role => foreign.Contains(role)
+                        ? ServiceEnsureActions.Blocked
+                    : Up(role) ? ServiceEnsureActions.Running
+                    : ServiceEnsureActions.Start),
                 foreign
             );
         }
@@ -289,11 +285,8 @@ public static class ServiceEnsurePlan
                 string.Join(" and ", new[] { starting, attaching }.Where(part => part != null))
                 + ".",
             SupervisorAttached = attach,
-            Roles = Describe(
-                status,
-                requested,
-                role =>
-                    down.Contains(role) ? ServiceEnsureActions.Start : ServiceEnsureActions.Running
+            Roles = Describe(status, requested, role =>
+                down.Contains(role) ? ServiceEnsureActions.Start : ServiceEnsureActions.Running
             ),
         };
     }

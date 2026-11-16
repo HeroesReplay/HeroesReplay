@@ -209,9 +209,8 @@ public class CheckJsonTests
     public void Codes_AreStableNamesWithAnOkAndAnErrorPerTarget()
     {
         Assert.Equal(CheckCodes.All.Count, CheckCodes.All.Distinct().Count());
-        Assert.All(
-            CheckCodes.All,
-            code => Assert.Matches(new Regex("^check(\\.[a-z0-9_]+){1,2}$"), code)
+        Assert.All(CheckCodes.All, code =>
+            Assert.Matches(new Regex("^check(\\.[a-z0-9_]+){1,2}$"), code)
         );
         foreach (CheckTarget target in CheckCommand.Targets)
         {

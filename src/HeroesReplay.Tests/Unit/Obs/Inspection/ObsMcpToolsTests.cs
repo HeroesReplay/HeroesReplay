@@ -81,14 +81,11 @@ public class ObsMcpToolsTests : IDisposable
             new[] { "obs_inspect", "obs_screenshot", "obs_validate" },
             tools.Select(tool => tool.Name).Order()
         );
-        Assert.All(
-            tools,
-            tool =>
-            {
-                Assert.True(tool.ReadOnly);
-                Assert.False(tool.Destructive);
-            }
-        );
+        Assert.All(tools, tool =>
+        {
+            Assert.True(tool.ReadOnly);
+            Assert.False(tool.Destructive);
+        });
     }
 
     [Fact]
@@ -184,9 +181,8 @@ public class ObsMcpToolsTests : IDisposable
     [Fact]
     public void UnreadableSettings_AreReportedNotThrown()
     {
-        ObsMcpTools tools = new(
-            FakeObs.Installed(data),
-            () => throw new InvalidDataException("bad appsettings")
+        ObsMcpTools tools = new(FakeObs.Installed(data), () =>
+            throw new InvalidDataException("bad appsettings")
         );
 
         ObsInspection inspection = tools.Inspect();

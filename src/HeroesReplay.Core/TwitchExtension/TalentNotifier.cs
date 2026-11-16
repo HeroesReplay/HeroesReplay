@@ -34,8 +34,8 @@ public class TalentNotifier : ITalentNotifier
     {
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
         this.context = context ?? throw new ArgumentNullException(nameof(context));
-        this.extensionService =
-            extensionService ?? throw new ArgumentNullException(nameof(extensionService));
+        this.extensionService = extensionService
+            ?? throw new ArgumentNullException(nameof(extensionService));
         this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
     }
 

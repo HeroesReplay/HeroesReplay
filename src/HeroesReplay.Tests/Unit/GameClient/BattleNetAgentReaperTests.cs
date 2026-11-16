@@ -25,16 +25,11 @@ public class BattleNetAgentReaperTests
     public void Reap_KillsThePlannedLeftoversAndCountsOnlyKilledOnes()
     {
         var killed = new List<int>();
-        BattleNetAgentReaper reaper = Reaper(
-            new BattleNetAgentSettings(),
-            process =>
-            {
-                killed.Add(process.Pid);
-                return process.Pid == 301
-                    ? ProcessKillResult.AccessDenied
-                    : ProcessKillResult.Killed;
-            }
-        );
+        BattleNetAgentReaper reaper = Reaper(new BattleNetAgentSettings(), process =>
+        {
+            killed.Add(process.Pid);
+            return process.Pid == 301 ? ProcessKillResult.AccessDenied : ProcessKillResult.Killed;
+        });
 
         int reaped = reaper.Reap("test");
 

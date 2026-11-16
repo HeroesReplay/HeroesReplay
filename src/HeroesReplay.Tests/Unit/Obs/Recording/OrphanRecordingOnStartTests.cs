@@ -80,10 +80,8 @@ public class OrphanRecordingOnStartTests : IDisposable
         Claim();
         FakeObs obs = Obs(recordedFor: TimeSpan.FromMinutes(12));
 
-        OrphanRecordingCheck check = Run(
-            obs,
-            now: Started.AddMinutes(12),
-            findProcess: pid => Process(pid, Started.AddMinutes(11))
+        OrphanRecordingCheck check = Run(obs, now: Started.AddMinutes(12), findProcess: pid =>
+            Process(pid, Started.AddMinutes(11))
         );
 
         Assert.Equal(OrphanRecordingState.Stopped, check.State);
@@ -99,15 +97,11 @@ public class OrphanRecordingOnStartTests : IDisposable
         FakeObs obs = Obs(recordedFor: TimeSpan.FromMinutes(12));
         var asked = new List<int>();
 
-        OrphanRecordingCheck check = Run(
-            obs,
-            now: Started.AddMinutes(12),
-            findProcess: pid =>
-            {
-                asked.Add(pid);
-                return Process(pid, ClaimantStarted);
-            }
-        );
+        OrphanRecordingCheck check = Run(obs, now: Started.AddMinutes(12), findProcess: pid =>
+        {
+            asked.Add(pid);
+            return Process(pid, ClaimantStarted);
+        });
 
         Assert.Equal(OrphanRecordingState.ClaimantRunning, check.State);
         Assert.Equal(new[] { DeadSpectate }, asked);

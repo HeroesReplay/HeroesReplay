@@ -20,10 +20,8 @@ public sealed class RuntimeRestart
     private bool warned;
 
     public RuntimeRestart(ILogger<RuntimeRestart> logger)
-        : this(
-            logger,
-            ServiceHeartbeat.CheckCurrentRuntime,
-            () => ServiceSupervisorFile.IsRunning()
+        : this(logger, ServiceHeartbeat.CheckCurrentRuntime, () =>
+            ServiceSupervisorFile.IsRunning()
         ) { }
 
     /// <param name="logger">Where the restart and the missing supervisor are logged.</param>

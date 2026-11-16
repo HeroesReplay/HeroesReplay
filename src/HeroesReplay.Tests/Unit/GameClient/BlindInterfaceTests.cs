@@ -75,9 +75,8 @@ public sealed class BlindInterfaceTests : IDisposable
         ClientStatusResult blind = configurator.GetStatus(blind: true);
 
         Assert.False(normal.MatchesPreset);
-        Assert.Contains(
-            normal.Mismatches,
-            line => line.StartsWith("interface file differs from " + Source(blind: false))
+        Assert.Contains(normal.Mismatches, line =>
+            line.StartsWith("interface file differs from " + Source(blind: false))
         );
         Assert.True(blind.MatchesPreset, string.Join("; ", blind.Mismatches));
     }

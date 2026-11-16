@@ -32,8 +32,7 @@ public sealed class StormClientConfigurator
     /// </summary>
     public ClientConfigureResult Configure(bool blind = false)
     {
-        ClientSettings client =
-            settings.Client
+        ClientSettings client = settings.Client
             ?? throw new InvalidOperationException("Client settings are not bound.");
 
         Directory.CreateDirectory(gameFolder);
@@ -121,8 +120,7 @@ public sealed class StormClientConfigurator
 
     public ClientStatusResult GetStatus(bool blind = false)
     {
-        ClientSettings client =
-            settings.Client
+        ClientSettings client = settings.Client
             ?? throw new InvalidOperationException("Client settings are not bound.");
 
         string variablesPath = Path.Combine(gameFolder, "Variables.txt");

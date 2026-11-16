@@ -1851,8 +1851,8 @@ public class YouTubeUploader : IYouTubeUploader
         try
         {
             YouTubeQuotaDay day = quotaUnits.Read(now);
-            ReplayMediaPolicySettings media =
-                settings.ReplayMedia ?? new ReplayMediaPolicySettings();
+            ReplayMediaPolicySettings media = settings.ReplayMedia
+                ?? new ReplayMediaPolicySettings();
             bool insertsCapped = InsertCapped(now);
             bool bucketBlocked = !quotaUnits.MayUpload(day, now);
             concern = YouTubeUploaderHealth.Evaluate(
@@ -1868,8 +1868,7 @@ public class YouTubeUploader : IYouTubeUploader
                     QuotaBlocked = bucketBlocked,
                     InsertCapped = insertsCapped,
                     InsertCap = media.MaxInsertsPerQuotaDay,
-                    UploadsResumeAt =
-                        quotaUnits.UploadsResumeAt(day, now)
+                    UploadsResumeAt = quotaUnits.UploadsResumeAt(day, now)
                         ?? (insertsCapped ? YouTubeQuotaUnits.NextQuotaDay(now) : null),
                     Tally = Tally(now),
                     LibraryProblem = libraryProblem,

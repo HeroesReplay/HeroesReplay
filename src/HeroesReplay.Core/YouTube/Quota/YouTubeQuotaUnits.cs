@@ -69,15 +69,11 @@ public sealed class YouTubeQuotaUnits
     public YouTubeQuotaDay Read(DateTimeOffset utcNow) => Update(utcNow, _ => false);
 
     /// <summary>Counts one <c>videos.insert</c> in the upload bucket. The pool is not touched.</summary>
-    public void SpendUploadCall(DateTimeOffset utcNow) =>
-        Update(
-            utcNow,
-            day =>
-            {
-                day.UploadCalls++;
-                return true;
-            }
-        );
+    public void SpendUploadCall(DateTimeOffset utcNow) => Update(utcNow, day =>
+        {
+            day.UploadCalls++;
+            return true;
+        });
 
     /// <summary>
     /// Adds <paramref name="units"/> to the library spend when the day still has room for
@@ -86,42 +82,31 @@ public sealed class YouTubeQuotaUnits
     public bool TrySpendLibrary(int units, DateTimeOffset utcNow)
     {
         bool spent = false;
-        Update(
-            utcNow,
-            day =>
+        Update(utcNow, day =>
+        {
+            if (Paused(day, utcNow) || units > LibraryRoom(day))
             {
-                if (Paused(day, utcNow) || units > LibraryRoom(day))
-                {
-                    return false;
-                }
-
-                day.LibraryUnits += Math.Max(0, units);
-                spent = true;
-                return true;
+                return false;
             }
-        );
+
+            day.LibraryUnits += Math.Max(0, units);
+            spent = true;
+            return true;
+        });
         return spent;
     }
 
-    public void PauseLibrary(DateTimeOffset until, DateTimeOffset utcNow) =>
-        Update(
-            utcNow,
-            day =>
-            {
-                day.LibraryPausedUntil = until;
-                return true;
-            }
-        );
+    public void PauseLibrary(DateTimeOffset until, DateTimeOffset utcNow) => Update(utcNow, day =>
+        {
+            day.LibraryPausedUntil = until;
+            return true;
+        });
 
-    public void PauseUploads(DateTimeOffset until, DateTimeOffset utcNow) =>
-        Update(
-            utcNow,
-            day =>
-            {
-                day.UploadsPausedUntil = until;
-                return true;
-            }
-        );
+    public void PauseUploads(DateTimeOffset until, DateTimeOffset utcNow) => Update(utcNow, day =>
+        {
+            day.UploadsPausedUntil = until;
+            return true;
+        });
 
     public static bool Paused(YouTubeQuotaDay day, DateTimeOffset utcNow) =>
         day?.LibraryPausedUntil is DateTimeOffset until && utcNow < until;

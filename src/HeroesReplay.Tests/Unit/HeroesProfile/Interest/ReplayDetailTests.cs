@@ -70,9 +70,8 @@ public class ReplayDetailTests
         await service.EnrichRankAsync(listed, CancellationToken.None);
 
         Assert.Equal("Gold 3", listed.Rank);
-        Assert.Single(
-            http.Paths,
-            path => path.EndsWith("/replay/66231266", StringComparison.Ordinal)
+        Assert.Single(http.Paths, path =>
+            path.EndsWith("/replay/66231266", StringComparison.Ordinal)
         );
     }
 
@@ -120,9 +119,8 @@ public class ReplayDetailTests
         var services = new ServiceCollection();
         services.AddLogging();
         services
-            .AddHttpClient(
-                HeroesProfileHttp.ClientName,
-                client => client.Timeout = Timeout.InfiniteTimeSpan
+            .AddHttpClient(HeroesProfileHttp.ClientName, client =>
+                client.Timeout = Timeout.InfiniteTimeSpan
             )
             .ConfigurePrimaryHttpMessageHandler(() => handler)
             .AddResilienceHandler(HeroesProfileHttp.ClientName, HeroesProfileHttp.Configure);

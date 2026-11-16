@@ -112,8 +112,8 @@ public static class CachedRequestReward
         }
 
         int replayId = loaded.ReplayId ?? loaded.HeroesProfileReplay?.Id ?? 0;
-        RewardQueueItem item =
-            Read(loaded.FileInfo?.FullName) ?? FindById(requestsDirectory, replayId);
+        RewardQueueItem item = Read(loaded.FileInfo?.FullName)
+            ?? FindById(requestsDirectory, replayId);
         if (item == null)
         {
             return false;

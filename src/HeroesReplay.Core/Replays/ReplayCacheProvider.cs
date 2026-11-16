@@ -65,10 +65,10 @@ public sealed class ReplayCacheProvider : IReplayProvider
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
         this.loader = loader ?? throw new ArgumentNullException(nameof(loader));
         this.replayHelper = replayHelper ?? throw new ArgumentNullException(nameof(replayHelper));
-        this.heroesProfile =
-            heroesProfile ?? throw new ArgumentNullException(nameof(heroesProfile));
-        this.tokenProvider =
-            tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
+        this.heroesProfile = heroesProfile
+            ?? throw new ArgumentNullException(nameof(heroesProfile));
+        this.tokenProvider = tokenProvider
+            ?? throw new ArgumentNullException(nameof(tokenProvider));
         this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
     }
 
@@ -275,8 +275,7 @@ public sealed class ReplayCacheProvider : IReplayProvider
             );
             // The request is found by replay id, so a copy in Data\Standard or a file whose
             // sidecar is missing still plays as the viewer's request (#165, #166).
-            RewardQueueItem request =
-                CachedRequestReward.Read(next.FullName)
+            RewardQueueItem request = CachedRequestReward.Read(next.FullName)
                 ?? CachedRequestReward.FindById(settings.RequestedReplayCachePath, replayId);
             if (request?.Request != null)
             {

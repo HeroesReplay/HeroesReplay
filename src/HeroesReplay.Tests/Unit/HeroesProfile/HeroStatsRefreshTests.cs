@@ -111,9 +111,8 @@ public sealed class HeroStatsRefreshTests : IDisposable
         Assert.Equal("2.57", stats.Query["timeframe"]);
         Assert.Equal("sl", stats.Query["game_type"]);
         Assert.Equal("true", stats.Query["group_by_map"]);
-        Assert.DoesNotContain(
-            api.Calls,
-            call => call.Path == "heroes/matchups" && call.Query["hero"] == "Unplayed"
+        Assert.DoesNotContain(api.Calls, call =>
+            call.Path == "heroes/matchups" && call.Query["hero"] == "Unplayed"
         );
 
         // Polls wait for Retry-After (10 s, then 7 s), and the default 10 s without one.
