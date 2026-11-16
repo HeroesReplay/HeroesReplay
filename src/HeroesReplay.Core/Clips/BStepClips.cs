@@ -12,8 +12,9 @@ namespace HeroesReplay.Core.Clips;
 /// or after a quiet push shows nothing. The clip runs from the earlier of the first death and the
 /// bstep to the later of the last death and the bstep, named after the bstepping hero.
 /// <para>
-/// At most <see cref="MaxClips"/> a replay, the most linked deaths first, then the most cycles,
-/// then the earliest; none that overlaps a kill or boss clip, since that moment is already cut.
+/// At most <see cref="MaxClips"/> a replay: a bstep whose deaths involve the bstepper or an enemy
+/// first (an ally falling next to them is weaker drama), then the most linked deaths, the most
+/// cycles, the earliest; none that overlaps a kill or boss clip, since that moment is already cut.
 /// Like a triple kill, never Notable. The camera must have the bstepper on screen
 /// (<see cref="TeamKillClip.OnScreen"/>) for most of the bstep and its last moment
 /// (<see cref="ClipCamera"/>): the movement is small, and near is not enough.
@@ -23,8 +24,11 @@ public static class BStepClips
 {
     public const string Kind = "bstep";
 
-    /// <summary>The most bstep clips one replay is cut into.</summary>
-    public const int MaxClips = 2;
+    /// <summary>
+    /// The most bstep clips one replay is cut into. On 250 corpus games about half had a bstep
+    /// with a linked death, some several, so one a replay keeps them rare.
+    /// </summary>
+    public const int MaxClips = 1;
 
     public const int LeadSeconds = 4;
 
@@ -50,7 +54,8 @@ public static class BStepClips
                 .BSteps.Where(step =>
                     step.Deaths?.Count > 0 && !string.IsNullOrWhiteSpace(step.Hero)
                 )
-                .OrderByDescending(step => step.Deaths.Count)
+                .OrderByDescending(step => step.Deaths.Any(Involves))
+                .ThenByDescending(step => step.Deaths.Count)
                 .ThenByDescending(step => step.Cycles)
                 .ThenBy(step => step.StartSecond)
         )
@@ -149,6 +154,9 @@ public static class BStepClips
             2 => $"{names[0]} and {names[1]}",
             _ => string.Join(", ", names.Take(names.Count - 1)) + " and " + names[^1],
         };
+
+    /// <summary>The bstepper died or got the kill, or an enemy fell next to them.</summary>
+    private static bool Involves(BStepDeath death) => death.Kind != BStepDeathKind.Ally;
 
     private static bool Overlaps(TeamKillClip left, TeamKillClip right) =>
         left.HudStartSecond <= right.HudEndSecond && right.HudStartSecond <= left.HudEndSecond;

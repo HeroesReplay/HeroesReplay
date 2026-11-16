@@ -45,7 +45,7 @@ public class BStepAnalyzerTests
     {
         ReplaySnapshot snapshot = Snapshot(
             Cycles(player: 0, from: 360, count: 6, gap: 0.2, cancel: 0.1),
-            new[] { new HeroDeath(0, 0, TimeSpan.FromSeconds(372), new MapPoint(10, 10), 5) }
+            new[] { new HeroDeath(0, 0, TimeSpan.FromSeconds(370), new MapPoint(10, 10), 5) }
         );
 
         BStepDeath death = Assert.Single(
@@ -98,16 +98,21 @@ public class BStepAnalyzerTests
     }
 
     [Fact]
-    public void TwoBstepsByOnePlayer_ASecondApartOrMore_AreTwo_AndAiIsLeftOut()
+    public void BurstsAFewSecondsApart_AreOneBstep_LongerPausesAreTwo_AndAiIsLeftOut()
     {
         var casts = new List<HearthCast>();
         casts.AddRange(Cycles(player: 0, from: 100, count: 4, gap: 0.2, cancel: 0.1));
         casts.AddRange(Cycles(player: 0, from: 103, count: 4, gap: 0.2, cancel: 0.1));
+        casts.AddRange(Cycles(player: 0, from: 110, count: 3, gap: 0.2, cancel: 0.1));
         casts.AddRange(Cycles(player: 9, from: 100, count: 8, gap: 0.2, cancel: 0.1));
 
         IReadOnlyList<BStep> steps = new BStepAnalyzer(null).Analyze(Snapshot(casts)).BSteps;
 
-        Assert.Equal(new[] { 100, 103 }, steps.Select(step => step.StartSecond));
+        Assert.Equal(
+            new[] { (100, 103, 8), (110, 110, 3) },
+            steps.Select(step => (step.StartSecond, step.EndSecond, step.Cycles))
+        );
+        Assert.Equal(0.2, steps[0].MedianGapSeconds, 2);
         Assert.All(steps, step => Assert.Empty(step.Deaths));
     }
 

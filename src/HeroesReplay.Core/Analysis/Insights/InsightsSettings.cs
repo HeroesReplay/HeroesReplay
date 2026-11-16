@@ -94,11 +94,17 @@ public class BStepInsightSettings
     /// </summary>
     public int MinCycles { get; set; } = 3;
 
+    /// <summary>
+    /// Bursts of bstepping by one player at most this many seconds apart are one bstep: a player
+    /// stops to look around and starts again (Anub'arak in 65269873, eleven bursts in 50 s).
+    /// </summary>
+    public double MergeSeconds { get; set; } = 4;
+
     /// <summary>A hero death this long before the bstep started links it to the bstep.</summary>
-    public int DeathBeforeSeconds { get; set; } = 12;
+    public int DeathBeforeSeconds { get; set; } = 10;
 
     /// <summary>A hero death this long after the bstep ended links it to the bstep.</summary>
-    public int DeathAfterSeconds { get; set; } = 12;
+    public int DeathAfterSeconds { get; set; } = 10;
 
     /// <summary>
     /// A death this close (map units) to the bstepping hero links it, whoever died: a little

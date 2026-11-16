@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-using System.Linq;
 using HeroesReplay.Core.Analysis.Insights.BSteps;
 using HeroesReplay.Core.Clips;
 using Xunit;
@@ -72,20 +70,29 @@ public class BStepClipTests
     }
 
     [Fact]
-    public void AtMostTwoClips_TheMostDeathsFirst_InTimeOrder()
+    public void OneClipAReplay_ABstepOnAnEnemyBeforeOneByAFallenAlly_ThenTheMostDeaths()
     {
-        BStepDeath Death(int second) => new(5, "Muradin", second, BStepDeathKind.Enemy, false);
+        BStepDeath Enemy(int second) => new(5, "Muradin", second, BStepDeathKind.Enemy, false);
         BStep[] steps =
         {
-            Step(100, 101, Death(99)),
-            Step(300, 301, Death(298), Death(299)),
-            Step(500, 501, Death(498), Death(499)),
+            Step(100, 101, Enemy(99)),
+            Step(300, 301, Enemy(298), Enemy(299)),
+            Step(
+                500,
+                501,
+                new BStepDeath(1, "Anduin", 497, BStepDeathKind.Ally, false),
+                new BStepDeath(2, "Rexxar", 498, BStepDeathKind.Ally, false),
+                new BStepDeath(3, "Tyrael", 499, BStepDeathKind.Ally, false)
+            ),
         };
 
-        IReadOnlyList<TeamKillClip> clips = BStepClips.Select(Insights(steps));
+        TeamKillClip clip = Assert.Single(BStepClips.Select(Insights(steps)));
 
-        Assert.Equal(BStepClips.MaxClips, clips.Count);
-        Assert.Equal(new[] { 300, 500 }, clips.Select(clip => clip.FirstDeathSecond));
+        Assert.Equal(300, clip.FirstDeathSecond);
+        Assert.Equal(
+            "Sonya bsteps after an ally falls (5 hearth cancels in 1 s)",
+            BStepClips.Description(steps[2])
+        );
     }
 
     private static BStep Step(int start, int end, params BStepDeath[] deaths) =>
