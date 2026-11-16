@@ -56,7 +56,15 @@ public class BStepClipTests
             601,
             new BStepDeath(5, "Muradin", 599, BStepDeathKind.KilledByBstepper, false, 0)
         );
-        var kill = new TeamKillClip("triple-kill", "Sonya", 590, 599, 578, 607, "Sonya triple kill");
+        var kill = new TeamKillClip(
+            "triple-kill",
+            "Sonya",
+            590,
+            599,
+            578,
+            607,
+            "Sonya triple kill"
+        );
 
         Assert.Empty(BStepClips.Select(Insights(quiet)));
         Assert.Empty(BStepClips.Select(Insights(overKill), new[] { kill }));
@@ -66,8 +74,7 @@ public class BStepClipTests
     [Fact]
     public void AtMostTwoClips_TheMostDeathsFirst_InTimeOrder()
     {
-        BStepDeath Death(int second) =>
-            new(5, "Muradin", second, BStepDeathKind.Enemy, false);
+        BStepDeath Death(int second) => new(5, "Muradin", second, BStepDeathKind.Enemy, false);
         BStep[] steps =
         {
             Step(100, 101, Death(99)),

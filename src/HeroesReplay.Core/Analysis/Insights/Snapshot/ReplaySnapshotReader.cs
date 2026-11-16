@@ -319,10 +319,7 @@ public static class ReplaySnapshotReader
         }
 
         casts.AddRange(open.Values);
-        return casts
-            .OrderBy(cast => cast.Seconds)
-            .ThenBy(cast => cast.PlayerIndex)
-            .ToArray();
+        return casts.OrderBy(cast => cast.Seconds).ThenBy(cast => cast.PlayerIndex).ToArray();
     }
 
     private enum OrderKind
@@ -339,8 +336,7 @@ public static class ReplaySnapshotReader
             return OrderKind.Move;
         }
 
-        TrackerEventStructure ability =
-            order.data?.array?.Length > 1 ? order.data.array[1] : null;
+        TrackerEventStructure ability = order.data?.array?.Length > 1 ? order.data.array[1] : null;
         if (ability == null)
         {
             return OrderKind.Move;

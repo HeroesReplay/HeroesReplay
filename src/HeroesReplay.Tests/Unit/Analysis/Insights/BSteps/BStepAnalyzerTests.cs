@@ -154,7 +154,9 @@ public class BStepAnalyzerTests
                 (0, 100.5, null),
                 (0, 103.125, null),
             },
-            snapshot.HearthCasts.Select(cast => (cast.PlayerIndex, cast.Seconds, cast.CancelSeconds))
+            snapshot.HearthCasts.Select(cast =>
+                (cast.PlayerIndex, cast.Seconds, cast.CancelSeconds)
+            )
         );
     }
 

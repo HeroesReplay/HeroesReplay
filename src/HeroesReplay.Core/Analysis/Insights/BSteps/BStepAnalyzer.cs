@@ -108,12 +108,13 @@ public sealed class BStepAnalyzer : IInsightAnalyzer<BStepInsights>
     )
     {
         var linked = new List<BStepDeath>();
-        foreach (
-            HeroDeath death in snapshot.HeroDeaths ?? Array.Empty<HeroDeath>()
-        )
+        foreach (HeroDeath death in snapshot.HeroDeaths ?? Array.Empty<HeroDeath>())
         {
             double second = death.Time.TotalSeconds;
-            if (second < start - settings.DeathBeforeSeconds || second > end + settings.DeathAfterSeconds)
+            if (
+                second < start - settings.DeathBeforeSeconds
+                || second > end + settings.DeathAfterSeconds
+            )
             {
                 continue;
             }
@@ -127,7 +128,9 @@ public sealed class BStepAnalyzer : IInsightAnalyzer<BStepInsights>
             linked.Add(
                 new BStepDeath(
                     death.PlayerIndex,
-                    snapshot.Players.FirstOrDefault(entry => entry.Index == death.PlayerIndex)?.HeroName,
+                    snapshot
+                        .Players.FirstOrDefault(entry => entry.Index == death.PlayerIndex)
+                        ?.HeroName,
                     (int)Math.Floor(second),
                     kind.Value,
                     second > end,
@@ -170,7 +173,13 @@ public sealed class BStepAnalyzer : IInsightAnalyzer<BStepInsights>
     /// death before the bstep or after the bstepper's own position runs out, at the nearest edge
     /// of the bstep.
     /// </summary>
-    private bool Near(IHeroPositions positions, int player, HeroDeath death, double start, double end)
+    private bool Near(
+        IHeroPositions positions,
+        int player,
+        HeroDeath death,
+        double start,
+        double end
+    )
     {
         if (positions == null)
         {

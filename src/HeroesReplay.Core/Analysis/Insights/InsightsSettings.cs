@@ -52,34 +52,34 @@ public class BStepInsightSettings
     /// <c>AbilityDetection:Hearth</c> (<c>AbilityDetector</c>).
     /// </summary>
     public AbilityBuild[] HearthLinks { get; set; } =
-    {
-        new() { AbilityLink = 200, LessThanBuild = 61872 },
-        new()
         {
-            AbilityLink = 119,
-            GreaterEqualBuild = 61872,
-            LessThanBuild = 68740,
-        },
-        new()
-        {
-            AbilityLink = 116,
-            GreaterEqualBuild = 68740,
-            LessThanBuild = 70682,
-        },
-        new()
-        {
-            AbilityLink = 112,
-            GreaterEqualBuild = 70682,
-            LessThanBuild = 77525,
-        },
-        new()
-        {
-            AbilityLink = 114,
-            GreaterEqualBuild = 77525,
-            LessThanBuild = 79033,
-        },
-        new() { AbilityLink = 115, GreaterEqualBuild = 79033 },
-    };
+            new() { AbilityLink = 200, LessThanBuild = 61872 },
+            new()
+            {
+                AbilityLink = 119,
+                GreaterEqualBuild = 61872,
+                LessThanBuild = 68740,
+            },
+            new()
+            {
+                AbilityLink = 116,
+                GreaterEqualBuild = 68740,
+                LessThanBuild = 70682,
+            },
+            new()
+            {
+                AbilityLink = 112,
+                GreaterEqualBuild = 70682,
+                LessThanBuild = 77525,
+            },
+            new()
+            {
+                AbilityLink = 114,
+                GreaterEqualBuild = 77525,
+                LessThanBuild = 79033,
+            },
+            new() { AbilityLink = 115, GreaterEqualBuild = 79033 },
+        };
 
     /// <summary>A move this soon after the Hearthstone started cancels it as a bstep.</summary>
     public double MaxCancelSeconds { get; set; } = 1.0;
