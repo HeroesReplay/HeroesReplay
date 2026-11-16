@@ -81,10 +81,10 @@ public class BStepAnalyzerTests
     }
 
     [Fact]
-    public void ThreeCancels_SlowCancels_SlowGaps_OrAbilityCancels_AreNotBstepping()
+    public void TwoCancels_SlowCancels_SlowGaps_OrAbilityCancels_AreNotBstepping()
     {
         var casts = new List<HearthCast>();
-        casts.AddRange(Cycles(player: 0, from: 100, count: 3, gap: 0.2, cancel: 0.1));
+        casts.AddRange(Cycles(player: 0, from: 100, count: 2, gap: 0.2, cancel: 0.1));
         // A hero hearths, waits, then walks off: one cancel, seconds in.
         casts.AddRange(Cycles(player: 1, from: 200, count: 4, gap: 0.3, cancel: 2.5));
         // 65269682: Rexxar's hearths cancelled seconds apart.

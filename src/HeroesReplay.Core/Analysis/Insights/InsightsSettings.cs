@@ -87,8 +87,12 @@ public class BStepInsightSettings
     /// <summary>The next bstep starts at most this long after the last one.</summary>
     public double MaxGapSeconds { get; set; } = 1.0;
 
-    /// <summary>A bstep needs at least this many Hearthstone starts, each cancelled by a move.</summary>
-    public int MinCycles { get; set; } = 4;
+    /// <summary>
+    /// A bstep needs at least this many Hearthstone starts, each cancelled by a move. On 300 games,
+    /// 1,084 hearth cancels stood alone and 50 came in pairs (a double tap), then the count drops
+    /// to a handful each at 3, 4, 5 and up to 64: three is already on purpose.
+    /// </summary>
+    public int MinCycles { get; set; } = 3;
 
     /// <summary>A hero death this long before the bstep started links it to the bstep.</summary>
     public int DeathBeforeSeconds { get; set; } = 12;
