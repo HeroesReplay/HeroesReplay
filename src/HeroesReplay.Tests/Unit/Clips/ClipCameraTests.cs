@@ -195,12 +195,7 @@ public class ClipCameraTests
         Positions positions = QuadraKillAround(HanzoStands);
 
         Assert.True(
-            ClipCamera.Shows(
-                QuadraKill(),
-                Camera((440, 490, Qhira)),
-                positions,
-                new ClipSettings()
-            )
+            ClipCamera.Shows(QuadraKill(), Camera((440, 490, Qhira)), positions, new ClipSettings())
         );
     }
 
@@ -302,7 +297,12 @@ public class ClipCameraTests
         foreach ((int second, int kx, int ky, int vx, int vy, int victim) in blows)
         {
             positions.Stand(Qhira, new MapPoint(hanzo.X + kx, hanzo.Y + ky), second, second);
-            positions.Stand(victim, new MapPoint(hanzo.X + vx, hanzo.Y + vy), second - 2, second - 1);
+            positions.Stand(
+                victim,
+                new MapPoint(hanzo.X + vx, hanzo.Y + vy),
+                second - 2,
+                second - 1
+            );
         }
 
         return positions;

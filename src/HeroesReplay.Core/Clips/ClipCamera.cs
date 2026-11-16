@@ -132,11 +132,7 @@ public static class ClipCamera
     )
     {
         TimeSpan time = TimeSpan.FromSeconds(blow.Second);
-        if (
-            camera == null
-            || !camera.TryGetValue(time, out Focus focus)
-            || focus == null
-        )
+        if (camera == null || !camera.TryGetValue(time, out Focus focus) || focus == null)
         {
             return false;
         }
