@@ -33,7 +33,7 @@ public sealed record BStep
     /// <summary>The middle gap between two Hearthstone starts, in seconds.</summary>
     public double MedianGapSeconds { get; init; }
 
-    public IReadOnlyList<BStepDeath> Deaths { get; init; } = Array.Empty<BStepDeath>();
+    public IReadOnlyList<BStepDeath> Deaths { get; set; } = Array.Empty<BStepDeath>();
 }
 
 /// <summary>How a death relates to the bstepper.</summary>
