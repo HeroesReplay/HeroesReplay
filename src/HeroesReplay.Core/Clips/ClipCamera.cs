@@ -81,14 +81,13 @@ public static class ClipCamera
     )
     {
         settings ??= new ClipSettings();
-        double radius = settings.CameraRadius;
         int first = Math.Min(clip.FirstDeathSecond, clip.LastDeathSecond);
         int last = clip.LastDeathSecond;
         int shown = 0;
         bool moment = false;
         for (int second = first; second <= last; second++)
         {
-            if (!At(clip, camera, positions, radius, second))
+            if (!At(clip, camera, positions, settings, second))
             {
                 continue;
             }
@@ -194,7 +193,7 @@ public static class ClipCamera
         TeamKillClip clip,
         IReadOnlyDictionary<TimeSpan, Focus> camera,
         IHeroPositions positions,
-        double radius,
+        ClipSettings settings,
         int second
     )
     {
@@ -228,7 +227,13 @@ public static class ClipCamera
             return false;
         }
 
-        return positions.TryGet(focus.Index, time, out MapPoint shown)
-            && shown.DistanceTo(place) <= radius;
+        if (!positions.TryGet(focus.Index, time, out MapPoint shown))
+        {
+            return false;
+        }
+
+        return clip.OnScreen
+            ? OnScreen(shown, place, settings)
+            : shown.DistanceTo(place) <= settings.CameraRadius;
     }
 }

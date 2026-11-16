@@ -34,6 +34,105 @@ public class InsightsSettings
     public AwardInsightSettings Awards { get; set; } = new();
 
     public BossFightInsightSettings Bosses { get; set; } = new();
+
+    public BStepInsightSettings BSteps { get; set; } = new();
+}
+
+/// <summary>
+/// Bstepping: a player starts their Hearthstone and cancels it with a move order, again and again,
+/// so their hero steps back and forth with the recall flashing; bad manners, usually aimed at an
+/// enemy. Measured on the prod-2026-10-25 corpus (build 2.57): a real bstep cycles every 0.13 to
+/// 0.5 s, a hero that hearths and walks off for a reason cancels once, and a hero that cancels the
+/// channel with an ability does it seconds apart.
+/// </summary>
+public class BStepInsightSettings
+{
+    /// <summary>
+    /// The Hearthstone's ability link by build: the same table as
+    /// <c>AbilityDetection:Hearth</c> (<c>AbilityDetector</c>).
+    /// </summary>
+    public AbilityBuild[] HearthLinks { get; set; } =
+        {
+            new() { AbilityLink = 200, LessThanBuild = 61872 },
+            new()
+            {
+                AbilityLink = 119,
+                GreaterEqualBuild = 61872,
+                LessThanBuild = 68740,
+            },
+            new()
+            {
+                AbilityLink = 116,
+                GreaterEqualBuild = 68740,
+                LessThanBuild = 70682,
+            },
+            new()
+            {
+                AbilityLink = 112,
+                GreaterEqualBuild = 70682,
+                LessThanBuild = 77525,
+            },
+            new()
+            {
+                AbilityLink = 114,
+                GreaterEqualBuild = 77525,
+                LessThanBuild = 79033,
+            },
+            new() { AbilityLink = 115, GreaterEqualBuild = 79033 },
+        };
+
+    /// <summary>A move this soon after the Hearthstone started cancels it as a bstep.</summary>
+    public double MaxCancelSeconds { get; set; } = 1.0;
+
+    /// <summary>The next bstep starts at most this long after the last one.</summary>
+    public double MaxGapSeconds { get; set; } = 1.0;
+
+    /// <summary>
+    /// A bstep needs at least this many Hearthstone starts, each cancelled by a move. On 300 games,
+    /// 1,084 hearth cancels stood alone and 50 came in pairs (a double tap), then the count drops
+    /// to a handful each at 3, 4, 5 and up to 64: three is already on purpose.
+    /// </summary>
+    public int MinCycles { get; set; } = 3;
+
+    /// <summary>
+    /// Bursts of bstepping by one player at most this many seconds apart are one bstep: a player
+    /// stops to look around and starts again (Anub'arak in 65269873, eleven bursts in 50 s).
+    /// </summary>
+    public double MergeSeconds { get; set; } = 4;
+
+    /// <summary>A hero death this long before the bstep started links it to the bstep.</summary>
+    public int DeathBeforeSeconds { get; set; } = 10;
+
+    /// <summary>A hero death this long after the bstep ended links it to the bstep.</summary>
+    public int DeathAfterSeconds { get; set; } = 10;
+
+    /// <summary>
+    /// A death this close (map units) to the bstepping hero links it, whoever died: a little
+    /// wider than the screen's half width (<c>Clips:CameraViewHalfWidth</c>, 12). The bstepper's
+    /// own death, and a death they were credited with, link wherever they happened.
+    /// </summary>
+    public double DeathRadius { get; set; } = 15;
+
+    /// <summary>The Hearthstone's link in <paramref name="build"/>, or null when the table has none.</summary>
+    public int? HearthLink(int build)
+    {
+        foreach (AbilityBuild entry in HearthLinks ?? Array.Empty<AbilityBuild>())
+        {
+            if (
+                entry != null
+                && AbilityDetector.IsBuildInRange(
+                    build,
+                    entry.GreaterEqualBuild,
+                    entry.LessThanBuild
+                )
+            )
+            {
+                return entry.AbilityLink;
+            }
+        }
+
+        return null;
+    }
 }
 
 /// <summary>
