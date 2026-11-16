@@ -278,6 +278,34 @@ public class ClipCameraTests
         );
     }
 
+    [Fact]
+    public void ABstep_NeedsTheBstepperOnScreen_NotJustNearTheFollowedHero()
+    {
+        var positions = new Positions();
+        positions.Stand(Whitemane, new MapPoint(100, 100), 600, 610);
+        // 14 units east of Whitemane: inside CameraRadius (15), outside the screen's half width (12).
+        positions.Stand(Raynor, new MapPoint(114, 100), 600, 610);
+        IReadOnlyDictionary<TimeSpan, Focus> camera = Camera((600, 610, Whitemane));
+        TeamKillClip bstep = new(
+            BStepClips.Kind,
+            "Raynor",
+            602,
+            605,
+            596,
+            609,
+            "Raynor bsteps",
+            Player: Raynor,
+            OnScreen: true
+        );
+
+        Assert.True(ClipCamera.Shows(bstep with { OnScreen = false }, camera, positions, null));
+        Assert.False(ClipCamera.Shows(bstep, camera, positions, null));
+
+        positions.Stand(Raynor, new MapPoint(108, 104), 600, 610);
+        Assert.True(ClipCamera.Shows(bstep, camera, positions, null));
+        Assert.True(ClipCamera.Shows(bstep, Camera((600, 610, Raynor)), positions, null));
+    }
+
     /// <summary>
     /// Qhira's four blows from replay 66698689, as (second, killer offset, victim offset, victim)
     /// from Hanzo; between blows Qhira stands near Hanzo.

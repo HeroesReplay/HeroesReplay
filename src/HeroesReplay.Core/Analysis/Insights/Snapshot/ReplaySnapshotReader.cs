@@ -100,6 +100,7 @@ public static class ReplaySnapshotReader
             KillingBlows = KillingBlows(replay, catalog),
             BossCaptures = BossCaptures(replay, players, camps, captures),
             HeroDeaths = HeroDeaths(players),
+            HearthCasts = HearthCasts(replay, players, settings.BSteps),
             Positions = new HeroPositions(players, settings.MaxPositionAge),
         };
     }
@@ -247,7 +248,10 @@ public static class ReplaySnapshotReader
                             index,
                             player.Team,
                             died,
-                            new MapPoint(unit.PointDied.X, unit.PointDied.Y)
+                            new MapPoint(unit.PointDied.X, unit.PointDied.Y),
+                            unit.PlayerKilledBy == null
+                                ? -1
+                                : Array.IndexOf(players, unit.PlayerKilledBy)
                         )
                     );
                 }
@@ -255,6 +259,96 @@ public static class ReplaySnapshotReader
         }
 
         return deaths.OrderBy(death => death.Time).ThenBy(death => death.PlayerIndex).ToArray();
+    }
+
+    /// <summary>
+    /// Each Hearthstone order (<see cref="BStepInsightSettings.HearthLinks"/> for the replay's
+    /// build) with the player's next order: a move cancels it when that next order is a plain
+    /// right-click (no ability: a point, a unit, or a held right mouse button updating the point).
+    /// </summary>
+    private static HearthCast[] HearthCasts(
+        Replay replay,
+        Player[] players,
+        BStepInsightSettings settings
+    )
+    {
+        int? link = settings?.HearthLink(replay.ReplayBuild);
+        if (link == null || replay.GameEvents == null)
+        {
+            return Array.Empty<HearthCast>();
+        }
+
+        var indexOf = new Dictionary<Player, int>();
+        for (int index = 0; index < players.Length; index++)
+        {
+            if (players[index] != null)
+            {
+                indexOf.TryAdd(players[index], index);
+            }
+        }
+
+        var casts = new List<HearthCast>();
+        var open = new Dictionary<int, HearthCast>();
+        foreach (
+            GameEvent order in replay
+                .GameEvents.Where(order =>
+                    order?.player != null
+                    && order.eventType
+                        is GameEventType.CCmdEvent
+                            or GameEventType.CCmdUpdateTargetPointEvent
+                )
+                .OrderBy(order => order.ticksElapsed)
+        )
+        {
+            if (!indexOf.TryGetValue(order.player, out int index))
+            {
+                continue;
+            }
+
+            double seconds = order.ticksElapsed / 16.0;
+            OrderKind kind = Kind(order, link.Value);
+            if (open.Remove(index, out HearthCast cast))
+            {
+                casts.Add(kind == OrderKind.Move ? cast with { CancelSeconds = seconds } : cast);
+            }
+
+            if (kind == OrderKind.Hearth)
+            {
+                open[index] = new HearthCast(index, seconds);
+            }
+        }
+
+        casts.AddRange(open.Values);
+        return casts
+            .OrderBy(cast => cast.Seconds)
+            .ThenBy(cast => cast.PlayerIndex)
+            .ToArray();
+    }
+
+    private enum OrderKind
+    {
+        Move,
+        Hearth,
+        Other,
+    }
+
+    private static OrderKind Kind(GameEvent order, int hearthLink)
+    {
+        if (order.eventType == GameEventType.CCmdUpdateTargetPointEvent)
+        {
+            return OrderKind.Move;
+        }
+
+        TrackerEventStructure ability =
+            order.data?.array?.Length > 1 ? order.data.array[1] : null;
+        if (ability == null)
+        {
+            return OrderKind.Move;
+        }
+
+        return ability.array?[0]?.unsignedInt == (ulong)hearthLink
+            ? OrderKind.Hearth
+            : OrderKind.Other;
     }
 
     private static Dictionary<int, Unit> Cores(Replay replay, InsightsSettings settings)

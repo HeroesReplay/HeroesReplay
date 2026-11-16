@@ -11,12 +11,14 @@ using Heroes.ReplayParser;
 using HeroesReplay.Core.Analysis.Insights;
 using HeroesReplay.Core.Analysis.Insights.Awards;
 using HeroesReplay.Core.Analysis.Insights.Bosses;
+using HeroesReplay.Core.Analysis.Insights.BSteps;
 using HeroesReplay.Core.Analysis.Insights.Builds;
 using HeroesReplay.Core.Analysis.Insights.Bursts;
 using HeroesReplay.Core.Analysis.Insights.Lanes;
 using HeroesReplay.Core.Analysis.Insights.Objectives;
 using HeroesReplay.Core.Analysis.Insights.Players;
 using HeroesReplay.Core.Builds.Reference;
+using HeroesReplay.Core.Clips;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.HeroesData;
 using HeroesReplay.Core.Shared;
@@ -34,7 +36,7 @@ public class InsightsCommand : Command
     public InsightsCommand()
         : base(
             "insights",
-            "Read every .StormReplay in a folder, one file at a time, with units, events and statistics, and print each replay's match insights: each team's solo laner and its confidence, positive standouts, the MVP, camps (and how many on the enemy side), forts and keeps lost, a core race, a comeback, each player's closest guide build, each hero's kill bursts (3 killing blows within 3 s), the map objective's leader with its share and award, the standout awards (clutch heals, vengeances, escapes), and each boss capture with the fight at the pit before it (who started it, who killed and who captured the boss, time grouped at the pit, deaths there; a steal, a denied boss or a defended boss). Then how often each appears per game, per team or per player, to tune the Insights thresholds. Reads the heroes-data2 catalog under Location:DataDirectory and the shipped talent-build reference. Read-only."
+            "Read every .StormReplay in a folder, one file at a time, with units, events and statistics, and print each replay's match insights: each team's solo laner and its confidence, positive standouts, the MVP, camps (and how many on the enemy side), forts and keeps lost, a core race, a comeback, each player's closest guide build, each hero's kill bursts (3 killing blows within 3 s), the map objective's leader with its share and award, the standout awards (clutch heals, vengeances, escapes), and each boss capture with the fight at the pit before it (who started it, who killed and who captured the boss, time grouped at the pit, deaths there; a steal, a denied boss or a defended boss), and each bstep (Hearthstone started and cancelled by a move, over and over) with the deaths around it, and the ones a clip would cut. Then how often each appears per game, per team or per player, to tune the Insights thresholds. Reads the heroes-data2 catalog under Location:DataDirectory and the shipped talent-build reference. Read-only."
         )
     {
         var directoryOption = new Option<string>("--directory")
@@ -379,6 +381,32 @@ public class InsightsCommand : Command
                 Count(games, "boss " + kind);
             }
 
+            foreach (BStep step in insights.BSteps.BSteps)
+            {
+                Count(games, "bstep (count)");
+                if (step.Deaths.Count > 0)
+                {
+                    Count(games, "bstep with a death (count)");
+                }
+
+                parts.Add(BStepRow(step));
+            }
+
+            if (insights.BSteps.BSteps.Count > 0)
+            {
+                Count(games, "bstep");
+            }
+
+            int bstepClips = BStepClips.Select(insights.BSteps).Count;
+            if (bstepClips > 0)
+            {
+                Count(games, "bstep clip");
+                for (int clip = 0; clip < bstepClips; clip++)
+                {
+                    Count(games, "bstep clips (count)");
+                }
+            }
+
             string row = string.Join(" | ", parts);
             rows.Add(row);
             return row;
@@ -451,6 +479,24 @@ public class InsightsCommand : Command
             : "off-guide (< 0.50)";
 
         private static string Team(int team) => team == 0 ? "Blue" : "Red";
+
+        /// <summary>One bstep's measurements, to tune <c>Insights:BSteps</c>.</summary>
+        private static string BStepRow(BStep step)
+        {
+            string deaths =
+                step.Deaths.Count == 0
+                    ? "no death"
+                    : string.Join(
+                        ", ",
+                        step.Deaths.Select(death =>
+                            $"{death.Kind} {death.Hero ?? "-"} {(death.After ? "after" : "before")} at {Clock(death.Second)}"
+                        )
+                    );
+            return string.Create(
+                CultureInfo.InvariantCulture,
+                $"bstep {Clock(step.StartSecond)}-{Clock(step.EndSecond)} {step.Hero ?? "-"} x{step.Cycles} every {step.MedianGapSeconds:0.00}s: {deaths}"
+            );
+        }
 
         /// <summary>One boss fight's measurements, to tune <c>Insights:Bosses</c> (#528).</summary>
         private static string Boss(BossFight fight)

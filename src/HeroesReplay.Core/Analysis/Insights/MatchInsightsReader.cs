@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Heroes.ReplayParser;
 using HeroesReplay.Core.Analysis.Insights.Awards;
 using HeroesReplay.Core.Analysis.Insights.Bosses;
+using HeroesReplay.Core.Analysis.Insights.BSteps;
 using HeroesReplay.Core.Analysis.Insights.Builds;
 using HeroesReplay.Core.Analysis.Insights.Bursts;
 using HeroesReplay.Core.Analysis.Insights.Camps;
@@ -53,6 +54,7 @@ public sealed class MatchInsightsReader : IMatchInsightsReader
     private readonly IInsightAnalyzer<ObjectiveInsights> objectives;
     private readonly IInsightAnalyzer<AwardInsights> awards;
     private readonly IInsightAnalyzer<BossFightInsights> bosses;
+    private readonly IInsightAnalyzer<BStepInsights> bsteps;
 
     public MatchInsightsReader(
         InsightsSettings settings,
@@ -67,9 +69,11 @@ public sealed class MatchInsightsReader : IMatchInsightsReader
         IInsightAnalyzer<BurstInsights> bursts,
         IInsightAnalyzer<ObjectiveInsights> objectives,
         IInsightAnalyzer<AwardInsights> awards,
-        IInsightAnalyzer<BossFightInsights> bosses
+        IInsightAnalyzer<BossFightInsights> bosses,
+        IInsightAnalyzer<BStepInsights> bsteps = null
     )
     {
+        this.bsteps = bsteps ?? new BStepAnalyzer(settings?.BSteps);
         this.bosses = bosses ?? throw new ArgumentNullException(nameof(bosses));
         this.settings = settings ?? new InsightsSettings();
         this.bursts = bursts ?? throw new ArgumentNullException(nameof(bursts));
@@ -110,7 +114,8 @@ public sealed class MatchInsightsReader : IMatchInsightsReader
             new BurstAnalyzer(settings.Bursts),
             new ObjectiveAnalyzer(settings.Objectives),
             new AwardAnalyzer(settings.Awards),
-            new BossFightAnalyzer(settings.Bosses)
+            new BossFightAnalyzer(settings.Bosses),
+            new BStepAnalyzer(settings.BSteps)
         );
     }
 
@@ -135,6 +140,7 @@ public sealed class MatchInsightsReader : IMatchInsightsReader
             Objectives = objectives.Analyze(snapshot),
             Awards = awards.Analyze(snapshot),
             Bosses = bosses.Analyze(snapshot),
+            BSteps = bsteps.Analyze(snapshot),
         };
     }
 }

@@ -9,6 +9,7 @@ using Heroes.ReplayParser;
 using HeroesReplay.Core.Analysis;
 using HeroesReplay.Core.Analysis.Insights;
 using HeroesReplay.Core.Analysis.Insights.Bosses;
+using HeroesReplay.Core.Analysis.Insights.BSteps;
 using HeroesReplay.Core.Analysis.Insights.Snapshot;
 using HeroesReplay.Core.Obs.Recording;
 using HeroesReplay.Core.Shared;
@@ -71,6 +72,7 @@ public static class MatchClipExporter
         );
         var clips = new List<TeamKillClip>(kills);
         clips.AddRange(BossClips(snapshot, insights, kills, shown, logger));
+        clips.AddRange(BStepClipsFor(snapshot, insights, clips.ToArray(), shown, logger));
         await ExportAsync(
                 clips,
                 replay,
@@ -167,6 +169,39 @@ public static class MatchClipExporter
         catch (Exception e)
         {
             logger?.LogWarning(e, "Could not read the boss fights. Only kill clips are cut.");
+            return Array.Empty<TeamKillClip>();
+        }
+    }
+
+    /// <summary>
+    /// The replay's bsteps around a death that the camera showed (<see cref="BStepClips"/>), none
+    /// over a kill or boss clip. A replay the analysis cannot read gives none.
+    /// </summary>
+    internal static IReadOnlyList<TeamKillClip> BStepClipsFor(
+        ReplaySnapshot snapshot,
+        InsightsSettings insights,
+        IReadOnlyList<TeamKillClip> otherClips,
+        Func<TeamKillClip, bool> onCamera,
+        ILogger logger
+    )
+    {
+        if (snapshot == null)
+        {
+            return Array.Empty<TeamKillClip>();
+        }
+
+        try
+        {
+            insights ??= new InsightsSettings();
+            return BStepClips.Select(
+                new BStepAnalyzer(insights.BSteps).Analyze(snapshot),
+                otherClips,
+                onCamera
+            );
+        }
+        catch (Exception e)
+        {
+            logger?.LogWarning(e, "Could not read the bsteps. They are not cut.");
             return Array.Empty<TeamKillClip>();
         }
     }
