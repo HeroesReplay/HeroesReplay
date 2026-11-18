@@ -29,7 +29,7 @@ updates:
       # An exact pin with its SHA-256 beside it (HeroesClientSDKSha256), restored from .packages.
       # A bump is a match-clock change and needs the live proof on ASA-SERVER (AGENTS.md).
       - dependency-name: HeroesClientSDK
-      # Stay on the .NET 10 LTS line the runtime runs on, and on System.CommandLine 2.
+      # Stay on the .NET 11 line the runtime runs on, and on System.CommandLine 2.
       - dependency-name: Microsoft.Extensions.*
         update-types:
           - version-update:semver-major
@@ -37,7 +37,7 @@ updates:
         update-types:
           - version-update:semver-major
     groups:
-      # The .NET 10 servicing train: one pull request each Patch Tuesday.
+      # The .NET 11 servicing train: one pull request each Patch Tuesday.
       microsoft-extensions:
         patterns:
           - Microsoft.Extensions.*

@@ -9,8 +9,8 @@
 # Needs gh signed in (GH_TOKEN in Actions) with issues: write.
 param(
     [string]$Repository = $env:GITHUB_REPOSITORY,
-    [string]$Channel = '10.0',
-    # Compare this runtime ('.NET 10.0.12') instead of the one the latest release names: a what-if
+    [string]$Channel = '11.0',
+    # Compare this runtime ('.NET 11.0.1') instead of the one the latest release names: a what-if
     # for -DryRun, such as for a release from before #462.
     [string]$ShippedRuntime = '',
     [switch]$DryRun
@@ -27,7 +27,7 @@ $metadataUrl = "https://builds.dotnet.microsoft.com/dotnet/release-metadata/$Cha
 $titlePrefix = 'Stale .NET runtime:'
 $marker = '<!-- runtime-currency: .github/workflows/runtime-currency.yml (#462) -->'
 
-# 10.0.13 from ".NET 10.0.13" or "10.0.13"; prerelease suffixes are ignored. Null without one.
+# 11.0.1 from ".NET 11.0.1" or "11.0.1"; prerelease suffixes are ignored. Null without one.
 function Get-RuntimeVersion([string]$Text) {
     if ("$Text" -match '(\d+)\.(\d+)\.(\d+)') {
         return [version]::new([int]$Matches[1], [int]$Matches[2], [int]$Matches[3])
