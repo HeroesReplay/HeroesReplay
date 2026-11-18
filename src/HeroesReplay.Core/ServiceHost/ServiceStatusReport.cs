@@ -5,6 +5,7 @@ using System.Text.Json.Serialization;
 using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.Shared;
 using HeroesReplay.Core.Status;
+using HeroesReplay.Core.Telemetry;
 
 namespace HeroesReplay.Core.ServiceHost;
 
@@ -206,6 +207,12 @@ public sealed record ServiceSupervisorSummary
 
     /// <summary>The OBS watchdog (#398) from <c>supervisor.json</c>. Null when it wrote none.</summary>
     public ObsWatchdogState Obs { get; init; }
+
+    /// <summary>
+    /// The Aspire dashboard (#538) from <c>supervisor.json</c>: <c>down</c> while its OTLP port does
+    /// not answer. It does not change <see cref="ServiceStatusReport.Ok"/>; the roles still run.
+    /// </summary>
+    public TelemetryDashboardState Telemetry { get; init; }
 }
 
 /// <summary>The spectator's own status file, summarised next to the roles.</summary>

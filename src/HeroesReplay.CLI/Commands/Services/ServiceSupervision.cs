@@ -7,6 +7,7 @@ using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.Retention;
 using HeroesReplay.Core.ServiceHost;
 using HeroesReplay.Core.Shared;
+using HeroesReplay.Core.Telemetry;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -137,6 +138,12 @@ public sealed class ServiceSupervision
     /// once a stop is requested. Null watches nothing.
     /// </summary>
     public ObsWatchdog Obs { get; init; }
+
+    /// <summary>
+    /// The Aspire dashboard watchdog (#538): relaunches the dashboard when its OTLP port stops
+    /// answering. It runs on every pass, never once a stop is requested. Null watches nothing.
+    /// </summary>
+    public TelemetryDashboardWatchdog Telemetry { get; init; }
 
     /// <summary>
     /// Why the .NET runtime this supervisor loaded is gone (<see cref="RuntimeFolder.Missing"/>),
@@ -281,6 +288,7 @@ public sealed class ServiceSupervision
             Health
         );
         bool changed = TickObs(now);
+        changed |= TickTelemetry(now);
         changed |= ApplyResets(now);
         foreach (string role in supervised)
         {
@@ -400,6 +408,25 @@ public sealed class ServiceSupervision
         }
 
         return changed;
+    }
+
+    /// <summary>One dashboard watchdog pass. A failure here never stops supervision.</summary>
+    private bool TickTelemetry(DateTimeOffset now)
+    {
+        if (Telemetry == null)
+        {
+            return false;
+        }
+
+        try
+        {
+            return Telemetry.Tick(now);
+        }
+        catch (Exception e)
+        {
+            Logger.LogWarning("The telemetry dashboard check failed: {Message}", e.Message);
+            return false;
+        }
     }
 
     /// <summary>One OBS watchdog pass. True when its state or restarts changed, so the file is saved.</summary>
@@ -858,6 +885,7 @@ public sealed class ServiceSupervision
                     Supervised = supervised.ToList(),
                     Roles = supervised.Select(role => ledgers[role]).ToList(),
                     Obs = Obs?.State,
+                    Telemetry = Telemetry?.State,
                 }
             );
             savedAt = now;

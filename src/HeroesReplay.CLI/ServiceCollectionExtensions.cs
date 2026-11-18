@@ -48,6 +48,7 @@ using HeroesReplay.Core.Spectating.Control;
 using HeroesReplay.Core.Spectating.Reports;
 using HeroesReplay.Core.Spectating.Session;
 using HeroesReplay.Core.Status;
+using HeroesReplay.Core.Telemetry;
 using HeroesReplay.Core.Twitch;
 using HeroesReplay.Core.Twitch.ChatMessages;
 using HeroesReplay.Core.Twitch.Predictions;
@@ -214,6 +215,11 @@ public static class ServiceCollectionExtensions
         ?? new ServiceLogSettings();
 
     /// <summary>The effective <c>MachineHealth</c> section. No secret is resolved.</summary>
+    /// <summary>The effective <c>OpenTelemetry</c> section (#538). No secret is resolved.</summary>
+    public static TelemetrySettings LoadTelemetrySettings() =>
+        GetConfiguration().GetSection(TelemetrySettings.SectionName).Get<TelemetrySettings>()
+        ?? new TelemetrySettings();
+
     public static MachineHealthSettings LoadMachineHealthSettings() =>
         GetConfiguration().GetSection("MachineHealth").Get<MachineHealthSettings>()
         ?? new MachineHealthSettings();

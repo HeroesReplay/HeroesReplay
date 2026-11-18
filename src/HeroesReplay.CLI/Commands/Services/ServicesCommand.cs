@@ -19,6 +19,7 @@ using HeroesReplay.Core.ServiceHost;
 using HeroesReplay.Core.ServiceHost.Logs;
 using HeroesReplay.Core.Shared;
 using HeroesReplay.Core.Status;
+using HeroesReplay.Core.Telemetry;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -456,10 +457,30 @@ public class ServicesCommand : Command
                 provider.GetRequiredService<ILogger<MachineHealthLog>>()
             ),
             Obs = CreateObsWatchdog(settings, provider.GetRequiredService<ILogger<ObsWatchdog>>()),
+            Telemetry = CreateTelemetryWatchdog(
+                provider.GetRequiredService<ILogger<TelemetryDashboardWatchdog>>()
+            ),
             Housekeeping = CreateHousekeeping(
                 provider.GetRequiredService<ILogger<HousekeepingPass>>()
             ),
         };
+
+    /// <summary>
+    /// The supervisor's dashboard watchdog (#538): probes OTLP gRPC and relaunches the Aspire
+    /// dashboard headless, with <c>OpenTelemetry:Dashboard</c>'s limits, when it stops answering.
+    /// </summary>
+    private static TelemetryDashboardWatchdog CreateTelemetryWatchdog(ILogger logger)
+    {
+        TelemetrySettings telemetry = ServiceCollectionExtensions.LoadTelemetrySettings();
+        TelemetryDashboardSettings dashboard = telemetry.Dashboard
+            ?? new TelemetryDashboardSettings();
+        return new TelemetryDashboardWatchdog(dashboard, telemetry.Enabled)
+        {
+            Listening = () => AspireDashboardHost.IsPortListening(AspireDashboardHost.OtlpGrpcPort),
+            Relaunch = () => AspireDashboardHost.Relaunch(dashboard),
+            Logger = logger,
+        };
+    }
 
     /// <summary>
     /// The supervisor's housekeeping pass (#487) over the effective settings, without secrets.

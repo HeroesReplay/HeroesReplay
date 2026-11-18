@@ -1011,6 +1011,13 @@ public static class ServiceSupervisor
         {
             output.WriteLine($"  OBS watchdog: {supervisor.Obs.Describe(now)}");
         }
+
+        if (supervisor.Telemetry != null)
+        {
+            output.WriteLine(
+                $"  Telemetry dashboard: {supervisor.Telemetry.Describe(now)} UI {AspireDashboardHost.UiUrl}."
+            );
+        }
     }
 
     /// <summary>
