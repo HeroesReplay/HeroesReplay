@@ -62,4 +62,10 @@ public class YouTubeTitleSettings
     /// title's lead and the description's insight lines. Off by default.
     /// </summary>
     public HighlightSettings Highlights { get; set; } = new HighlightSettings();
+
+    /// <summary>Clip titles from the clip's own facts (<c>YouTube:Titles:Clips</c>).</summary>
+    public ClipTitleSettings Clips { get; set; } = new ClipTitleSettings();
+
+    /// <summary>The game's name at the end of a title (<c>YouTube:Titles:GameName</c>).</summary>
+    public GameNameSettings GameName { get; set; } = new GameNameSettings();
 }

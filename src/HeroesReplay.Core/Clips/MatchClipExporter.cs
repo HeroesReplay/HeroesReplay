@@ -163,7 +163,8 @@ public static class MatchClipExporter
             return BossFightClips.Select(
                 new BossFightAnalyzer(insights.Bosses).Analyze(snapshot),
                 kills,
-                onCamera
+                onCamera,
+                snapshot.TeamLevels
             );
         }
         catch (Exception e)
@@ -406,7 +407,7 @@ public static class MatchClipExporter
         // A clip that names a team (a boss stolen from the team that killed it, #528) has no hero.
         string hero = clip.NamesTeam ? null : clip.Hero?.Trim();
         string title = YouTubeListing.ApplyMarker(
-            string.Join(" - ", new[] { clip.Hero, kind, map, id }.WhereNotEmpty()),
+            ClipTitle.Compose(clip, map, id, youtube?.Titles, youtube?.TitlePrefix),
             youtube?.TitlePrefix
         );
         var entry = new YouTubeEntry
@@ -424,7 +425,7 @@ public static class MatchClipExporter
                     ? string.Empty
                     : $"Heroes Profile Match: https://www.heroesprofile.com/Match/Single/?replayID={id}",
             }.WhereNotEmpty(),
-            Tags = new[] { kind, clip.NamesTeam ? null : clip.Hero, map }.WhereNotEmpty(),
+            Tags = ClipTags(clip, kind, map, youtube?.Titles?.GameName),
             Hero = string.IsNullOrWhiteSpace(hero) ? null : hero,
             Heroes = string.IsNullOrWhiteSpace(hero) ? null : new[] { hero },
         };
@@ -433,6 +434,27 @@ public static class MatchClipExporter
             JsonSerializer.Serialize(entry, YouTubeJsonContext.Indented.YouTubeEntry)
         );
     }
+
+    /// <summary>
+    /// The kind, the hero and the map, then a bstep's own search words and the game's names
+    /// when the title names the game (<see cref="GameNameSettings.Clips"/>).
+    /// </summary>
+    private static string[] ClipTags(
+        TeamKillClip clip,
+        string kind,
+        string map,
+        GameNameSettings game
+    ) =>
+        new[]
+        {
+            kind,
+            clip.NamesTeam ? null : clip.Hero,
+            map,
+            clip.Kind == BStepClips.Kind ? "hearth cancel" : null,
+            clip.Kind == BStepClips.Kind ? "BM" : null,
+            game?.Clips == true ? game.Name : null,
+            game?.Clips == true ? game.Short : null,
+        }.WhereNotEmpty();
 
     private static string[] WhereNotEmpty(this IEnumerable<string> parts)
     {
