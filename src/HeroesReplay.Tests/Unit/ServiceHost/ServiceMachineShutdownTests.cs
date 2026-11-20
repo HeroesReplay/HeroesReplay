@@ -1,4 +1,4 @@
-∩╗┐using System;
+using System;
 using System.Collections.Generic;
 using HeroesReplay.CLI.Commands.Services;
 using HeroesReplay.Core.ServiceHost;

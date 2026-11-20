@@ -1,4 +1,4 @@
-∩╗┐using System;
+using System;
 using HeroesReplay.Core.ServiceHost;
 using Xunit;
 
