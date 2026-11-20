@@ -6,7 +6,7 @@ Contract for coding agents working in this repository. Code and this file win ov
 
 Windows-only automated spectator for Heroes of the Storm `.StormReplay` files: parse → score focus per second → drive the live client + optional OBS/Twitch. Product vision and the 24/7 cycle: `docs/vision.md`.
 
-Solution: `heroes-replay.slnx` (.NET 10 LTS). Projects: `HeroesReplay.CLI`, `HeroesReplay.Core`, `HeroesReplay.HeroesProfile.Client` (Kiota v1), `HeroesReplay.Tests`. There is no AutoSpectator project. Regenerate the Heroes Profile client with `tools/generate-heroesprofile-client.ps1`; do not csharpier `Generated/`.
+Solution: `heroes-replay.slnx` (.NET 11). Projects: `HeroesReplay.CLI`, `HeroesReplay.Core`, `HeroesReplay.HeroesProfile.Client` (Kiota v1), `HeroesReplay.Tests`. There is no AutoSpectator project. Regenerate the Heroes Profile client with `tools/generate-heroesprofile-client.ps1`; do not csharpier `Generated/`.
 
 The client memory readers live in their own repo and package, [HeroesClientSDK](https://github.com/HeroesReplay/HeroesClientSDK) (namespace `HeroesClientSDK`, #274): `MatchClock`, `LoadingScreen` and `ClientScreen` (0.4.0 names; before 0.4 `StableMatchClock`, `LoadingScreenMemory` and `ClientScreenMemory`), their samples, `MatchClockTelemetry`, `HeroesClientProcess`, the per-build patterns and the build profiles (`BuildProfileRegistry`). Change them there, with their tests, then tag `vX.Y.Z` on its `main`; `publish.yml` attaches `HeroesClientSDK.X.Y.Z.nupkg` to the GitHub Release of that tag (and also pushes it to GitHub Packages). HeroesReplay restores it without credentials: `nuget.config` maps only `HeroesClientSDK` to the gitignored `.packages` folder, and `tools/restore-sdk-package.ps1` downloads the release asset into it and refuses a file whose SHA-256 differs from the pin. `ci.yml` and `release.yml` run that script before anything restores, `bootstrap-workstation.ps1` runs it, and the build runs it when the file is missing (`Directory.Build.targets`). To bump, set `HeroesClientSDKVersion` and `HeroesClientSDKSha256` together in `Directory.Packages.props` (the SHA-256 of the release asset; `PackageVersion` is the exact pin `[$(HeroesClientSDKVersion)]`). A bump is a match-clock change: it needs the short live proof on ASA-SERVER (`check timer`, plus a current-patch and a previous-patch replay reaching `MM:SS`) before `master`. The stream PC needs nothing: the release zip carries `HeroesClientSDK.dll`.
 
@@ -260,7 +260,7 @@ New machine: clone into `C:\heroesreplay\HeroesReplay`, then `pwsh -File tools/b
 
 ## Hard rules
 
-- Target `net10.0-windows10.0.19041.0` for CLI/Core/Tests. The PrintWindow/BitBlt capture and the WinRT OCR of `check battlenet` need the Windows TFM.
+- Target `net11.0-windows10.0.19041.0` for CLI/Core/Tests. The PrintWindow/BitBlt capture and the WinRT OCR of `check battlenet` need the Windows TFM.
 - File-scoped namespaces, usings outside the namespace, `using` declarations where they reduce nesting.
 - Calculators implement `IFocusCalculator.Contribute(ReplayTimeline)`. Do not bring back `GetFocusPlayers(TimeSpan, Replay)` × PLINQ.
 - Focus pipeline: parse replay → calculators offer weighted events → death lead-ins → hold last winner across empty seconds → keep a nearby hero → hold each shot for its dwell → spectator looks up by the memory match clock until core kill. Do not recompute calculators in the live loop.
@@ -312,7 +312,7 @@ These are installed under `.agents/skills/<name>/` from [dotnet/skills](https://
 | `dotnet-test` | `assertion-quality`, `code-testing-agent`, `code-testing-extensions`, `coverage-analysis`, `crap-score`, `detect-static-dependencies`, `filter-syntax`, `find-untested-sources`, `generate-testability-wrappers`, `grade-tests`, `migrate-static-to-wrapper`, `mtp-hot-reload`, `platform-detection`, `run-tests`, `scaffold-dotnet-test-project`, `test-analysis-extensions`, `test-anti-patterns`, `test-gap-analysis`, `test-smell-detection`, `test-tagging`, `testability-obstacle` |
 | `dotnet-diag` | `analyzing-dotnet-performance`, `clr-activation-debugging`, `dotnet-trace-collect`, `dump-collect`, `microbenchmarking` |
 
-Not vendored because they do not apply to this repo: `migrate-dotnet8-to-dotnet9` and `migrate-dotnet9-to-dotnet10` (already on .NET 10), `thread-abort-migration` (no .NET Framework code), `writing-mstest-tests` (tests use xUnit), and `android-tombstone-symbolication` and `apple-crash-symbolication` (Windows only). Some vendored skills still point to `writing-mstest-tests` for MSTest work. Ignore those pointers.
+Not vendored because they do not apply to this repo: `migrate-dotnet8-to-dotnet9` and `migrate-dotnet9-to-dotnet10` (already past .NET 10), `thread-abort-migration` (no .NET Framework code), `writing-mstest-tests` (tests use xUnit), and `android-tombstone-symbolication` and `apple-crash-symbolication` (Windows only). Some vendored skills still point to `writing-mstest-tests` for MSTest work. Ignore those pointers.
 
 Grok already provides `review`, `create-skill`, and `long-running-background-tasks`. They stay with the tool and are not copied into this repo.
 

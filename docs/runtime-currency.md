@@ -4,7 +4,7 @@ Step 9 of the Native AOT epic (#452), issue #462. It must be in place before any
 
 ## Why
 
-The release is self-contained (#453, from 2026-11-20): the zip carries its .NET runtime, so the stream PC needs no machine-wide runtime, a new .NET major (11) installs on a machine that has only 10, and Windows Update servicing the machine-wide runtime no longer touches a running role (#450, 2026-10-15). Until then it was framework-dependent and ran on the machine-wide runtime Microsoft Update services.
+The release is self-contained (#453, from 2026-11-20): the zip carries its .NET runtime, so the stream PC needs no machine-wide runtime, a new .NET major installs on a machine that has only the old one, and Windows Update servicing the machine-wide runtime no longer touches a running role (#450, 2026-10-15). Until then it was framework-dependent and ran on the machine-wide runtime Microsoft Update services.
 
 The cost: a .NET security fix reaches production only when CI rebuilds the release with a newer SDK and `develop` is released to `master`. This page is how that happens on time.
 
@@ -12,8 +12,8 @@ The cost: a .NET security fix reaches production only when CI rebuilds the relea
 
 | What | Where | Moved by |
 | --- | --- | --- |
-| The .NET SDK | `global.json` (`10.0.402`, `rollForward: patch`) | Dependabot `dotnet-sdk`, weekly |
-| `Microsoft.Extensions.*` and `System.*` (the 10.0.x servicing train) | `Directory.Packages.props` | Dependabot `nuget`, weekly, one `microsoft-extensions` pull request |
+| The .NET SDK | `global.json` (`11.0.100`, `rollForward: patch`) | Dependabot `dotnet-sdk`, weekly |
+| `Microsoft.Extensions.*` and `System.*` (the 11.0.x servicing train) | `Directory.Packages.props` | Dependabot `nuget`, weekly, one `microsoft-extensions` pull request |
 | OpenTelemetry, Kiota | `Directory.Packages.props` | Dependabot `nuget`, weekly, one pull request per group |
 | Every other package | `Directory.Packages.props` | Dependabot `nuget`, weekly, one pull request each |
 | `HeroesClientSDK` | `Directory.Packages.props` (exact pin plus SHA-256) | By hand only. A bump is a match-clock change and needs the live proof (AGENTS.md) |
@@ -23,8 +23,8 @@ The cost: a .NET security fix reaches production only when CI rebuilds the relea
   - `ci.yml` and `release.yml` install it with `actions/setup-dotnet` and `global-json-file: global.json`.
   - `tools/bootstrap-workstation.ps1` warns when no installed SDK satisfies the pin.
   - The SDK brings the runtime the build is tested on. Native AOT also bakes that runtime patch in, so the SDK bump pull request is the record of which runtime ships.
-  - `patch` (#522) makes `setup-dotnet` install exactly the pinned SDK. A local build uses the pinned SDK, or without it the newest installed patch of the same feature band (10.0.4xx for 10.0.402). It was `latestPatch` until 2026-10-25: `setup-dotnet` turns that into the channel `10.0.4xx`, which pointed at 10.0.403 before Microsoft released it, and every CI run failed with HTTP 409 on the download. `runtime.txt` shows which runtime was used.
-- **Majors.** Dependabot ignores major versions of `Microsoft.Extensions.*` and `System.*`. That keeps the packages on the .NET 10 LTS line and keeps `System.CommandLine` on 2 (AGENTS.md hard rules).
+  - `patch` (#522) makes `setup-dotnet` install exactly the pinned SDK. A local build uses the pinned SDK, or without it the newest installed patch of the same feature band (11.0.1xx for 11.0.100). It was `latestPatch` until 2026-10-25: `setup-dotnet` turns that into the channel `10.0.4xx`, which pointed at 10.0.403 before Microsoft released it, and every CI run failed with HTTP 409 on the download. `runtime.txt` shows which runtime was used.
+- **Majors.** Dependabot ignores major versions of `Microsoft.Extensions.*` and `System.*`. That keeps the packages on the .NET 11 line and keeps `System.CommandLine` on 2 (AGENTS.md hard rules).
 - **Security updates.** Turn on Dependabot security updates in the repository settings (Code security). That is a setting, not a file.
 
 ## Cadence
@@ -37,16 +37,16 @@ The cost: a .NET security fix reaches production only when CI rebuilds the relea
 2. **Prove it on ASA-SERVER**, then release `develop` to `master` (AGENTS.md Dev loop). The release notes name the runtime.
 3. **When the .NET release notes list a CVE**, do steps 1 and 2 within 72 hours of the release.
 
-Each month's release metadata says whether the release is a security release and lists its CVEs: `https://builds.dotnet.microsoft.com/dotnet/release-metadata/10.0/releases.json` (`security`, `cve-list`, `release-notes`).
+Each month's release metadata says whether the release is a security release and lists its CVEs: `https://builds.dotnet.microsoft.com/dotnet/release-metadata/11.0/releases.json` (`security`, `cve-list`, `release-notes`).
 
 ## Where the runtime shows
 
-The runtime is `RuntimeInformation.FrameworkDescription`, such as `.NET 10.0.13`.
+The runtime is `RuntimeInformation.FrameworkDescription`, such as `.NET 11.0.0`.
 
 | Where | What it is |
 | --- | --- |
 | `runtime.txt` in the release zip, beside `version.txt` | The runtime the packaged exe ran on when `tools/package-release.ps1` asked it (`heroesreplay check runtime`). `version.txt` stays the tag alone, because the update compares it to the release tag. |
-| The GitHub Release notes | `Runtime: .NET 10.0.13` and `SDK: 10.0.402`, from `release.yml`. The weekly check reads the `Runtime:` line. |
+| The GitHub Release notes | `Runtime: .NET 11.0.0` and `SDK: 11.0.100`, from `release.yml`. The weekly check reads the `Runtime:` line. |
 | `heroesreplay check runtime` | The runtime this exe runs on, its folder, and the release's `runtime.txt`. A warning (`check.runtime.older_than_release`) when this machine's runtime is older than the release's: Microsoft Update has not serviced it yet. |
 | `status.json` | `dotnetRuntime`: the runtime spectate runs on. |
 | `services status` | Each role's `dotnetRuntime`, from its heartbeat, and the top-level `dotnetRuntime` (what a role started now loads) and `releaseRuntime` (`runtime.txt`). The text output prints a `Runtime:` line, and the runtime after each role's version. |
@@ -54,12 +54,14 @@ The runtime is `RuntimeInformation.FrameworkDescription`, such as `.NET 10.0.13`
 
 `runtime.txt` is the runtime the release carries and CI tested. A self-contained install runs on exactly that one, whatever the machine-wide runtime is. (While releases were framework-dependent, the stream PC ran on its own machine-wide runtime, which could be newer or older.) `check runtime` on the stream PC says which.
 
+`tools/apply-release.ps1` still guards a framework-dependent zip (a rollback build, or a release from before #453): it reads the staged `heroesreplay.runtimeconfig.json` before it runs the staged exe or touches the install, and when a framework it names (`Microsoft.NETCore.App`, `Microsoft.WindowsDesktop.App`) has no installed version of the same major at that version or later, the release is not installed: it goes on the skip list with `missing .NET runtime: ...`, the current build starts again, and the log names the Desktop Runtime to install (`winget install Microsoft.DotNet.DesktopRuntime.<major>`). A self-contained zip lists `includedFrameworks`, not `frameworks`, so the guard passes it.
+
 ## The weekly check
 
 `.github/workflows/runtime-currency.yml` runs every Wednesday, and on demand (`workflow_dispatch`). It runs `tools/check-runtime-currency.ps1`, which:
 
 - Reads the `Runtime:` line of the latest GitHub Release. A release from before #462 has none: the run says so and changes nothing.
-- Reads `latest-runtime` and each release's `security` flag from the .NET 10.0 `releases.json`.
+- Reads `latest-runtime` and each release's `security` flag from the .NET 11.0 `releases.json`.
 - Opens one issue, titled `Stale .NET runtime: ...` and labelled `dependencies`, when a security release is newer than the release's runtime. The issue has a table of each newer security release, its SDK, its CVE count and its due date (72 hours with CVEs, else 7 days).
 - Updates that issue on later runs, and comments when a newer security release came out since.
 - Closes it once the latest release carries the newest security runtime or a later one.
@@ -68,7 +70,7 @@ Run it by hand without touching an issue:
 
 ```powershell
 pwsh -File tools/check-runtime-currency.ps1 -Repository HeroesReplay/HeroesReplay -DryRun
-pwsh -File tools/check-runtime-currency.ps1 -Repository HeroesReplay/HeroesReplay -DryRun -ShippedRuntime ".NET 10.0.11"
+pwsh -File tools/check-runtime-currency.ps1 -Repository HeroesReplay/HeroesReplay -DryRun -ShippedRuntime ".NET 10.0.15"
 ```
 
 `-ShippedRuntime` compares another runtime instead of the release's (a what-if).

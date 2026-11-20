@@ -101,7 +101,7 @@ if (Test-Path $sdk) {
 }
 
 # global.json pins the .NET SDK (#462) with rollForward patch (#522): the pinned SDK builds, or
-# without it the newest patch of the same feature band (10.0.4xx for 10.0.402) above the pin.
+# without it the newest patch of the same feature band (11.0.1xx for 11.0.100) above the pin.
 # Dependabot moves the pin; this only notes when this machine has no SDK that satisfies it.
 $pin = "$((Get-Content -LiteralPath (Join-Path $root 'global.json') -Raw | ConvertFrom-Json).sdk.version)"
 $pinned = [version]$pin
