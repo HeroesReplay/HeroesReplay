@@ -655,8 +655,10 @@ public sealed class YouTubeLibraryTests : IDisposable
             "2.57.0.98304",
             YouTubeLibraryRecord.Read(YouTubeLibraryRecord.PathFor(directory))["clip-1"].GameVersion
         );
-        // A clip is recorded but goes into no playlist.
-        Assert.Empty(pass.Planned);
+        // Once resolved, a public clip goes into the Clips playlist only.
+        YouTubeLibraryItem item = Assert.Single(pass.Planned);
+        Assert.Equal("clip-1", item.VideoId);
+        Assert.Equal(YouTubePlaylistNames.Clips, item.PlaylistTitle);
     }
 
     [Fact]
