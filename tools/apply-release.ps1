@@ -305,6 +305,64 @@ function Test-ReleaseSkipped([string]$Tag) {
     return $false
 }
 
+function Get-MissingRuntime([string]$Folder) {
+    # A framework-dependent release names the shared runtimes it needs in heroesreplay.runtimeconfig.json
+    # (Microsoft.NETCore.App and Microsoft.WindowsDesktop.App). A new .NET major, such as .NET 11, needs
+    # its runtime installed first: without it the staged exe cannot start, so it could not migrate,
+    # install its OBS files, pass the health gate, or help roll itself back. The host takes the same
+    # major at that version or later (rollForward Minor). A prerelease runtime does not count.
+    $config = Join-Path $Folder 'heroesreplay.runtimeconfig.json'
+    if (-not (Test-Path -LiteralPath $config)) {
+        return @()
+    }
+
+    $options = (Get-Content -LiteralPath $config -Raw | ConvertFrom-Json).runtimeOptions
+    $frameworks = @()
+    if ($options.frameworks) {
+        $frameworks += $options.frameworks
+    }
+
+    if ($options.framework) {
+        $frameworks += $options.framework
+    }
+
+    $roots = @()
+    if ($env:DOTNET_ROOT) {
+        $roots += $env:DOTNET_ROOT
+    }
+
+    $roots += (Join-Path $env:ProgramFiles 'dotnet')
+    $missing = @()
+    foreach ($framework in $frameworks) {
+        $need = [version](($framework.version -split '-', 2)[0])
+        $found = $false
+        foreach ($root in $roots) {
+            $folder = Join-Path (Join-Path $root 'shared') $framework.name
+            if (-not (Test-Path -LiteralPath $folder)) {
+                continue
+            }
+
+            foreach ($installed in Get-ChildItem -LiteralPath $folder -Directory) {
+                $have = $null
+                if ($installed.Name -notmatch '-' -and [version]::TryParse($installed.Name, [ref]$have) -and $have.Major -eq $need.Major -and $have -ge $need) {
+                    $found = $true
+                    break
+                }
+            }
+
+            if ($found) {
+                break
+            }
+        }
+
+        if (-not $found) {
+            $missing += "$($framework.name) $($framework.version)"
+        }
+    }
+
+    return $missing
+}
+
 function Read-Version([string]$Directory) {
     $file = Join-Path $Directory 'version.txt'
     if (-not (Test-Path -LiteralPath $file)) {
@@ -491,6 +549,25 @@ try {
     # A build from before the skip list still stages a release this machine rolled back. Do not install it again.
     if (Test-ReleaseSkipped $Version) {
         Write-Host "Release $Version failed its health gate here before ($skipList). It was not installed; the current install starts again."
+        Clear-ServiceStop
+        Start-HeroesReplayStack
+        exit 0
+    }
+
+    # Before the staged exe runs at all: a release built on a .NET runtime this machine lacks is not
+    # installed. It goes on the skip list, so the gate does not stop the stack for it after every replay.
+    $missingRuntime = @()
+    try {
+        $missingRuntime = @(Get-MissingRuntime $source)
+    }
+    catch {
+        Write-Host "Could not read the release's runtimeconfig.json, so its runtime was not checked: $($_.Exception.Message)"
+    }
+
+    if ($missingRuntime.Count -gt 0) {
+        $major = ($missingRuntime[0] -split ' ', 2)[1].Split('.')[0]
+        Write-Host "Release $Version needs a .NET runtime this machine does not have: $($missingRuntime -join ', '). It was not installed; the current install starts again. Install the .NET $major Desktop Runtime (winget install Microsoft.DotNet.DesktopRuntime.$major), then delete the $Version line from $skipList to install it, or wait for the next release."
+        Add-SkippedRelease $Version "missing .NET runtime: $($missingRuntime -join ', ')"
         Clear-ServiceStop
         Start-HeroesReplayStack
         exit 0

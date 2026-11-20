@@ -52,6 +52,8 @@ The runtime is `RuntimeInformation.FrameworkDescription`, such as `.NET 11.0.0`.
 | `services status` | Each role's `dotnetRuntime`, from its heartbeat, and the top-level `dotnetRuntime` (what a role started now loads) and `releaseRuntime` (`runtime.txt`). The text output prints a `Runtime:` line, and the runtime after each role's version. |
 | MCP `get_spectator_status` | `status.dotnetRuntime` (spectate's), `dotnetRuntime` (the MCP server's), and `releaseRuntime`. |
 
+A release built on a new .NET major (such as the move to .NET 11) needs that runtime on the machine before it can start. `tools/apply-release.ps1` reads the staged `heroesreplay.runtimeconfig.json` before it runs the staged exe or touches the install. When a framework it names (`Microsoft.NETCore.App`, `Microsoft.WindowsDesktop.App`) has no installed version of the same major at that version or later, the release is not installed: it goes on the skip list with `missing .NET runtime: ...`, the current build starts again, and the log says which Desktop Runtime to install (`winget install Microsoft.DotNet.DesktopRuntime.<major>`). After installing it, delete that tag's line from `skipped-releases.txt`, or wait for the next release. Install the runtime on ASA-SERVER and the stream PC before releasing a new major.
+
 While the release is framework-dependent, `runtime.txt` is the runtime CI built and tested it on. The stream PC runs on its own machine-wide runtime, which can be newer, or older until Microsoft Update services it. `check runtime` on the stream PC says which.
 
 ## The weekly check
