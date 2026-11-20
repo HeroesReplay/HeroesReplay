@@ -25,11 +25,11 @@ jobs:
       - name: Fetch HeroesClientSDK
         shell: pwsh
         run: pwsh -NoProfile -File tools/restore-sdk-package.ps1
-      - uses: gittools/actions/gitversion/setup@v4.7.0
+      - uses: gittools/actions/gitversion/setup@v4.7.2
         with:
           versionSpec: 6.8.x
       - id: gitversion
-        uses: gittools/actions/gitversion/execute@v4.7.0
+        uses: gittools/actions/gitversion/execute@v4.7.2
       - name: Build
         run: dotnet build heroes-replay.slnx -c Release --nologo
       - name: Unit tests
@@ -85,4 +85,4 @@ jobs:
             Runtime: ${{ steps.runtime.outputs.runtime }}
             SDK: ${{ steps.runtime.outputs.sdk }}
 
-            Framework-dependent win-x64. The stream PC runs it on its machine-wide .NET runtime, which Microsoft Update services. The runtime above is the one CI built and tested it on (`runtime.txt` in the zip). Patch Tuesday cadence: `docs/runtime-currency.md`.
+            Self-contained win-x64: the zip carries the .NET runtime above (`runtime.txt`), so the stream PC needs no machine-wide runtime. A .NET security fix reaches it only with a new release. Patch Tuesday cadence: `docs/runtime-currency.md`.

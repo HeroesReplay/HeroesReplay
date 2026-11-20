@@ -14,55 +14,55 @@
         <HeroesClientSDKSha256>df350d7da6e0839832e5606c6099fd07884ea0f7cfc9949d301564cf2a665f7a</HeroesClientSDKSha256>
     </PropertyGroup>
     <ItemGroup>
-        <!-- .NET 10 LTS -->
-        <PackageVersion Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.15" />
+        <!-- .NET 11 -->
+        <PackageVersion Include="Microsoft.Extensions.Configuration.Binder" Version="11.0.0" />
         <PackageVersion
             Include="Microsoft.Extensions.Configuration.EnvironmentVariables"
-            Version="10.0.15"
+            Version="11.0.0"
         />
-        <PackageVersion Include="Microsoft.Extensions.Configuration.Json" Version="10.0.15" />
-        <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.15" />
+        <PackageVersion Include="Microsoft.Extensions.Configuration.Json" Version="11.0.0" />
+        <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="11.0.0" />
         <PackageVersion
             Include="Microsoft.Extensions.FileProviders.Abstractions"
-            Version="10.0.15"
+            Version="11.0.0"
         />
-        <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.15" />
-        <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.15" />
-        <PackageVersion Include="Microsoft.Extensions.Logging.Console" Version="10.0.15" />
-        <PackageVersion Include="Microsoft.Extensions.Logging.EventLog" Version="10.0.15" />
-        <PackageVersion Include="Microsoft.Extensions.Options" Version="10.0.15" />
-        <PackageVersion Include="System.Drawing.Common" Version="10.0.12" />
-        <PackageVersion Include="System.Net.Http.Json" Version="10.0.12" />
+        <PackageVersion Include="Microsoft.Extensions.Http" Version="11.0.0" />
+        <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="11.0.0" />
+        <PackageVersion Include="Microsoft.Extensions.Logging.Console" Version="11.0.0" />
+        <PackageVersion Include="Microsoft.Extensions.Logging.EventLog" Version="11.0.0" />
+        <PackageVersion Include="Microsoft.Extensions.Options" Version="11.0.0" />
+        <PackageVersion Include="System.Drawing.Common" Version="11.0.0" />
+        <PackageVersion Include="System.Net.Http.Json" Version="11.0.0" />
 
-        <PackageVersion Include="System.CommandLine" Version="2.0.12" />
-        <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.15" />
-        <PackageVersion Include="ModelContextProtocol" Version="2.2.0" />
+        <PackageVersion Include="System.CommandLine" Version="2.0.15" />
+        <PackageVersion Include="Microsoft.Extensions.Hosting" Version="11.0.0" />
+        <PackageVersion Include="ModelContextProtocol" Version="2.4.0" />
 
-        <PackageVersion Include="OpenTelemetry" Version="1.20.1" />
-        <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.20.1" />
-        <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.20.1" />
-        <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="1.20.2" />
-        <PackageVersion Include="OpenTelemetry.Instrumentation.Runtime" Version="1.20.1" />
+        <PackageVersion Include="OpenTelemetry" Version="1.21.0" />
+        <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.21.0" />
+        <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.21.0" />
+        <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="1.21.0" />
+        <PackageVersion Include="OpenTelemetry.Instrumentation.Runtime" Version="1.21.0" />
 
         <PackageVersion Include="Google.Apis.YouTube.v3" Version="1.78.0.4325" />
         <PackageVersion Include="Heroes.Element" Version="1.1.0" />
         <PackageVersion Include="Heroes.ReplayParser" Version="1.2.18" />
-        <PackageVersion Include="Microsoft.Kiota.Bundle" Version="2.1.6" />
+        <PackageVersion Include="Microsoft.Kiota.Bundle" Version="2.2.0" />
         <PackageVersion Include="Newtonsoft.Json" Version="13.0.4" />
         <PackageVersion Include="obs-websocket-dotnet" Version="5.7.0" />
         <PackageVersion Include="PInvoke.User32" Version="0.7.124" />
-        <PackageVersion Include="Microsoft.Extensions.Caching.Abstractions" Version="10.0.15" />
-        <PackageVersion Include="Microsoft.Extensions.Caching.Memory" Version="10.0.15" />
-        <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.11.0" />
-        <PackageVersion Include="Microsoft.Extensions.Resilience" Version="10.11.0" />
+        <PackageVersion Include="Microsoft.Extensions.Caching.Abstractions" Version="11.0.0" />
+        <PackageVersion Include="Microsoft.Extensions.Caching.Memory" Version="11.0.0" />
+        <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="11.0.0" />
+        <PackageVersion Include="Microsoft.Extensions.Resilience" Version="11.0.0" />
         <PackageVersion Include="TwitchLib" Version="3.5.3" />
 
         <PackageVersion Include="HeroesClientSDK" Version="[$(HeroesClientSDKVersion)]" />
 
         <PackageVersion Include="FluentAssertions" Version="8.11.0" />
-        <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.11.1" />
+        <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.12.0" />
         <PackageVersion Include="xunit" Version="2.9.3" />
-        <PackageVersion Include="xunit.runner.visualstudio" Version="2.8.2" />
-        <PackageVersion Include="coverlet.collector" Version="10.1.0" />
+        <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.1" />
+        <PackageVersion Include="coverlet.collector" Version="10.1.1" />
     </ItemGroup>
 </Project>

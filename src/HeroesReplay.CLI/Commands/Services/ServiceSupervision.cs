@@ -7,6 +7,7 @@ using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.Retention;
 using HeroesReplay.Core.ServiceHost;
 using HeroesReplay.Core.Shared;
+using HeroesReplay.Core.Telemetry;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -51,6 +52,7 @@ public sealed class ServiceSupervision
     private DateTimeOffset? processStartedAt;
     private DateTimeOffset? savedAt;
     private bool stopping;
+    private string sessionEnding;
 
     public string LockPath { get; init; } = ServiceLockStore.DefaultPath;
     public string StatePath { get; init; } = ServiceSupervisorFile.DefaultPath;
@@ -66,6 +68,13 @@ public sealed class ServiceSupervision
 
     /// <summary>True once <c>services stop</c> has its stop file down.</summary>
     public Func<bool> StopRequested { get; init; }
+
+    /// <summary>
+    /// Why Windows is ending the session (a restart, shutdown or logoff), or null
+    /// (<see cref="SessionEndSignal.Ending"/>). While it answers, a pass restarts no role and
+    /// starts no OBS. Null never pauses.
+    /// </summary>
+    public Func<DateTimeOffset, string> SessionEnding { get; init; }
 
     /// <summary>
     /// The roles <c>services reset</c> asked for since the last pass (<see cref="ServiceResetFile"/>,
@@ -137,6 +146,12 @@ public sealed class ServiceSupervision
     /// once a stop is requested. Null watches nothing.
     /// </summary>
     public ObsWatchdog Obs { get; init; }
+
+    /// <summary>
+    /// The Aspire dashboard watchdog (#538): relaunches the dashboard when its OTLP port stops
+    /// answering. It runs on every pass, never once a stop is requested. Null watches nothing.
+    /// </summary>
+    public TelemetryDashboardWatchdog Telemetry { get; init; }
 
     /// <summary>
     /// Why the .NET runtime this supervisor loaded is gone (<see cref="RuntimeFolder.Missing"/>),
@@ -248,6 +263,11 @@ public sealed class ServiceSupervision
             return false;
         }
 
+        if (PausedForSessionEnd())
+        {
+            return true;
+        }
+
         // Before any role: a restart launched from a serviced runtime could fail on a library
         // it never loaded, so the new supervisor does the restarts (#450).
         if (RuntimeServiced?.Invoke() is string serviced)
@@ -281,6 +301,7 @@ public sealed class ServiceSupervision
             Health
         );
         bool changed = TickObs(now);
+        changed |= TickTelemetry(now);
         changed |= ApplyResets(now);
         foreach (string role in supervised)
         {
@@ -400,6 +421,25 @@ public sealed class ServiceSupervision
         }
 
         return changed;
+    }
+
+    /// <summary>One dashboard watchdog pass. A failure here never stops supervision.</summary>
+    private bool TickTelemetry(DateTimeOffset now)
+    {
+        if (Telemetry == null)
+        {
+            return false;
+        }
+
+        try
+        {
+            return Telemetry.Tick(now);
+        }
+        catch (Exception e)
+        {
+            Logger.LogWarning("The telemetry dashboard check failed: {Message}", e.Message);
+            return false;
+        }
     }
 
     /// <summary>One OBS watchdog pass. True when its state or restarts changed, so the file is saved.</summary>
@@ -805,6 +845,40 @@ public sealed class ServiceSupervision
         }
     }
 
+    /// <summary>
+    /// True while Windows ends the session: the processes are about to be closed by Windows, so
+    /// starting roles or OBS again would only fight the shutdown. Logged once each way.
+    /// </summary>
+    private bool PausedForSessionEnd()
+    {
+        string ending = SessionEnding?.Invoke(Time.GetUtcNow());
+        if (ending != null)
+        {
+            if (sessionEnding == null)
+            {
+                sessionEnding = ending;
+                Logger.LogWarning(
+                    "Windows is ending the session ({Reason}): a restart, shutdown or logoff. The supervisor restarts no role and starts no OBS while Windows closes them. The HeroesReplay-live task starts the stack again at the next logon; `heroesreplay check autostart` says whether that logon happens by itself.",
+                    ending
+                );
+            }
+
+            return true;
+        }
+
+        if (sessionEnding != null)
+        {
+            Logger.LogInformation(
+                "Windows did not end the session ({Reason}) within {Wait}: the shutdown was cancelled. Supervision resumes.",
+                sessionEnding,
+                SessionEndSignal.CancelledAfter
+            );
+            sessionEnding = null;
+        }
+
+        return false;
+    }
+
     private bool Stopping()
     {
         if (StopRequested?.Invoke() != true)
@@ -858,6 +932,7 @@ public sealed class ServiceSupervision
                     Supervised = supervised.ToList(),
                     Roles = supervised.Select(role => ledgers[role]).ToList(),
                     Obs = Obs?.State,
+                    Telemetry = Telemetry?.State,
                 }
             );
             savedAt = now;

@@ -28,6 +28,13 @@ public class YouTubePlaylistSettings
     public bool HeroFocus { get; set; } = true;
 
     /// <summary>
+    /// One playlist for every clip (pentakills, multikills, boss steals, bsteps): <c>Clips</c>.
+    /// The record already holds the channel's earlier clips, so turning it on files those too,
+    /// newest first, after any newer full match.
+    /// </summary>
+    public bool Clips { get; set; } = true;
+
+    /// <summary>
     /// One playlist per role of those videos: <c>Hero gameplay - Healer</c>. Off by default,
     /// because <c>Hero gameplay</c> already holds every one of them.
     /// </summary>

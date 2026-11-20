@@ -1,6 +1,9 @@
 # Builds heroesreplay-win-x64.zip, the release production installs. release.yml uploads it;
 # ci.yml builds it on every pull request and push, and tools/verify-release.ps1 checks it.
-# Framework-dependent win-x64 publish. The CLI project publishes the assets obs/bundle.manifest
+# Self-contained win-x64 publish: the zip carries its own .NET runtime, so the stream PC needs
+# no machine-wide runtime (a .NET 11 release installs on a machine with only .NET 10), and
+# Windows Update servicing that runtime no longer touches a running role (#450). A .NET security
+# fix arrives only with a release (docs/runtime-currency.md). The CLI project publishes the assets obs/bundle.manifest
 # lists under obs\, and the published build writes the zip's obs\bundle.manifest (schema 2).
 # The zip never carries appsettings.secrets.json or OBS service.json (the stream key).
 # version.txt is $Version exactly, with no newline: the update compares it to the release tag.
@@ -21,7 +24,7 @@ $out = Join-Path $temp ('heroesreplay-publish-' + [System.IO.Path]::GetRandomFil
 
 Push-Location $root
 try {
-    dotnet publish src/HeroesReplay.CLI/HeroesReplay.CLI.csproj -c $Configuration -r win-x64 --self-contained false -o $out --nologo
+    dotnet publish src/HeroesReplay.CLI/HeroesReplay.CLI.csproj -c $Configuration -r win-x64 --self-contained true -o $out --nologo
     if ($LASTEXITCODE -ne 0) {
         throw "dotnet publish exited $LASTEXITCODE"
     }

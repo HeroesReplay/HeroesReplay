@@ -32,9 +32,17 @@ public readonly record struct TeamKillClip(
     IReadOnlyList<TeamKillBlow> Kills = null,
     bool NamesTeam = false,
     int Player = -1,
-    MapPoint? Point = null
+    MapPoint? Point = null,
+    bool OnScreen = false
 )
 {
+    /// <summary>
+    /// The camera shows the clip only while <see cref="Player"/> is on the screen around the hero
+    /// it follows (<see cref="ClipCamera.OnScreen"/>), not merely near it: a bstep is a
+    /// small movement that the screen must show.
+    /// </summary>
+    public bool OnScreen { get; init; } = OnScreen;
+
     /// <summary>
     /// <see cref="Hero"/> names a team (<c>Blue team</c>), not a hero: a boss stolen from the team
     /// that killed it (#528). The clip's entry then names no hero.
@@ -51,6 +59,11 @@ public readonly record struct TeamKillClip(
     /// Where the clip happens, such as a boss pit, or null when it follows <see cref="Player"/>.
     /// </summary>
     public MapPoint? Point { get; init; } = Point;
+
+    /// <summary>
+    /// The bstep or boss fight behind the clip, for its title (<see cref="ClipFacts"/>), or null.
+    /// </summary>
+    public ClipFacts Facts { get; init; }
 
     /// <summary>
     /// The pentakill's blows killed five different enemy heroes: the whole team. It is a fact
@@ -98,6 +111,7 @@ public static class TeamKillClips
             TripleKillKind => clip.Kills?.Count >= 4 ? "quadra kill" : "triple kill",
             BossFightClips.StealKind => "boss steal",
             BossFightClips.DefendedKind => "boss defended",
+            BStepClips.Kind => "bstep",
             _ => clip.Kind,
         };
 

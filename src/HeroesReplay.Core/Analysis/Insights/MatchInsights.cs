@@ -1,5 +1,6 @@
 using HeroesReplay.Core.Analysis.Insights.Awards;
 using HeroesReplay.Core.Analysis.Insights.Bosses;
+using HeroesReplay.Core.Analysis.Insights.BSteps;
 using HeroesReplay.Core.Analysis.Insights.Builds;
 using HeroesReplay.Core.Analysis.Insights.Bursts;
 using HeroesReplay.Core.Analysis.Insights.Camps;
@@ -50,4 +51,7 @@ public sealed record MatchInsights
 
     /// <summary>Each boss capture and the fight at the pit before it (#528).</summary>
     public BossFightInsights Bosses { get; set; } = new();
+
+    /// <summary>Each bstep (Hearthstone started and cancelled by moves, over and over) and the deaths around it.</summary>
+    public BStepInsights BSteps { get; set; } = new();
 }

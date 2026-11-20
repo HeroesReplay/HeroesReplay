@@ -62,6 +62,12 @@ public sealed record ReplaySnapshot
     /// <summary>Every hero death and where it happened (#528), in time order.</summary>
     public IReadOnlyList<HeroDeath> HeroDeaths { get; init; } = Array.Empty<HeroDeath>();
 
+    /// <summary>
+    /// Every Hearthstone a player started, in time order, with how soon a move order cancelled it:
+    /// the raw material of bstepping (<c>BStepAnalyzer</c>).
+    /// </summary>
+    public IReadOnlyList<HearthCast> HearthCasts { get; init; } = Array.Empty<HearthCast>();
+
     public static string TeamName(int team) => team == 0 ? "Blue" : "Red";
 }
 
@@ -170,5 +176,26 @@ public sealed record BossCapture(
     int KillerIndex
 );
 
-/// <summary>A player's hero unit died at <see cref="Point"/> (#528).</summary>
-public sealed record HeroDeath(int PlayerIndex, int Team, TimeSpan Time, MapPoint Point);
+/// <summary>
+/// A player's hero unit died at <see cref="Point"/> (#528). <see cref="KillerIndex"/> is the player
+/// credited with the kill, or -1 when the replay names none.
+/// </summary>
+public sealed record HeroDeath(
+    int PlayerIndex,
+    int Team,
+    TimeSpan Time,
+    MapPoint Point,
+    int KillerIndex = -1
+);
+
+/// <summary>
+/// A player started their Hearthstone at <see cref="Seconds"/> (replay time, to the game loop).
+/// <see cref="CancelSeconds"/> is when the player's very next order, a move or a right-click,
+/// cancelled the channel; null when the next order was another ability, another Hearthstone, or
+/// none at all.
+/// </summary>
+public sealed record HearthCast(int PlayerIndex, double Seconds, double? CancelSeconds = null)
+{
+    /// <summary>How long the channel ran before the move cancelled it, or null.</summary>
+    public double? CancelledAfter => CancelSeconds - Seconds;
+}

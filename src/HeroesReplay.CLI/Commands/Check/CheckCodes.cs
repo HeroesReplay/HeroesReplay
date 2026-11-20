@@ -4,6 +4,7 @@ using System.Reflection;
 using HeroesReplay.Core.Clips;
 using HeroesReplay.Core.Retention;
 using HeroesReplay.Core.SelfUpdate;
+using HeroesReplay.Core.ServiceHost;
 
 namespace HeroesReplay.CLI.Commands.Check;
 
@@ -113,6 +114,27 @@ public static class CheckCodes
     public const string RuntimeOlderThanRelease =
         "check.runtime." + ReleaseRuntime.OlderThanRelease;
     public const string RuntimeError = "check.runtime.error";
+
+    public const string AutoStartOk = "check.autostart.ok";
+
+    /// <summary>No HeroesReplay-live task: nothing starts the stack after a restart.</summary>
+    public const string AutoStartNoTask = "check.autostart." + AutoStartCheck.NoTask;
+
+    /// <summary>The task starts another install's exe.</summary>
+    public const string AutoStartTaskOtherInstall =
+        "check.autostart." + AutoStartCheck.TaskOtherInstall;
+
+    /// <summary>Winlogon AutoAdminLogon is not 1: after a restart the machine waits at sign-in.</summary>
+    public const string AutoStartNoAutoLogon = "check.autostart." + AutoStartCheck.NoAutoLogon;
+
+    /// <summary>Auto-logon signs in another user than the task's.</summary>
+    public const string AutoStartAutoLogonOtherUser =
+        "check.autostart." + AutoStartCheck.AutoLogonOtherUser;
+
+    /// <summary>AutoLogonCount is set: Windows turns auto-logon off after that many logons.</summary>
+    public const string AutoStartAutoLogonCounted =
+        "check.autostart." + AutoStartCheck.AutoLogonCounted;
+    public const string AutoStartError = "check.autostart.error";
 
     public const string StorageOk = "check.storage.ok";
 

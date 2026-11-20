@@ -142,11 +142,11 @@ public class ReleaseWorkflowTests
     public void BothWorkflows_InstallTheSdkGlobalJsonPins()
     {
         // #462: the SDK carries the runtime a release is built on, so it is pinned and
-        // Dependabot moves it, never whatever 10.0.x the runner has that day.
+        // Dependabot moves it, never whatever 11.0.x the runner has that day.
         using var global = JsonDocument.Parse(ReadRepoFile("global.json"));
         JsonElement sdk = global.RootElement.GetProperty("sdk");
-        Assert.Matches(@"^10\.0\.\d{3}$", sdk.GetProperty("version").GetString());
-        // #522: not latestPatch, which setup-dotnet turns into a channel (10.0.4xx) that can point at
+        Assert.Matches(@"^11\.0\.\d{3}$", sdk.GetProperty("version").GetString());
+        // #522: not latestPatch, which setup-dotnet turns into a channel (11.0.1xx) that can point at
         // an SDK Microsoft has staged but not released (HTTP 409); patch installs this exact version.
         Assert.Equal("patch", sdk.GetProperty("rollForward").GetString());
 
@@ -237,7 +237,7 @@ public class ReleaseWorkflowTests
         string package = ReadRepoFile("tools", "package-release.ps1");
         string verify = ReadRepoFile("tools", "verify-release.ps1");
 
-        Assert.Contains("-r win-x64 --self-contained false", package, StringComparison.Ordinal);
+        Assert.Contains("-r win-x64 --self-contained true", package, StringComparison.Ordinal);
         Assert.Contains("appsettings.secrets.json", package, StringComparison.Ordinal);
         Assert.Contains("-Filter service.json | Remove-Item", package, StringComparison.Ordinal);
         Assert.Contains(
@@ -248,6 +248,8 @@ public class ReleaseWorkflowTests
 
         Assert.Contains("obs\\bundle.manifest", verify, StringComparison.Ordinal);
         Assert.Contains("'HeroesClientSDK.dll'", verify, StringComparison.Ordinal);
+        Assert.Contains("'hostfxr.dll'", verify, StringComparison.Ordinal);
+        Assert.Contains("'coreclr.dll'", verify, StringComparison.Ordinal);
         Assert.Contains("'--help'", verify, StringComparison.Ordinal);
 
         // #308: the published build writes the schema 2 manifest, and the check hashes every file.

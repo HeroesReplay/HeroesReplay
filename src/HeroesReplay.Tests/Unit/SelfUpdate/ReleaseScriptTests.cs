@@ -316,6 +316,29 @@ public class ReleaseScriptTests
     }
 
     [Fact]
+    public void ApplyRelease_SkipsAReleaseWhoseDotnetRuntimeIsMissingBeforeItsExeRuns()
+    {
+        // .NET 11: the release is framework-dependent, so on a machine without the new runtime the
+        // staged exe cannot start. The check runs before anything starts that exe or touches the
+        // install, and skips the tag so the gate does not stop the stack for it after every replay.
+        string script = File.ReadAllText(FindScript());
+        int check = script.IndexOf("Get-MissingRuntime $source", StringComparison.Ordinal);
+        int skipped = script.IndexOf("Test-ReleaseSkipped $Version", StringComparison.Ordinal);
+        int firstRun = script.IndexOf(
+            "Protect-MinReplayId (Join-Path $source 'heroesreplay.exe')",
+            StringComparison.Ordinal
+        );
+        int backup = script.IndexOf("Copy-Install $InstallDir $previous", StringComparison.Ordinal);
+
+        Assert.True(check > skipped, "The runtime check runs before the skip-list check.");
+        Assert.True(firstRun > check, "The staged exe runs before the runtime check.");
+        Assert.True(backup > check, "The install is backed up before the runtime check.");
+        Assert.Contains("'heroesreplay.runtimeconfig.json'", script);
+        Assert.Contains("Microsoft.DotNet.DesktopRuntime.", script);
+        Assert.Contains("Add-SkippedRelease $Version \"missing .NET runtime:", script);
+    }
+
+    [Fact]
     public void ApplyRelease_MigratesTheStreamArmFromTheReplacedInstallBeforeItIsOverwritten()
     {
         string script = File.ReadAllText(FindScript());

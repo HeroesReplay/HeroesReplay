@@ -9,6 +9,7 @@ using Heroes.ReplayParser;
 using HeroesReplay.Core.Analysis;
 using HeroesReplay.Core.Analysis.Insights;
 using HeroesReplay.Core.Analysis.Insights.Bosses;
+using HeroesReplay.Core.Analysis.Insights.BSteps;
 using HeroesReplay.Core.Analysis.Insights.Snapshot;
 using HeroesReplay.Core.Obs.Recording;
 using HeroesReplay.Core.Shared;
@@ -71,6 +72,7 @@ public static class MatchClipExporter
         );
         var clips = new List<TeamKillClip>(kills);
         clips.AddRange(BossClips(snapshot, insights, kills, shown, logger));
+        clips.AddRange(BStepClipsFor(snapshot, insights, clips.ToArray(), shown, logger));
         await ExportAsync(
                 clips,
                 replay,
@@ -161,12 +163,46 @@ public static class MatchClipExporter
             return BossFightClips.Select(
                 new BossFightAnalyzer(insights.Bosses).Analyze(snapshot),
                 kills,
-                onCamera
+                onCamera,
+                snapshot.TeamLevels
             );
         }
         catch (Exception e)
         {
             logger?.LogWarning(e, "Could not read the boss fights. Only kill clips are cut.");
+            return Array.Empty<TeamKillClip>();
+        }
+    }
+
+    /// <summary>
+    /// The replay's bsteps around a death that the camera showed (<see cref="BStepClips"/>), none
+    /// over a kill or boss clip. A replay the analysis cannot read gives none.
+    /// </summary>
+    internal static IReadOnlyList<TeamKillClip> BStepClipsFor(
+        ReplaySnapshot snapshot,
+        InsightsSettings insights,
+        IReadOnlyList<TeamKillClip> otherClips,
+        Func<TeamKillClip, bool> onCamera,
+        ILogger logger
+    )
+    {
+        if (snapshot == null)
+        {
+            return Array.Empty<TeamKillClip>();
+        }
+
+        try
+        {
+            insights ??= new InsightsSettings();
+            return BStepClips.Select(
+                new BStepAnalyzer(insights.BSteps).Analyze(snapshot),
+                otherClips,
+                onCamera
+            );
+        }
+        catch (Exception e)
+        {
+            logger?.LogWarning(e, "Could not read the bsteps. They are not cut.");
             return Array.Empty<TeamKillClip>();
         }
     }
@@ -371,7 +407,7 @@ public static class MatchClipExporter
         // A clip that names a team (a boss stolen from the team that killed it, #528) has no hero.
         string hero = clip.NamesTeam ? null : clip.Hero?.Trim();
         string title = YouTubeListing.ApplyMarker(
-            string.Join(" - ", new[] { clip.Hero, kind, map, id }.WhereNotEmpty()),
+            ClipTitle.Compose(clip, map, id, youtube?.Titles, youtube?.TitlePrefix),
             youtube?.TitlePrefix
         );
         var entry = new YouTubeEntry
@@ -389,7 +425,7 @@ public static class MatchClipExporter
                     ? string.Empty
                     : $"Heroes Profile Match: https://www.heroesprofile.com/Match/Single/?replayID={id}",
             }.WhereNotEmpty(),
-            Tags = new[] { kind, clip.NamesTeam ? null : clip.Hero, map }.WhereNotEmpty(),
+            Tags = ClipTags(clip, kind, map, youtube?.Titles?.GameName),
             Hero = string.IsNullOrWhiteSpace(hero) ? null : hero,
             Heroes = string.IsNullOrWhiteSpace(hero) ? null : new[] { hero },
         };
@@ -398,6 +434,27 @@ public static class MatchClipExporter
             JsonSerializer.Serialize(entry, YouTubeJsonContext.Indented.YouTubeEntry)
         );
     }
+
+    /// <summary>
+    /// The kind, the hero and the map, then a bstep's own search words and the game's names
+    /// when the title names the game (<see cref="GameNameSettings.Clips"/>).
+    /// </summary>
+    private static string[] ClipTags(
+        TeamKillClip clip,
+        string kind,
+        string map,
+        GameNameSettings game
+    ) =>
+        new[]
+        {
+            kind,
+            clip.NamesTeam ? null : clip.Hero,
+            map,
+            clip.Kind == BStepClips.Kind ? "hearth cancel" : null,
+            clip.Kind == BStepClips.Kind ? "BM" : null,
+            game?.Clips == true ? game.Name : null,
+            game?.Clips == true ? game.Short : null,
+        }.WhereNotEmpty();
 
     private static string[] WhereNotEmpty(this IEnumerable<string> parts)
     {

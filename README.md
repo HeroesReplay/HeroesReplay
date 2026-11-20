@@ -2,7 +2,7 @@
 
 Automated spectator for Heroes of the Storm `.StormReplay` files. It parses a replay, scores who to watch each second, launches the game, drives camera focus, and can switch OBS Studio scenes while streaming.
 
-Originally built for [twitch.tv/saltysadism](https://twitch.tv/saltysadism). Modernized to **.NET 10 LTS**. The product vision and the 24/7 cycle are in [docs/vision.md](docs/vision.md). What the YouTube uploader records, publishes, and files is in [docs/youtube-uploader.md](docs/youtube-uploader.md).
+Originally built for [twitch.tv/saltysadism](https://twitch.tv/saltysadism). Modernized to **.NET 11**. The product vision and the 24/7 cycle are in [docs/vision.md](docs/vision.md). What the YouTube uploader records, publishes, and files is in [docs/youtube-uploader.md](docs/youtube-uploader.md).
 
 `develop` is the default branch. A clone checks it out, and day-to-day work lands there. `master` is only the production branch. Merging into `master` runs the release workflow and publishes `heroesreplay-win-x64.zip`: the executable, `appsettings.json` with its `dev` and `prod` overlays, and the OBS scene collection with its assets. The stream PC installs that zip. It does not build from this checkout.
 
@@ -30,7 +30,7 @@ Catalog: `Maps:Catalog` in `appsettings.json` (`Playable`, `RankedRotation`, `Ty
 ## Requirements
 
 - Windows 10/11 (WinRT OCR, **PrintWindow** capture, process control). The client must be **windowed 1080p** (`heroesreplay client configure`). Fullscreen D3D11 is not supported.
-- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
+- [.NET 11 SDK](https://dotnet.microsoft.com/download/dotnet/11.0)
 - PowerShell 7 (`pwsh`). The build fetches HeroesClientSDK, the memory match clock package, from its public GitHub Release with `tools/restore-sdk-package.ps1` (no credentials; the SHA-256 is pinned in `Directory.Packages.props`).
 - Heroes of the Storm + Battle.net
 - Optional: OBS Studio 30.0+ (obs-websocket 5.3+, for `SetRecordDirectory`) with **Tools → WebSocket Server Settings** enabled (port **4455**). `heroesreplay obs validate` checks the running OBS offers every request in `ObsValidator.RequiredRequests`
@@ -105,7 +105,7 @@ dotnet run --no-launch-profile -- --help
 | `calculators units --directory <path>` | Sample 1–5 replays per map, one file at a time, and write unit CSVs |
 | `twitch connect` / `twitch rewards …` | Chat bot and channel-point rewards |
 | `youtube uploader` | Upload OBS recordings |
-| `youtube library` | File uploaded matches into map, mode, rank, unusual-drafts, viewer-review, and hero-gameplay playlists (`YouTube:Playlists`) |
+| `youtube library` | File uploaded matches into map, mode, rank, unusual-drafts, viewer-review, and hero-gameplay playlists, and clips into a `Clips` playlist (`YouTube:Playlists`) |
 | `client configure` | Windowed 1080p + AhliObs in `Documents\Heroes of the Storm` (Variables.txt + StormInterface). Quit the game first. |
 | `client status` / `check client` | Verify that preset |
 | `check` | Config + Heroes Profile + OBS + Twitch + client + Battle.net + connectivity (continues on failure) |

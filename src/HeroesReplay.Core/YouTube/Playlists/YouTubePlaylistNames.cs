@@ -17,6 +17,7 @@ public static class YouTubePlaylistNames
     public const string ViewerReviews = "Viewer requested reviews";
     public const string UnusualDrafts = "Unusual drafts";
     public const string HeroGameplay = "Hero gameplay";
+    public const string Clips = "Clips";
 
     /// <summary>
     /// The focus role group: <c>Hero gameplay - Ranged Assassin</c>, or null for a role that is

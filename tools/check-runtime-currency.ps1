@@ -9,8 +9,8 @@
 # Needs gh signed in (GH_TOKEN in Actions) with issues: write.
 param(
     [string]$Repository = $env:GITHUB_REPOSITORY,
-    [string]$Channel = '10.0',
-    # Compare this runtime ('.NET 10.0.12') instead of the one the latest release names: a what-if
+    [string]$Channel = '11.0',
+    # Compare this runtime ('.NET 11.0.1') instead of the one the latest release names: a what-if
     # for -DryRun, such as for a release from before #462.
     [string]$ShippedRuntime = '',
     [switch]$DryRun
@@ -27,7 +27,7 @@ $metadataUrl = "https://builds.dotnet.microsoft.com/dotnet/release-metadata/$Cha
 $titlePrefix = 'Stale .NET runtime:'
 $marker = '<!-- runtime-currency: .github/workflows/runtime-currency.yml (#462) -->'
 
-# 10.0.13 from ".NET 10.0.13" or "10.0.13"; prerelease suffixes are ignored. Null without one.
+# 11.0.1 from ".NET 11.0.1" or "11.0.1"; prerelease suffixes are ignored. Null without one.
 function Get-RuntimeVersion([string]$Text) {
     if ("$Text" -match '(\d+)\.(\d+)\.(\d+)') {
         return [version]::new([int]$Matches[1], [int]$Matches[2], [int]$Matches[3])
@@ -114,7 +114,7 @@ $($rows -join "`n")
 
 **Cadence** (``docs/runtime-currency.md``): merge Dependabot's SDK bump (``global.json``) and its ``microsoft-extensions`` group on ``develop`` within 7 days of Patch Tuesday, within 72 hours when the release notes list a CVE. Let CI build and smoke it, prove it on ASA-SERVER, then release ``develop`` to ``master``.
 
-While the release is framework-dependent, the stream PC runs on its machine-wide .NET runtime, which Microsoft Update services: ``heroesreplay check runtime`` there shows which one. A self-contained or Native AOT release (#453, #461) carries the runtime above until the next release.
+The release is self-contained (#453): the stream PC runs the runtime the latest release carries until the next release, whatever Microsoft Update installs machine-wide. ``heroesreplay check runtime`` there shows which one.
 
 Checked $((Get-Date).ToUniversalTime().ToString('yyyy-MM-dd HH:mm')) UTC against [releases.json]($metadataUrl) (latest runtime $latestRuntime). The workflow closes this issue once the latest release carries .NET $newestVersion or later.
 "@
