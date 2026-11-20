@@ -453,13 +453,7 @@ public static class ClipTitle
                 f => $"Instant karma: {f.Hero} bsteps and gets caught",
                 Karma
             ),
-            new(
-                ClipKind.BStep,
-                2,
-                f => f.DiedAfter,
-                f => $"Bstep BM backfires on {f.Hero}",
-                Karma
-            ),
+            new(ClipKind.BStep, 2, f => f.DiedAfter, f => $"Bstep BM backfires on {f.Hero}", Karma),
             new(
                 ClipKind.BStep,
                 3,
@@ -620,16 +614,26 @@ public static class ClipTitle
         };
 
         // Heroes the community has a running joke about.
-        lines.AddRange(HeroKillLines(new[] { "Chromie" }, f => $"Chromie hits her skillshots: {f.KindWord}"));
-        lines.AddRange(HeroKillLines(new[] { "Raynor" }, f => $"Beginner hero? Raynor {f.KindWord}"));
+        lines.AddRange(
+            HeroKillLines(new[] { "Chromie" }, f => $"Chromie hits her skillshots: {f.KindWord}")
+        );
+        lines.AddRange(
+            HeroKillLines(new[] { "Raynor" }, f => $"Beginner hero? Raynor {f.KindWord}")
+        );
         lines.AddRange(HeroKillLines(new[] { "Azmodan" }, f => $"Azmodunk! Azmodan {f.KindWord}"));
         lines.AddRange(HeroKillLines(new[] { "Abathur" }, f => $"Slug life: Abathur {f.KindWord}"));
         lines.AddRange(
             HeroKillLines(new[] { "Cho", "Gall" }, f => $"Two heads, one {f.KindWord}: {f.Hero}")
         );
         lines.AddRange(HeroKillLines(new[] { "Murky" }, f => $"Mrrgl! Murky {f.KindWord}"));
-        lines.AddRange(HeroKillLines(new[] { "Illidan" }, f => $"Illidan was prepared: {f.KindWord}"));
-        lines.AddRange(HeroKillLines(new[] { "The Butcher", "Butcher" }, f => $"Fresh meat! Butcher {f.KindWord}"));
+        lines.AddRange(
+            HeroKillLines(new[] { "Illidan" }, f => $"Illidan was prepared: {f.KindWord}")
+        );
+        lines.AddRange(
+            HeroKillLines(new[] { "The Butcher", "Butcher" }, f =>
+                $"Fresh meat! Butcher {f.KindWord}"
+            )
+        );
         return lines;
     }
 }

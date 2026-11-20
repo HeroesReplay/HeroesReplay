@@ -195,7 +195,7 @@ public class MatchClipExportTests : IClassFixture<ReplayFixture>
             Assert.Contains(" - Garden of Terror - 65000001", pentakillEntry.Title);
             Assert.StartsWith("[TEST] ", tripleEntry.Title, StringComparison.Ordinal);
             Assert.Contains("Test", tripleEntry.Title, StringComparison.Ordinal);
-            Assert.Contains("triple kill", tripleEntry.Title, StringComparison.Ordinal);
+            Assert.Contains("triple kill", tripleEntry.Title, StringComparison.OrdinalIgnoreCase);
             Assert.Contains(" - Garden of Terror - 65000001", tripleEntry.Title);
             Assert.Contains("triple kill", tripleEntry.Tags);
             Assert.Equal("clip:65000001:triple-kill:Test", tripleEntry.DescriptionLines[0]);

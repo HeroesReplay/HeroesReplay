@@ -30,7 +30,11 @@ public class ClipTitleTests
 
             Assert.Contains(KindWord(line.Kind), text, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain(" - ", text, StringComparison.Ordinal);
-            Assert.True(line.Emoji.Length == 0 || line.Kind is ClipTitle.ClipKind.BStep or ClipTitle.ClipKind.Penta, text);
+            Assert.True(
+                line.Emoji.Length == 0
+                    || line.Kind is ClipTitle.ClipKind.BStep or ClipTitle.ClipKind.Penta,
+                text
+            );
             foreach (string word in new[] { "full match", "full game", "insane", "best ever" })
             {
                 Assert.DoesNotContain(word, text, StringComparison.OrdinalIgnoreCase);
@@ -165,7 +169,10 @@ public class ClipTitleTests
         var titles = new YouTubeTitleSettings { Clips = new ClipTitleSettings { Emoji = false } };
         foreach (TeamKillClip clip in Clips())
         {
-            Assert.Equal(0, Emoji(ClipTitle.Compose(clip, "Cursed Hollow", "66698689", titles, null)));
+            Assert.Equal(
+                0,
+                Emoji(ClipTitle.Compose(clip, "Cursed Hollow", "66698689", titles, null))
+            );
         }
     }
 
@@ -180,7 +187,13 @@ public class ClipTitleTests
 
         Assert.Equal(
             "Kerrigan - quadra kill - Cursed Hollow - 66698689",
-            ClipTitle.Compose(Kill("Kerrigan", 4, 100, 109), "Cursed Hollow", "66698689", titles, null)
+            ClipTitle.Compose(
+                Kill("Kerrigan", 4, 100, 109),
+                "Cursed Hollow",
+                "66698689",
+                titles,
+                null
+            )
         );
     }
 
@@ -216,12 +229,25 @@ public class ClipTitleTests
         {
             yield return Kill(hero, 3, 100, 101);
             yield return Kill(hero, 4, 100, 106);
-            yield return Kill(hero, 5, 100, 108) with { Kind = TeamKillClips.PentakillKind };
-            yield return Kill(hero, 5, 100, 140) with { Kind = TeamKillClips.PentakillKind };
+            yield return Kill(hero, 5, 100, 108) with
+            {
+                Kind = TeamKillClips.PentakillKind,
+            };
+            yield return Kill(hero, 5, 100, 140) with
+            {
+                Kind = TeamKillClips.PentakillKind,
+            };
             yield return BStepClips.Clip(
                 Step(
                     hero,
-                    new BStepDeath(5, "Lt. Morales", 298, BStepDeathKind.KilledByBstepper, false, 0),
+                    new BStepDeath(
+                        5,
+                        "Lt. Morales",
+                        298,
+                        BStepDeathKind.KilledByBstepper,
+                        false,
+                        0
+                    ),
                     new BStepDeath(6, "The Lost Vikings", 299, BStepDeathKind.Enemy, false, 1),
                     new BStepDeath(0, hero, 306, BStepDeathKind.Bstepper, true, 6)
                 )
@@ -238,14 +264,7 @@ public class ClipTitleTests
             .Select(
                 new BossFightInsights
                 {
-                    Fights = new[]
-                    {
-                        Steal() with
-                        {
-                            KillerHero = "Abathur",
-                            KillerTeam = 0,
-                        },
-                    },
+                    Fights = new[] { Steal() with { KillerHero = "Abathur", KillerTeam = 0 } },
                 }
             )
             .Single();

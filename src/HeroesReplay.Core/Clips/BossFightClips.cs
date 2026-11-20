@@ -31,6 +31,9 @@ public static class BossFightClips
 
     public const int TailSeconds = 6;
 
+    /// <param name="insights">The replay's boss fights.</param>
+    /// <param name="killClips">Pentakill and triple-kill clips already cut; an overlapping fight is skipped.</param>
+    /// <param name="onCamera">Whether the camera showed a clip. Null takes every fight.</param>
     /// <param name="teamLevels">
     /// When each team reached each level (<see cref="ReplaySnapshot.TeamLevels"/>), so the clip's
     /// title can say a team took the boss while behind. Null leaves the levels out.
