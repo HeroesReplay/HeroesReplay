@@ -4,9 +4,9 @@ Step 9 of the Native AOT epic (#452), issue #462. It must be in place before any
 
 ## Why
 
-Today `heroesreplay.exe` is framework-dependent. It runs on the machine-wide .NET 11 runtime, which Microsoft Update services: a .NET security fix reaches the stream PC without a release. Windows Update can also remove that runtime under running roles (#450, 2026-10-15).
+The release is self-contained (#453, from 2026-11-20): the zip carries its .NET runtime, so the stream PC needs no machine-wide runtime, a new .NET major installs on a machine that has only the old one, and Windows Update servicing the machine-wide runtime no longer touches a running role (#450, 2026-10-15). Until then it was framework-dependent and ran on the machine-wide runtime Microsoft Update services.
 
-A self-contained release (#453) or a Native AOT release (#461) carries its runtime inside the zip. A .NET security fix then reaches production only when CI rebuilds the release with a newer SDK and `develop` is released to `master`. This page is how that happens on time.
+The cost: a .NET security fix reaches production only when CI rebuilds the release with a newer SDK and `develop` is released to `master`. This page is how that happens on time.
 
 ## What is pinned
 
@@ -52,9 +52,9 @@ The runtime is `RuntimeInformation.FrameworkDescription`, such as `.NET 11.0.0`.
 | `services status` | Each role's `dotnetRuntime`, from its heartbeat, and the top-level `dotnetRuntime` (what a role started now loads) and `releaseRuntime` (`runtime.txt`). The text output prints a `Runtime:` line, and the runtime after each role's version. |
 | MCP `get_spectator_status` | `status.dotnetRuntime` (spectate's), `dotnetRuntime` (the MCP server's), and `releaseRuntime`. |
 
-A release built on a new .NET major (such as the move to .NET 11) needs that runtime on the machine before it can start. `tools/apply-release.ps1` reads the staged `heroesreplay.runtimeconfig.json` before it runs the staged exe or touches the install. When a framework it names (`Microsoft.NETCore.App`, `Microsoft.WindowsDesktop.App`) has no installed version of the same major at that version or later, the release is not installed: it goes on the skip list with `missing .NET runtime: ...`, the current build starts again, and the log says which Desktop Runtime to install (`winget install Microsoft.DotNet.DesktopRuntime.<major>`). After installing it, delete that tag's line from `skipped-releases.txt`, or wait for the next release. Install the runtime on ASA-SERVER and the stream PC before releasing a new major.
+`runtime.txt` is the runtime the release carries and CI tested. A self-contained install runs on exactly that one, whatever the machine-wide runtime is. (While releases were framework-dependent, the stream PC ran on its own machine-wide runtime, which could be newer or older.) `check runtime` on the stream PC says which.
 
-While the release is framework-dependent, `runtime.txt` is the runtime CI built and tested it on. The stream PC runs on its own machine-wide runtime, which can be newer, or older until Microsoft Update services it. `check runtime` on the stream PC says which.
+`tools/apply-release.ps1` still guards a framework-dependent zip (a rollback build, or a release from before #453): it reads the staged `heroesreplay.runtimeconfig.json` before it runs the staged exe or touches the install, and when a framework it names (`Microsoft.NETCore.App`, `Microsoft.WindowsDesktop.App`) has no installed version of the same major at that version or later, the release is not installed: it goes on the skip list with `missing .NET runtime: ...`, the current build starts again, and the log names the Desktop Runtime to install (`winget install Microsoft.DotNet.DesktopRuntime.<major>`). A self-contained zip lists `includedFrameworks`, not `frameworks`, so the guard passes it.
 
 ## The weekly check
 

@@ -36,6 +36,7 @@ public class ServicesCommand : Command
         Subcommands.Add(StartCommand());
         Subcommands.Add(EnsureCommand());
         Subcommands.Add(StopCommand());
+        Subcommands.Add(ShutdownCommand());
         Subcommands.Add(StatusCommand());
         Subcommands.Add(SuperviseCommand());
         Subcommands.Add(ResetCommand());
@@ -180,6 +181,13 @@ public class ServicesCommand : Command
                         + task
                         + "`; remove it with `heroesreplay services install-task --remove`."
                 );
+
+                // The task only runs at logon. Say when nothing logs on after a restart.
+                AutoStartReport autostart = AutoStartProbe.Check(task);
+                if (!autostart.Ready)
+                {
+                    Console.WriteLine("Warning: " + autostart.Detail);
+                }
             }
 
             return code;
@@ -403,6 +411,16 @@ public class ServicesCommand : Command
             .Run(cancellationToken);
     }
 
+    /// <summary>
+    /// Starts hearing Windows end the session (<see cref="SessionEndSignal"/>), so the supervisor
+    /// does not restart roles into a restart or shutdown.
+    /// </summary>
+    private static Func<DateTimeOffset, string> WatchSessionEnd()
+    {
+        SessionEndSignal.Default.Watch();
+        return SessionEndSignal.Default.Ending;
+    }
+
     private static ServiceSupervision CreateSupervision(
         string exe,
         ServiceRestartSettings settings,
@@ -423,6 +441,7 @@ public class ServicesCommand : Command
             ReadHeartbeat = record => ServiceReadyFile.TryRead(record),
             DeleteHeartbeat = record => ServiceReadyFile.Delete(record?.Nonce),
             StopRequested = () => File.Exists(ServiceStopFile.DefaultPath),
+            SessionEnding = WatchSessionEnd(),
             TakeResets = () => ServiceResetFile.Take(),
             Launch = request =>
                 LaunchRole(
@@ -1005,40 +1024,128 @@ public class ServicesCommand : Command
             "Ask the recorded processes, and any role process from this install that is not recorded, to shut down, kill any still running after 20 seconds, close Heroes of the Storm and any HeroesSwitcher left without it, and stop an OBS recording spectate left running (never the stream). Exits 1 unless every role exited, the game and those switchers closed, OBS is not streaming, and no recording spectate started is still running."
         );
         command.SetAction(
+            (parseResult, cancellationToken) => Task.FromResult(StopStack().ExitCode)
+        );
+        return command;
+    }
+
+    /// <summary>What <c>services stop</c> runs; <c>services shutdown</c> runs it first.</summary>
+    private static ServiceStopResult StopStack() =>
+        ServiceSupervisor.Stop(
+            ServiceLockStore.DefaultPath,
+            new ServiceShutdown
+            {
+                ProcessNameOrNull = ProcessNameOrNull,
+                Probe = ServiceProcessProbe.TryFromProcess,
+                Kill = Kill,
+                RequestGracefulStop = () => ServiceStopFile.Request(),
+                GracefulWait = ServiceShutdown.DefaultGracefulWait,
+                Wait = Thread.Sleep,
+                ClearStopFile = () => ServiceStopFile.Clear(),
+                FindUnrecordedRoles = recorded =>
+                    UnrecordedRoles.Find(
+                        ProcessTable.Snapshot(),
+                        ProcessCommandLine.TryRead,
+                        Environment.ProcessPath,
+                        Environment.ProcessId,
+                        recorded
+                    ),
+                GameRunning = () => NamedProcess.IsRunning(GameProcessName),
+                CloseGame = StopSpectatedGame,
+                CloseIdleSwitchers = new HeroesSwitcherShutdown().CloseIdle,
+                ConfirmStream = ObsServiceStop.DelegateToSpectator,
+                ReadStream = ServiceStreamProbe.Read,
+                StopSpectateRecording = ServiceRecordingProbe.StopLeftRecording,
+                StopSupervisor = StopSupervisor,
+            }
+        );
+
+    private static Command ShutdownCommand()
+    {
+        var command = new Command(
+            "shutdown",
+            "Take this machine's automation down cleanly, for a restart or a planned downtime: everything `services stop` does, then stop the OBS stream and recording over the websocket, close OBS (killed if it is still open after 20 s), and with --restart or --poweroff ask Windows to restart or power off. Windows is asked only when every role, the supervisor, the game and OBS closed, unless --force. This ends a live stream. Exit 1 when something is still running or shutdown.exe failed."
+        );
+        var restart = new Option<bool>("--restart")
+        {
+            Description =
+                "Restart Windows once everything is closed. The HeroesReplay-live task starts the stack at the next logon (check autostart).",
+        };
+        var powerOff = new Option<bool>("--poweroff")
+        {
+            Description = "Power Windows off once everything is closed.",
+        };
+        var delay = new Option<int>("--delay")
+        {
+            Description =
+                "Seconds Windows waits before it restarts or powers off (shutdown /t). Cancel with `shutdown /a`.",
+            DefaultValueFactory = _ => 10,
+        };
+        var force = new Option<bool>("--force")
+        {
+            Description =
+                "Close OBS and ask Windows to restart or power off even when a role, the supervisor or the game did not stop.",
+        };
+        command.Options.Add(restart);
+        command.Options.Add(powerOff);
+        command.Options.Add(delay);
+        command.Options.Add(force);
+        command.SetAction(
             (parseResult, cancellationToken) =>
             {
-                ServiceStopResult result = ServiceSupervisor.Stop(
-                    ServiceLockStore.DefaultPath,
-                    new ServiceShutdown
-                    {
-                        ProcessNameOrNull = ProcessNameOrNull,
-                        Probe = ServiceProcessProbe.TryFromProcess,
-                        Kill = Kill,
-                        RequestGracefulStop = () => ServiceStopFile.Request(),
-                        GracefulWait = ServiceShutdown.DefaultGracefulWait,
-                        Wait = Thread.Sleep,
-                        ClearStopFile = () => ServiceStopFile.Clear(),
-                        FindUnrecordedRoles = recorded =>
-                            UnrecordedRoles.Find(
-                                ProcessTable.Snapshot(),
-                                ProcessCommandLine.TryRead,
-                                Environment.ProcessPath,
-                                Environment.ProcessId,
-                                recorded
-                            ),
-                        GameRunning = () => NamedProcess.IsRunning(GameProcessName),
-                        CloseGame = StopSpectatedGame,
-                        CloseIdleSwitchers = new HeroesSwitcherShutdown().CloseIdle,
-                        ConfirmStream = ObsServiceStop.DelegateToSpectator,
-                        ReadStream = ServiceStreamProbe.Read,
-                        StopSpectateRecording = ServiceRecordingProbe.StopLeftRecording,
-                        StopSupervisor = StopSupervisor,
-                    }
-                );
+                cancellationToken.ThrowIfCancellationRequested();
+                if (parseResult.GetValue(restart) && parseResult.GetValue(powerOff))
+                {
+                    Console.Error.WriteLine("Pass --restart or --poweroff, not both.");
+                    return Task.FromResult(1);
+                }
+
+                int seconds = parseResult.GetValue(delay);
+                if (seconds < 0 || seconds > 600)
+                {
+                    Console.Error.WriteLine("--delay is 0 to 600 seconds.");
+                    return Task.FromResult(1);
+                }
+
+                MachinePowerAction action =
+                    parseResult.GetValue(restart) ? MachinePowerAction.Restart
+                    : parseResult.GetValue(powerOff) ? MachinePowerAction.PowerOff
+                    : MachinePowerAction.None;
+                ServiceMachineShutdownResult result = new ServiceMachineShutdown
+                {
+                    StopStack = StopStack,
+                    FindObs = ServiceObsOutputs.FindObs,
+                    StopObsOutputs = ServiceObsOutputs.Stop,
+                    CloseObs = ServiceObsOutputs.Close,
+                    WaitForExit = ServiceObsOutputs.WaitForExit,
+                    KillObs = ServiceObsOutputs.Kill,
+                    RequestPower = RequestPower,
+                }.Run(action, TimeSpan.FromSeconds(seconds), parseResult.GetValue(force));
                 return Task.FromResult(result.ExitCode);
             }
         );
         return command;
+    }
+
+    /// <summary>shutdown.exe /r or /s, recorded in the event log as a planned shutdown (event 1074).</summary>
+    private static int RequestPower(MachinePowerAction action, TimeSpan delay)
+    {
+        var start = new ProcessStartInfo(Path.Combine(Environment.SystemDirectory, "shutdown.exe"))
+        {
+            UseShellExecute = false,
+        };
+        start.ArgumentList.Add(action == MachinePowerAction.Restart ? "/r" : "/s");
+        start.ArgumentList.Add("/t");
+        start.ArgumentList.Add(
+            ((int)delay.TotalSeconds).ToString(System.Globalization.CultureInfo.InvariantCulture)
+        );
+        start.ArgumentList.Add("/d");
+        start.ArgumentList.Add("p:0:0");
+        start.ArgumentList.Add("/c");
+        start.ArgumentList.Add("heroesreplay services shutdown");
+        using Process process = Process.Start(start);
+        process.WaitForExit();
+        return process.ExitCode;
     }
 
     private static Command StatusCommand()

@@ -234,6 +234,16 @@ Report the .NET runtime this exe runs on (RuntimeInformation.FrameworkDescriptio
 - **Exit:** 0 when the check passes (a warning passes), 1 when it fails or on a parse error.
 - **Codes:** `check.runtime.ok`, `check.runtime.older_than_release`, `check.runtime.error`
 
+## `check autostart`
+
+Report whether the stack comes back by itself after Windows restarts: the HeroesReplay-live logon task (services install-task) starts this install, and Windows logs that user on by itself (Winlogon AutoAdminLogon). A missing piece is a warning. Read-only; no password is read.
+
+- **Options:** `--output` (`-o`)
+- **Before:** None. Reads no secret and no password.
+- **Changes:** Nothing. Runs `schtasks /Query /TN HeroesReplay-live /XML` and reads the Winlogon `AutoAdminLogon`, `DefaultUserName` and `AutoLogonCount` values.
+- **Exit:** 0 always unless the read throws (no task, a task for another install, auto-logon off, for another user, or counted are warnings), 1 on a parse error or an unexpected error.
+- **Codes:** `check.autostart.ok`, `check.autostart.no_task`, `check.autostart.task_other_install`, `check.autostart.no_auto_logon`, `check.autostart.auto_logon_other_user`, `check.autostart.auto_logon_counted`, `check.autostart.error`
+
 ## `check storage`
 
 Measure Location:DataDirectory and %LOCALAPPDATA%\HeroesReplay (total, largest category, free space) and report the last housekeeping pass (housekeeping.json). A pass that never ran, ran more than 3 Housekeeping:Interval ago, or failed is a warning.
@@ -467,6 +477,15 @@ Ask the recorded processes, and any role process from this install that is not r
 - **Exit:** 0 when every role and the supervisor exited, the game and every `HeroesSwitcher_x64` without a Heroes child closed, OBS is closed or not streaming, and no recording spectate started is left running. 1 otherwise, including a running OBS whose websocket does not answer on an install that streams, and a claimed recording that OBS refused to stop or that could not be checked.
 - **Codes:** `service.role_kill_spared_obs`
 
+## `services shutdown`
+
+Take this machine's automation down cleanly, for a restart or a planned downtime: everything `services stop` does, then stop the OBS stream and recording over the websocket, close OBS (killed if it is still open after 20 s), and with --restart or --poweroff ask Windows to restart or power off. Windows is asked only when every role, the supervisor, the game and OBS closed, unless --force. This ends a live stream. Exit 1 when something is still running or shutdown.exe failed.
+
+- **Options:** `--restart`, `--poweroff`, `--delay`, `--force`
+- **Before:** Only for a restart or a scheduled downtime: it ends a live stream. On DESKTOP-8SJEK72 only with the owner, in a scheduled downtime.
+- **Changes:** Everything `services stop` does, then (once every role, the supervisor and the game stopped, or with `--force`) sends `StopStream` and `StopRecord` for the outputs OBS reports active and waits up to 15 s for both to end, asks each obs64 to close (`CloseMainWindow`) and kills one still running after 20 s. With `--restart` or `--poweroff`, then runs `shutdown /r` or `/s /t <--delay, 10> /d p:0:0` (event 1074, planned), only when everything closed unless `--force`; `shutdown /a` cancels it. The `HeroesReplay-live` task starts the stack at the next logon (`check autostart`).
+- **Exit:** 0 when every role, the supervisor, the game and OBS closed and, with `--restart` or `--poweroff`, shutdown.exe accepted the request. 1 otherwise, including both flags at once or a `--delay` outside 0 to 600.
+
 ## `services status`
 
 Classify each role as ready, degraded, stale, stopped, or failed from its heartbeat, with the cause and the fix, plus the spectator status file. Exits 1 when a role is failed, stale, or degraded.
@@ -501,7 +520,7 @@ Register the Windows scheduled task HeroesReplay-live: `services start --supervi
 
 - **Options:** `--environment`, `--roles`, `--name`, `--remove`
 - **Before:** Run once from the release install on the stream PC. No administrator rights.
-- **Changes:** Registers (or with `--remove` deletes) the scheduled task `HeroesReplay-live` that runs `services start --supervise` at logon.
+- **Changes:** Registers (or with `--remove` deletes) the scheduled task `HeroesReplay-live` that runs `services start --supervise` at logon, then warns when Windows would not log that user on by itself after a restart (the `check autostart` reasons).
 - **Exit:** 0 when it finishes. 1 on a parse error or an unexpected error.
 
 ## `obs arm`
