@@ -71,7 +71,12 @@ public static class AutoStartProbe
             _ = stderr.Result;
             return process.ExitCode == 0 ? ParseTaskCommand(xml) : null;
         }
-        catch (Exception e) when (e is IOException or InvalidOperationException or System.ComponentModel.Win32Exception)
+        catch (Exception e)
+            when (e
+                    is IOException
+                        or InvalidOperationException
+                        or System.ComponentModel.Win32Exception
+            )
         {
             return null;
         }
@@ -100,8 +105,7 @@ public static class AutoStartProbe
                 return null;
             }
 
-            string arguments = exec
-                .Elements()
+            string arguments = exec.Elements()
                 .FirstOrDefault(element => element.Name.LocalName == "Arguments")
                 ?.Value;
             return string.IsNullOrWhiteSpace(arguments) ? command : command + " " + arguments;

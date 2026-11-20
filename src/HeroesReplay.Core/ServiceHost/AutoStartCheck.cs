@@ -43,7 +43,8 @@ public static class AutoStartCheck
     public const string AutoLogonOtherUser = "auto_logon_other_user";
     public const string AutoLogonCounted = "auto_logon_counted";
 
-    public const string AutologonUrl = "https://learn.microsoft.com/sysinternals/downloads/autologon";
+    public const string AutologonUrl =
+        "https://learn.microsoft.com/sysinternals/downloads/autologon";
 
     public static AutoStartReport Evaluate(AutoStartFacts facts, string taskName)
     {

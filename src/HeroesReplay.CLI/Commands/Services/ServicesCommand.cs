@@ -1077,7 +1077,8 @@ public class ServicesCommand : Command
         };
         var delay = new Option<int>("--delay")
         {
-            Description = "Seconds Windows waits before it restarts or powers off (shutdown /t). Cancel with `shutdown /a`.",
+            Description =
+                "Seconds Windows waits before it restarts or powers off (shutdown /t). Cancel with `shutdown /a`.",
             DefaultValueFactory = _ => 10,
         };
         var force = new Option<bool>("--force")
@@ -1106,11 +1107,10 @@ public class ServicesCommand : Command
                     return Task.FromResult(1);
                 }
 
-                MachinePowerAction action = parseResult.GetValue(restart)
-                    ? MachinePowerAction.Restart
-                    : parseResult.GetValue(powerOff)
-                        ? MachinePowerAction.PowerOff
-                        : MachinePowerAction.None;
+                MachinePowerAction action =
+                    parseResult.GetValue(restart) ? MachinePowerAction.Restart
+                    : parseResult.GetValue(powerOff) ? MachinePowerAction.PowerOff
+                    : MachinePowerAction.None;
                 ServiceMachineShutdownResult result = new ServiceMachineShutdown
                 {
                     StopStack = StopStack,
@@ -1136,7 +1136,9 @@ public class ServicesCommand : Command
         };
         start.ArgumentList.Add(action == MachinePowerAction.Restart ? "/r" : "/s");
         start.ArgumentList.Add("/t");
-        start.ArgumentList.Add(((int)delay.TotalSeconds).ToString(System.Globalization.CultureInfo.InvariantCulture));
+        start.ArgumentList.Add(
+            ((int)delay.TotalSeconds).ToString(System.Globalization.CultureInfo.InvariantCulture)
+        );
         start.ArgumentList.Add("/d");
         start.ArgumentList.Add("p:0:0");
         start.ArgumentList.Add("/c");

@@ -100,7 +100,9 @@ internal static class ServiceObsOutputs
 
             if (recording)
             {
-                notes.Add(TrySend(() => obs.StopRecord()) ? "StopRecord sent" : "StopRecord failed");
+                notes.Add(
+                    TrySend(() => obs.StopRecord()) ? "StopRecord sent" : "StopRecord failed"
+                );
             }
 
             if (!streaming && !recording)
@@ -115,14 +117,19 @@ internal static class ServiceObsOutputs
             {
                 Thread.Sleep(500);
                 streamDone = streamDone || !TryRead(() => obs.GetStreamStatus()?.IsActive == true);
-                recordDone = recordDone || !TryRead(() => obs.GetRecordStatus()?.IsRecording == true);
+                recordDone =
+                    recordDone || !TryRead(() => obs.GetRecordStatus()?.IsRecording == true);
             }
 
             string state =
                 streamDone && recordDone
                     ? $"stream and recording stopped in {wait.Elapsed.TotalSeconds:0.0} s"
                     : $"after {OutputsStopWait.TotalSeconds:0} s the "
-                        + (streamDone ? "recording" : recordDone ? "stream" : "stream and recording")
+                        + (
+                            streamDone ? "recording"
+                            : recordDone ? "stream"
+                            : "stream and recording"
+                        )
                         + " still reported active; closing OBS anyway";
             return new ObsOutputsStop(
                 true,

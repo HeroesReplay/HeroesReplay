@@ -1,7 +1,6 @@
-using System;
+∩╗┐using System;
 using HeroesReplay.CLI.Commands.Services;
 using HeroesReplay.Core.ServiceHost;
-using HeroesReplay.Tests.Unit.Support;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.ServiceHost;
@@ -16,7 +15,9 @@ public class AutoStartCheckTests
         CurrentUser = @"DESKTOP-8SJEK72\admin",
         Executable = Exe,
         TaskCommand =
-            "cmd.exe /d /c \"set HEROES_REPLAY_ENV=prod&& \"" + Exe + "\" services start --supervise\"",
+            "cmd.exe /d /c \"set HEROES_REPLAY_ENV=prod&& \""
+            + Exe
+            + "\" services start --supervise\"",
         AutoAdminLogon = true,
         AutoLogonUser = "admin",
     };
@@ -34,7 +35,10 @@ public class AutoStartCheckTests
     public void NoTask_SaysToRunInstallTask()
     {
         AutoStartReport report = AutoStartCheck.Evaluate(
-            Ready with { TaskCommand = null },
+            Ready with
+            {
+                TaskCommand = null,
+            },
             ServiceLogonTask.DefaultName
         );
 
@@ -48,7 +52,8 @@ public class AutoStartCheckTests
         AutoStartReport report = AutoStartCheck.Evaluate(
             Ready with
             {
-                TaskCommand = @"C:\heroesreplay\HeroesReplay\src\bin\heroesreplay.exe services start --supervise",
+                TaskCommand =
+                    @"C:\heroesreplay\HeroesReplay\src\bin\heroesreplay.exe services start --supervise",
             },
             ServiceLogonTask.DefaultName
         );
@@ -60,7 +65,10 @@ public class AutoStartCheckTests
     public void AutoLogonOff_PointsAtAutologon()
     {
         AutoStartReport report = AutoStartCheck.Evaluate(
-            Ready with { AutoAdminLogon = false },
+            Ready with
+            {
+                AutoAdminLogon = false,
+            },
             ServiceLogonTask.DefaultName
         );
 
@@ -73,7 +81,10 @@ public class AutoStartCheckTests
     public void AutoLogonForAnotherUser_IsNotReady()
     {
         AutoStartReport report = AutoStartCheck.Evaluate(
-            Ready with { AutoLogonUser = "stream" },
+            Ready with
+            {
+                AutoLogonUser = "stream",
+            },
             ServiceLogonTask.DefaultName
         );
 
@@ -84,7 +95,10 @@ public class AutoStartCheckTests
     public void AutoLogonCount_RunsOut()
     {
         AutoStartReport report = AutoStartCheck.Evaluate(
-            Ready with { AutoLogonCount = 2 },
+            Ready with
+            {
+                AutoLogonCount = 2,
+            },
             ServiceLogonTask.DefaultName
         );
 

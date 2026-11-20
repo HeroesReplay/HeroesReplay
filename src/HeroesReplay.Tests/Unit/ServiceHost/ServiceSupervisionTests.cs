@@ -35,9 +35,8 @@ public class ServiceSupervisionTests
         stack.Ticks(supervision, 120);
 
         Assert.Empty(stack.Launches);
-        LogEntry paused = Assert.Single(
-            stack.Log.Entries,
-            entry => entry.Level == LogLevel.Warning && entry.Message.Contains("ending the session")
+        LogEntry paused = Assert.Single(stack.Log.Entries, entry =>
+            entry.Level == LogLevel.Warning && entry.Message.Contains("ending the session")
         );
         Assert.Contains("SystemShutdown", paused.Message);
 

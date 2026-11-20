@@ -32,7 +32,12 @@ public enum ObsCloseOutcome
 }
 
 /// <summary>The websocket part of closing OBS: stop the stream and the recording first.</summary>
-public sealed record ObsOutputsStop(bool Connected, bool StreamStopped, bool RecordingStopped, string Detail)
+public sealed record ObsOutputsStop(
+    bool Connected,
+    bool StreamStopped,
+    bool RecordingStopped,
+    string Detail
+)
 {
     public static ObsOutputsStop Unreachable(string detail) => new(false, false, false, detail);
 }
@@ -86,9 +91,9 @@ public sealed class ServiceMachineShutdown
             );
         }
 
-        ObsCloseOutcome obs =
-            stackStopped || force ? CloseObsProcesses() : ObsCloseOutcome.Skipped;
-        bool obsClosed = obs is ObsCloseOutcome.NotRunning or ObsCloseOutcome.Closed or ObsCloseOutcome.Killed;
+        ObsCloseOutcome obs = stackStopped || force ? CloseObsProcesses() : ObsCloseOutcome.Skipped;
+        bool obsClosed =
+            obs is ObsCloseOutcome.NotRunning or ObsCloseOutcome.Closed or ObsCloseOutcome.Killed;
         bool clean = stackStopped && obsClosed;
 
         int? powerExit = null;
@@ -106,7 +111,9 @@ public sealed class ServiceMachineShutdown
             }
             else
             {
-                Write("Windows was not asked to restart or power off, because something is still running.");
+                Write(
+                    "Windows was not asked to restart or power off, because something is still running."
+                );
             }
         }
 
@@ -158,7 +165,9 @@ public sealed class ServiceMachineShutdown
                 continue;
             }
 
-            Write($"OBS pid {pid}: still running {ObsCloseWait.TotalSeconds:0} s after the close request. Killing it.");
+            Write(
+                $"OBS pid {pid}: still running {ObsCloseWait.TotalSeconds:0} s after the close request. Killing it."
+            );
             try
             {
                 KillObs?.Invoke(pid);

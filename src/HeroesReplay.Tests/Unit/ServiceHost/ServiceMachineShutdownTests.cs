@@ -1,8 +1,7 @@
-using System;
+∩╗┐using System;
 using System.Collections.Generic;
 using HeroesReplay.CLI.Commands.Services;
 using HeroesReplay.Core.ServiceHost;
-using HeroesReplay.Tests.Unit.Support;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.ServiceHost;
@@ -79,8 +78,7 @@ public class ServiceMachineShutdownTests
         var fake = new Fake();
         fake.Obs.Add(42);
 
-        ServiceMachineShutdownResult result = fake
-            .Shutdown()
+        ServiceMachineShutdownResult result = fake.Shutdown()
             .Run(MachinePowerAction.Restart, Delay, force: false);
 
         Assert.Equal(new[] { "stop", "outputs", "close 42", "power Restart 10" }, fake.Steps);
@@ -95,8 +93,7 @@ public class ServiceMachineShutdownTests
         fake.Obs.Add(42);
         fake.IgnoresClose.Add(42);
 
-        ServiceMachineShutdownResult result = fake
-            .Shutdown()
+        ServiceMachineShutdownResult result = fake.Shutdown()
             .Run(MachinePowerAction.None, Delay, force: false);
 
         Assert.Equal(new[] { "stop", "outputs", "close 42", "kill 42" }, fake.Steps);
@@ -109,8 +106,7 @@ public class ServiceMachineShutdownTests
     {
         var fake = new Fake();
 
-        ServiceMachineShutdownResult result = fake
-            .Shutdown()
+        ServiceMachineShutdownResult result = fake.Shutdown()
             .Run(MachinePowerAction.PowerOff, Delay, force: false);
 
         Assert.Equal(new[] { "stop", "power PowerOff 10" }, fake.Steps);
@@ -123,8 +119,7 @@ public class ServiceMachineShutdownTests
         var fake = new Fake { Stack = RoleLeft() };
         fake.Obs.Add(42);
 
-        ServiceMachineShutdownResult result = fake
-            .Shutdown()
+        ServiceMachineShutdownResult result = fake.Shutdown()
             .Run(MachinePowerAction.Restart, Delay, force: false);
 
         Assert.Equal(new[] { "stop" }, fake.Steps);
@@ -138,8 +133,7 @@ public class ServiceMachineShutdownTests
         var fake = new Fake { Stack = RoleLeft() };
         fake.Obs.Add(42);
 
-        ServiceMachineShutdownResult result = fake
-            .Shutdown()
+        ServiceMachineShutdownResult result = fake.Shutdown()
             .Run(MachinePowerAction.Restart, Delay, force: true);
 
         Assert.Equal(new[] { "stop", "outputs", "close 42", "power Restart 10" }, fake.Steps);
