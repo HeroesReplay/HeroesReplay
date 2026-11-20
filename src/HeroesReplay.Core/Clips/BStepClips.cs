@@ -102,7 +102,10 @@ public static class BStepClips
             Description(step),
             Player: step.PlayerIndex,
             OnScreen: true
-        );
+        )
+        {
+            Facts = new ClipFacts { BStep = step },
+        };
     }
 
     /// <summary>The clip's line: <c>Sonya bsteps over Muradin</c>, <c>Murky bsteps, then dies</c>.</summary>
