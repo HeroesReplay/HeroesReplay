@@ -61,6 +61,11 @@ public readonly record struct TeamKillClip(
     public MapPoint? Point { get; init; } = Point;
 
     /// <summary>
+    /// The bstep or boss fight behind the clip, for its title (<see cref="ClipFacts"/>), or null.
+    /// </summary>
+    public ClipFacts Facts { get; init; }
+
+    /// <summary>
     /// The pentakill's blows killed five different enemy heroes: the whole team. It is a fact
     /// about this one clip, which the media score and the full match tags use. It is never a
     /// clip of its own (#369).

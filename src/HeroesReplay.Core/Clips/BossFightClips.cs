@@ -31,10 +31,15 @@ public static class BossFightClips
 
     public const int TailSeconds = 6;
 
+    /// <param name="teamLevels">
+    /// When each team reached each level (<see cref="ReplaySnapshot.TeamLevels"/>), so the clip's
+    /// title can say a team took the boss while behind. Null leaves the levels out.
+    /// </param>
     public static IReadOnlyList<TeamKillClip> Select(
         BossFightInsights insights,
         IReadOnlyList<TeamKillClip> killClips = null,
-        Func<TeamKillClip, bool> onCamera = null
+        Func<TeamKillClip, bool> onCamera = null,
+        IReadOnlyDictionary<int, IReadOnlyDictionary<int, TimeSpan>> teamLevels = null
     )
     {
         if (insights?.Fights == null || insights.Fights.Count == 0)
@@ -50,7 +55,7 @@ public static class BossFightClips
                 .ThenBy(fight => fight.Second)
         )
         {
-            TeamKillClip clip = Clip(fight);
+            TeamKillClip clip = Clip(fight, teamLevels);
             if (
                 (onCamera != null && !onCamera(clip))
                 || (killClips ?? Array.Empty<TeamKillClip>()).Any(kill => Overlaps(kill, clip))
@@ -71,7 +76,10 @@ public static class BossFightClips
         return clips;
     }
 
-    private static TeamKillClip Clip(BossFight fight)
+    private static TeamKillClip Clip(
+        BossFight fight,
+        IReadOnlyDictionary<int, IReadOnlyDictionary<int, TimeSpan>> teamLevels
+    )
     {
         bool steal = fight.Kind == BossFightKind.Steal;
         string team = ReplaySnapshot.TeamName(fight.Team);
@@ -112,7 +120,48 @@ public static class BossFightClips
             description,
             NamesTeam: namesTeam,
             Point: fight.Point
-        );
+        )
+        {
+            Facts = new ClipFacts
+            {
+                Boss = fight,
+                CapturerLevel = LevelAt(teamLevels, fight.Team, fight.Second),
+                OtherLevel = LevelAt(teamLevels, 1 - fight.Team, fight.Second),
+            },
+        };
+    }
+
+    /// <summary>
+    /// The team's level at <paramref name="second"/>, on the same replay clock as the capture, or
+    /// null when the replay has no levels for it.
+    /// </summary>
+    internal static int? LevelAt(
+        IReadOnlyDictionary<int, IReadOnlyDictionary<int, TimeSpan>> teamLevels,
+        int team,
+        int second
+    )
+    {
+        if (
+            teamLevels == null
+            || !teamLevels.TryGetValue(team, out IReadOnlyDictionary<int, TimeSpan> levels)
+            || levels == null
+            || levels.Count == 0
+        )
+        {
+            return null;
+        }
+
+        TimeSpan time = TimeSpan.FromSeconds(second);
+        int level = 1;
+        foreach (KeyValuePair<int, TimeSpan> reached in levels)
+        {
+            if (reached.Value <= time && reached.Key > level)
+            {
+                level = reached.Key;
+            }
+        }
+
+        return level;
     }
 
     private static bool Overlaps(TeamKillClip left, TeamKillClip right) =>

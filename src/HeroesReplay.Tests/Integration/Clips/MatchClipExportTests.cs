@@ -189,21 +189,27 @@ public class MatchClipExportTests : IClassFixture<ReplayFixture>
             // Each kind names itself in its title and tags, with the English map name.
             YouTubeEntry pentakillEntry = EntryOf(rows, first.HudStartSecond);
             YouTubeEntry tripleEntry = EntryOf(rows, triple.HudStartSecond);
-            Assert.Contains(" - pentakill - Garden of Terror - 65000001", pentakillEntry.Title);
-            Assert.Equal(
-                "[TEST] Test - triple kill - Garden of Terror - 65000001",
-                tripleEntry.Title
-            );
+            // The hook is picked from the clip's facts (ClipTitle); the map and id parts stay.
+            Assert.StartsWith("[TEST] ", pentakillEntry.Title, StringComparison.Ordinal);
+            Assert.Contains("pentakill", pentakillEntry.Title, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains(" - Garden of Terror - 65000001", pentakillEntry.Title);
+            Assert.StartsWith("[TEST] ", tripleEntry.Title, StringComparison.Ordinal);
+            Assert.Contains("Test", tripleEntry.Title, StringComparison.Ordinal);
+            Assert.Contains("triple kill", tripleEntry.Title, StringComparison.Ordinal);
+            Assert.Contains(" - Garden of Terror - 65000001", tripleEntry.Title);
             Assert.Contains("triple kill", tripleEntry.Tags);
             Assert.Equal("clip:65000001:triple-kill:Test", tripleEntry.DescriptionLines[0]);
             YouTubeEntry stealEntry = EntryOf(rows, steal.HudStartSecond);
-            Assert.Equal(
-                "[TEST] Red team - boss steal - Garden of Terror - 65000001",
-                stealEntry.Title
-            );
+            Assert.StartsWith("[TEST] ", stealEntry.Title, StringComparison.Ordinal);
+            Assert.Contains("Red team", stealEntry.Title, StringComparison.Ordinal);
+            Assert.Contains("boss", stealEntry.Title, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains(" - Garden of Terror - 65000001", stealEntry.Title);
             Assert.Null(stealEntry.Hero);
             Assert.Null(stealEntry.Heroes);
-            Assert.Equal(new[] { "boss steal", "Garden of Terror" }, stealEntry.Tags);
+            Assert.Equal(
+                new[] { "boss steal", "Garden of Terror", "Heroes of the Storm", "HotS" },
+                stealEntry.Tags
+            );
         }
         finally
         {

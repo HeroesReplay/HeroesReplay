@@ -306,6 +306,11 @@ public static class FullMatchMetadataBuilder
             replayId != null,
             HighlightTags(draft.Labels, highlights, highlight)
         );
+        if (titles.GameName?.FullMatches == true)
+        {
+            title = titles.GameName.Append(title, TitleBudget(options.TitleMarker));
+        }
+
         string combined = title + "\n" + description;
         return new FullMatchMetadata
         {
