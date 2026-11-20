@@ -5,7 +5,7 @@ namespace HeroesReplay.Core.ServiceHost;
 /// <summary>
 /// What decides whether the stack comes back by itself after Windows restarts (<c>check
 /// autostart</c>): the <see cref="ServiceLogonTask"/> starts it only when its user logs on, so
-/// an unattended restart (Windows Update restarts at about 03:30 on Patch Tuesday) also needs
+/// an unattended restart (Windows Update's, or one nobody at the machine planned) also needs
 /// Windows to log that user on by itself (Winlogon <c>AutoAdminLogon</c>).
 /// </summary>
 public sealed record AutoStartFacts
@@ -74,7 +74,7 @@ public static class AutoStartCheck
         {
             return new AutoStartReport(
                 NoAutoLogon,
-                $"Task {task} starts the stack when {user} logs on, but Windows does not log on by itself (Winlogon AutoAdminLogon is not 1). After a restart (Windows Update restarts at about 03:30 on Patch Tuesday) the machine waits at the sign-in screen until someone logs on. Turn on auto-logon for {user} once with Sysinternals Autologon ({AutologonUrl}), which keeps the password encrypted in LSA."
+                $"Task {task} starts the stack when {user} logs on, but Windows does not log on by itself (Winlogon AutoAdminLogon is not 1). After a restart the machine waits at the sign-in screen until someone logs on. Turn on auto-logon for {user} once with Sysinternals Autologon ({AutologonUrl}), which keeps the password encrypted in LSA."
             );
         }
 
