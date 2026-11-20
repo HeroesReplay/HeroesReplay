@@ -114,7 +114,7 @@ $($rows -join "`n")
 
 **Cadence** (``docs/runtime-currency.md``): merge Dependabot's SDK bump (``global.json``) and its ``microsoft-extensions`` group on ``develop`` within 7 days of Patch Tuesday, within 72 hours when the release notes list a CVE. Let CI build and smoke it, prove it on ASA-SERVER, then release ``develop`` to ``master``.
 
-While the release is framework-dependent, the stream PC runs on its machine-wide .NET runtime, which Microsoft Update services: ``heroesreplay check runtime`` there shows which one. A self-contained or Native AOT release (#453, #461) carries the runtime above until the next release.
+The release is self-contained (#453): the stream PC runs the runtime the latest release carries until the next release, whatever Microsoft Update installs machine-wide. ``heroesreplay check runtime`` there shows which one.
 
 Checked $((Get-Date).ToUniversalTime().ToString('yyyy-MM-dd HH:mm')) UTC against [releases.json]($metadataUrl) (latest runtime $latestRuntime). The workflow closes this issue once the latest release carries .NET $newestVersion or later.
 "@

@@ -52,6 +52,7 @@ public sealed class ServiceSupervision
     private DateTimeOffset? processStartedAt;
     private DateTimeOffset? savedAt;
     private bool stopping;
+    private string sessionEnding;
 
     public string LockPath { get; init; } = ServiceLockStore.DefaultPath;
     public string StatePath { get; init; } = ServiceSupervisorFile.DefaultPath;
@@ -67,6 +68,13 @@ public sealed class ServiceSupervision
 
     /// <summary>True once <c>services stop</c> has its stop file down.</summary>
     public Func<bool> StopRequested { get; init; }
+
+    /// <summary>
+    /// Why Windows is ending the session (a restart, shutdown or logoff), or null
+    /// (<see cref="SessionEndSignal.Ending"/>). While it answers, a pass restarts no role and
+    /// starts no OBS. Null never pauses.
+    /// </summary>
+    public Func<DateTimeOffset, string> SessionEnding { get; init; }
 
     /// <summary>
     /// The roles <c>services reset</c> asked for since the last pass (<see cref="ServiceResetFile"/>,
@@ -253,6 +261,11 @@ public sealed class ServiceSupervision
         if (Stopping())
         {
             return false;
+        }
+
+        if (PausedForSessionEnd())
+        {
+            return true;
         }
 
         // Before any role: a restart launched from a serviced runtime could fail on a library
@@ -830,6 +843,40 @@ public sealed class ServiceSupervision
                 e.Message
             );
         }
+    }
+
+    /// <summary>
+    /// True while Windows ends the session: the processes are about to be closed by Windows, so
+    /// starting roles or OBS again would only fight the shutdown. Logged once each way.
+    /// </summary>
+    private bool PausedForSessionEnd()
+    {
+        string ending = SessionEnding?.Invoke(Time.GetUtcNow());
+        if (ending != null)
+        {
+            if (sessionEnding == null)
+            {
+                sessionEnding = ending;
+                Logger.LogWarning(
+                    "Windows is ending the session ({Reason}): a restart, shutdown or logoff. The supervisor restarts no role and starts no OBS while Windows closes them. The HeroesReplay-live task starts the stack again at the next logon; `heroesreplay check autostart` says whether that logon happens by itself.",
+                    ending
+                );
+            }
+
+            return true;
+        }
+
+        if (sessionEnding != null)
+        {
+            Logger.LogInformation(
+                "Windows did not end the session ({Reason}) within {Wait}: the shutdown was cancelled. Supervision resumes.",
+                sessionEnding,
+                SessionEndSignal.CancelledAfter
+            );
+            sessionEnding = null;
+        }
+
+        return false;
     }
 
     private bool Stopping()

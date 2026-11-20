@@ -8,6 +8,7 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using HeroesClientSDK;
+using HeroesReplay.CLI.Commands.Services;
 using HeroesReplay.CLI.OpenTelemetry;
 using HeroesReplay.CLI.Output;
 using HeroesReplay.Core.Clips;
@@ -20,6 +21,7 @@ using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.Obs.Collection;
 using HeroesReplay.Core.Retention;
 using HeroesReplay.Core.SelfUpdate;
+using HeroesReplay.Core.ServiceHost;
 using HeroesReplay.Core.Shared;
 using HeroesReplay.Core.Telemetry;
 using HeroesReplay.Core.Twitch;
@@ -106,6 +108,12 @@ public class CheckCommand : Command
             "runtime",
             "Report the .NET runtime this exe runs on (RuntimeInformation.FrameworkDescription) and the one its release was built and tested on (runtime.txt). A runtime older than the release's is a warning.",
             CheckRuntimeAsync,
+            InAll: false
+        ),
+        new(
+            "autostart",
+            "Report whether the stack comes back by itself after Windows restarts: the HeroesReplay-live logon task (services install-task) starts this install, and Windows logs that user on by itself (Winlogon AutoAdminLogon). A missing piece is a warning. Read-only; no password is read.",
+            CheckAutoStartAsync,
             InAll: false
         ),
         new(
@@ -828,6 +836,21 @@ public class CheckCommand : Command
     /// The runtime this exe runs on and its release's (#462). <c>package-release.ps1</c> reads the
     /// JSON detail, which starts with the runtime, into the zip's runtime.txt.
     /// </summary>
+    public static Task<CheckResult> CheckAutoStartAsync(CheckRun run)
+    {
+        _ = run;
+        return Task.FromResult(ToCheckResult(AutoStartProbe.Check()));
+    }
+
+    /// <summary>A missing piece passes (exit 0) and prints as <c>[WARN]</c>: a dev box needs none of it.</summary>
+    public static CheckResult ToCheckResult(AutoStartReport report) =>
+        new(
+            "autostart",
+            true,
+            report.Ready ? report.Detail : WarningPrefix + report.Detail,
+            report.Ready ? CheckCodes.AutoStartOk : CheckCodes.For("autostart", report.Reason)
+        );
+
     public static Task<CheckResult> CheckRuntimeAsync(CheckRun run)
     {
         _ = run;

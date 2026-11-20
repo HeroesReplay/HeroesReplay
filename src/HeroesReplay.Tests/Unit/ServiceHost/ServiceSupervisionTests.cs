@@ -23,6 +23,32 @@ public class ServiceSupervisionTests
     private static readonly DateTimeOffset Start = new(2026, 10, 2, 12, 0, 0, TimeSpan.Zero);
 
     [Fact]
+    public void SessionEnding_RestartsNothingUntilTheShutdownIsCancelled()
+    {
+        using var stack = new FakeStack(("download", 100), ("youtube", 101));
+        ServiceSupervision supervision = stack.Supervision();
+        Assert.True(supervision.Begin());
+
+        // Windows asks to end the session, then closes the roles one by one.
+        stack.SessionEnd.Mark("SystemShutdown", stack.Clock.Now);
+        stack.Crash(stack.PidOf("download"));
+        stack.Ticks(supervision, 120);
+
+        Assert.Empty(stack.Launches);
+        LogEntry paused = Assert.Single(
+            stack.Log.Entries,
+            entry => entry.Level == LogLevel.Warning && entry.Message.Contains("ending the session")
+        );
+        Assert.Contains("SystemShutdown", paused.Message);
+
+        // Still alive after the window: the shutdown was cancelled, and the role comes back.
+        stack.Ticks(supervision, (int)SessionEndSignal.CancelledAfter.TotalSeconds);
+        stack.RunUntil(supervision, () => stack.Launches.Count == 1);
+        Assert.Equal("download", stack.Launches[0].Role);
+        Assert.Contains(stack.Log.Entries, entry => entry.Message.Contains("was cancelled"));
+    }
+
+    [Fact]
     public void FailedRole_RestartsAfter10s30s2m5m5m_ThenTheBudgetIsExhausted()
     {
         using var stack = new FakeStack(("download", 100), ("youtube", 101));
@@ -1216,6 +1242,7 @@ public class ServiceSupervisionTests
         public string LockPath { get; }
         public string StatePath { get; }
         public bool StopRequested { get; set; }
+        public SessionEndSignal SessionEnd { get; } = new();
         public bool CancelLaunches { get; set; }
         public bool FailLaunches { get; set; }
 
@@ -1322,6 +1349,7 @@ public class ServiceSupervisionTests
                 ReadHeartbeat = Heartbeat,
                 DeleteHeartbeat = _ => { },
                 StopRequested = () => StopRequested,
+                SessionEnding = SessionEnd.Ending,
                 TakeResets = resets,
                 Launch = Launch,
                 Kill = pid =>

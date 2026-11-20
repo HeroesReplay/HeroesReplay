@@ -238,6 +238,13 @@ public static class CommandReference
             CheckCodesFor("runtime")
         ),
         new(
+            "check autostart",
+            "None. Reads no secret and no password.",
+            "Nothing. Runs `schtasks /Query /TN HeroesReplay-live /XML` and reads the Winlogon `AutoAdminLogon`, `DefaultUserName` and `AutoLogonCount` values.",
+            "0 always unless the read throws (no task, a task for another install, auto-logon off, for another user, or counted are warnings), 1 on a parse error or an unexpected error.",
+            CheckCodesFor("autostart")
+        ),
+        new(
             "check storage",
             "None. Reads no secret.",
             "Nothing. Measures `Location:DataDirectory` and `%LOCALAPPDATA%\\HeroesReplay` and reads `housekeeping.json`.",
@@ -399,6 +406,12 @@ public static class CommandReference
             [RoleProcessTree.ObsSparedCode]
         ),
         new(
+            "services shutdown",
+            "Only for a restart or a scheduled downtime: it ends a live stream. " + LiveAsk,
+            "Everything `services stop` does, then (once every role, the supervisor and the game stopped, or with `--force`) sends `StopStream` and `StopRecord` for the outputs OBS reports active and waits up to 15 s for both to end, asks each obs64 to close (`CloseMainWindow`) and kills one still running after 20 s. With `--restart` or `--poweroff`, then runs `shutdown /r` or `/s /t <--delay, 10> /d p:0:0` (event 1074, planned), only when everything closed unless `--force`; `shutdown /a` cancels it. The `HeroesReplay-live` task starts the stack at the next logon (`check autostart`).",
+            "0 when every role, the supervisor, the game and OBS closed and, with `--restart` or `--poweroff`, shutdown.exe accepted the request. 1 otherwise, including both flags at once or a `--delay` outside 0 to 600."
+        ),
+        new(
             "services status",
             "None. Over SSH the supervisor's mutex is not visible, so `supervisor.json` decides.",
             Nothing,
@@ -444,7 +457,7 @@ public static class CommandReference
         new(
             "services install-task",
             "Run once from the release install on the stream PC. No administrator rights.",
-            "Registers (or with `--remove` deletes) the scheduled task `HeroesReplay-live` that runs `services start --supervise` at logon.",
+            "Registers (or with `--remove` deletes) the scheduled task `HeroesReplay-live` that runs `services start --supervise` at logon, then warns when Windows would not log that user on by itself after a restart (the `check autostart` reasons).",
             Finishes
         ),
         new(

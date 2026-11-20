@@ -36,6 +36,9 @@ $required = [System.Collections.Generic.List[string]]::new()
     'heroesreplay.exe',
     'heroesreplay.dll',
     'heroesreplay.runtimeconfig.json',
+    # The runtime a self-contained release carries: without them it is a framework-dependent zip.
+    'hostfxr.dll',
+    'coreclr.dll',
     'HeroesClientSDK.dll',
     'appsettings.json',
     'appsettings.prod.json',

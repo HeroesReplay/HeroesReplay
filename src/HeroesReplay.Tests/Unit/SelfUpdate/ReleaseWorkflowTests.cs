@@ -237,7 +237,7 @@ public class ReleaseWorkflowTests
         string package = ReadRepoFile("tools", "package-release.ps1");
         string verify = ReadRepoFile("tools", "verify-release.ps1");
 
-        Assert.Contains("-r win-x64 --self-contained false", package, StringComparison.Ordinal);
+        Assert.Contains("-r win-x64 --self-contained true", package, StringComparison.Ordinal);
         Assert.Contains("appsettings.secrets.json", package, StringComparison.Ordinal);
         Assert.Contains("-Filter service.json | Remove-Item", package, StringComparison.Ordinal);
         Assert.Contains(
@@ -248,6 +248,8 @@ public class ReleaseWorkflowTests
 
         Assert.Contains("obs\\bundle.manifest", verify, StringComparison.Ordinal);
         Assert.Contains("'HeroesClientSDK.dll'", verify, StringComparison.Ordinal);
+        Assert.Contains("'hostfxr.dll'", verify, StringComparison.Ordinal);
+        Assert.Contains("'coreclr.dll'", verify, StringComparison.Ordinal);
         Assert.Contains("'--help'", verify, StringComparison.Ordinal);
 
         // #308: the published build writes the schema 2 manifest, and the check hashes every file.
