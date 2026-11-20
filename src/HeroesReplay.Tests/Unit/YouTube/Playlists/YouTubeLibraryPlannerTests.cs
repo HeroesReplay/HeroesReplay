@@ -115,7 +115,27 @@ public class YouTubeLibraryPlannerTests
     }
 
     [Fact]
-    public void Titles_ClipGoesIntoNoPlaylist()
+    public void Titles_ClipGoesIntoClipsOnly()
+    {
+        var clip = new YouTubeLibraryVideo
+        {
+            VideoId = "clip",
+            Kind = YouTubeLibraryRecord.Clip,
+            Map = "Alterac Pass",
+            Mode = "Storm League",
+            Rank = "Diamond 2",
+            GameVersion = Line,
+            PrivacyStatus = "public",
+            FocusHero = "Li-Ming",
+            HeroFocus = "Li-Ming",
+            Draft = "Blue no healer",
+        };
+
+        Assert.Equal(new[] { "Clips" }, Titles(clip));
+    }
+
+    [Fact]
+    public void Titles_ClipGoesIntoNoPlaylistWhenClipsIsOff()
     {
         var clip = new YouTubeLibraryVideo
         {
@@ -124,10 +144,37 @@ public class YouTubeLibraryPlannerTests
             Map = "Alterac Pass",
             GameVersion = Line,
             PrivacyStatus = "public",
-            FocusHero = "Li-Ming",
         };
 
-        Assert.Empty(Titles(clip));
+        Assert.Empty(Titles(clip, new YouTubePlaylistSettings { Clips = false }));
+    }
+
+    [Fact]
+    public void Plan_FilesPublicClipsNewestFirstAndSkipsPrivateOnes()
+    {
+        YouTubeLibraryVideo Clip(string id, string privacy, int hours) =>
+            new()
+            {
+                VideoId = id,
+                Kind = YouTubeLibraryRecord.Clip,
+                Map = "Cursed Hollow",
+                GameVersion = Line,
+                PrivacyStatus = privacy,
+                UploadedAt = Noon.AddHours(hours),
+            };
+
+        IReadOnlyList<YouTubeLibraryItem> items = YouTubeLibraryPlanner.Plan(
+            new[]
+            {
+                Clip("old", "public", -48),
+                Clip("scheduled", "private", 1),
+                Clip("new", "public", 0),
+            },
+            new YouTubePlaylistSettings()
+        );
+
+        Assert.Equal(new[] { "new", "old" }, items.Select(item => item.VideoId));
+        Assert.All(items, item => Assert.Equal("Clips", item.PlaylistTitle));
     }
 
     [Fact]

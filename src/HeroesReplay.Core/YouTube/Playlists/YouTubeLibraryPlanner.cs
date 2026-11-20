@@ -53,9 +53,9 @@ public static class YouTubeLibraryPlanner
     }
 
     /// <summary>
-    /// The playlists one video belongs in, in group order, each title once. Only a full match
-    /// with a filed mode (Storm League, Quick Match, ARAM, or Unranked Draft) is filed. A clip
-    /// goes into no playlist.
+    /// The playlists one video belongs in, in group order, each title once. A full match is
+    /// filed only with a filed mode (Storm League, Quick Match, ARAM, or Unranked Draft). A clip
+    /// goes into <c>Clips</c> only, whatever its map.
     /// </summary>
     public static IReadOnlyList<string> Titles(
         YouTubeLibraryVideo video,
@@ -69,50 +69,62 @@ public static class YouTubeLibraryPlanner
         }
 
         groups ??= new YouTubePlaylistSettings();
-        if (!video.IsClip && YouTubePlaylistNames.Mode(video.Mode) != null)
+        if (video.IsClip)
         {
-            if (groups.Map)
+            if (groups.Clips)
             {
-                Add(YouTubePlaylistNames.Map(video.Map));
+                Add(YouTubePlaylistNames.Clips);
             }
 
-            if (groups.Mode)
+            return titles;
+        }
+
+        if (YouTubePlaylistNames.Mode(video.Mode) == null)
+        {
+            return titles;
+        }
+
+        if (groups.Map)
+        {
+            Add(YouTubePlaylistNames.Map(video.Map));
+        }
+
+        if (groups.Mode)
+        {
+            Add(YouTubePlaylistNames.Mode(video.Mode));
+        }
+
+        if (groups.Rank)
+        {
+            Add(YouTubePlaylistNames.Rank(video.Mode, video.Rank));
+        }
+
+        if (groups.Draft)
+        {
+            Add(YouTubePlaylistNames.Draft(video.Draft));
+        }
+
+        if (groups.ViewerReview && video.IsViewerReview)
+        {
+            Add(YouTubePlaylistNames.ViewerReviews);
+        }
+
+        if (!string.IsNullOrWhiteSpace(video.HeroFocus))
+        {
+            if (groups.HeroFocus)
             {
-                Add(YouTubePlaylistNames.Mode(video.Mode));
+                Add(YouTubePlaylistNames.HeroGameplay);
             }
 
-            if (groups.Rank)
+            if (groups.HeroFocusRole)
             {
-                Add(YouTubePlaylistNames.Rank(video.Mode, video.Rank));
+                Add(YouTubePlaylistNames.HeroFocusRole(video.HeroFocusRole));
             }
+        }
 
-            if (groups.Draft)
-            {
-                Add(YouTubePlaylistNames.Draft(video.Draft));
-            }
-
-            if (groups.ViewerReview && video.IsViewerReview)
-            {
-                Add(YouTubePlaylistNames.ViewerReviews);
-            }
-
-            if (!string.IsNullOrWhiteSpace(video.HeroFocus))
-            {
-                if (groups.HeroFocus)
-                {
-                    Add(YouTubePlaylistNames.HeroGameplay);
-                }
-
-                if (groups.HeroFocusRole)
-                {
-                    Add(YouTubePlaylistNames.HeroFocusRole(video.HeroFocusRole));
-                }
-            }
-
-            if (groups.MapMode)
-            {
-                Add(YouTubePlaylistNames.Title(video.Map, video.Mode, video.Rank));
-            }
+        if (groups.MapMode)
+        {
+            Add(YouTubePlaylistNames.Title(video.Map, video.Mode, video.Rank));
         }
 
         return titles;

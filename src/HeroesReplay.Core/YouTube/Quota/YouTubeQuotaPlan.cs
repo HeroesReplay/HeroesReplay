@@ -23,7 +23,8 @@ public static class YouTubeQuotaPlan
     /// The playlist units a public ranked Storm League video costs on average with these groups:
     /// one <c>playlistItems.insert</c> (50 units) for each of map, mode, rank and the combined
     /// map-mode playlist that is on, plus the share of videos that have a draft note or are
-    /// focus-hero videos. Viewer reviews are too few to count, and a clip is never filed.
+    /// focus-hero videos. Viewer reviews are too few to count. A clip is its own video and costs
+    /// one more insert into <c>Clips</c> when that group is on; it is not counted here.
     /// </summary>
     public static int PlaylistUnitsPerVideo(YouTubePlaylistSettings groups)
     {

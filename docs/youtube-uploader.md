@@ -514,7 +514,8 @@ Renaming or retitling published videos is not part of the pass. That stays in `t
   "ViewerReview": true,
   "HeroFocus": true,
   "HeroFocusRole": false,
-  "MapMode": false
+  "MapMode": false,
+  "Clips": true
 }
 ```
 
@@ -528,8 +529,9 @@ Renaming or retitling published videos is not part of the pass. That stays in `t
 | `HeroFocus` | `Hero gameplay` | The cycle's focus-hero video (#433): the description has a `Hero focus:` line. |
 | `HeroFocusRole` | `Hero gameplay - Healer` | Off by default. The focus-hero video's role, one playlist per catalog role. |
 | `MapMode` | `Alterac Pass - Storm League - Diamond`, `Alterac Pass - Quick Match` | Off by default. The earlier combined playlist. |
+| `Clips` | `Clips` | A public clip: pentakill, triple or quadra kill, boss steal or defended, bstep. Every clip shares the one playlist, whatever its map or kind. A clip goes into no other group. |
 
-Only a public full match in a filed mode is filed. A clip goes into no playlist. There are no patch playlists: the build is still recorded, but nothing is filed by it.
+A public full match is filed only in a filed mode. A public clip goes into `Clips` only. The record already holds the channel's earlier clips, so the first pass with `Clips` on files those too, newest first, behind any newer full match, as the day's library units allow (50 units a clip). There are no patch playlists: the build is still recorded, but nothing is filed by it.
 
 The draft notes are the title's notes (see "What the video contains"): no tank or healer, no healer, double or triple healer, double bruiser without a tank, no tank, double tank, triple bruiser, double support, and no ranged assassin, with counts above three written as a number (`4 healers`), plus the composition labels: split push, siege, dive, poke, double or triple melee assassin, all melee, one ranged, triple sustain, triple specialist, merc control, and glass cannon. Each of those used to have its own `Unusual drafts - <note>` playlist, about twenty in practice, most holding a few videos. One `Unusual drafts` playlist is one insert a game, however many notes it has.
 
@@ -546,9 +548,9 @@ Cost per video. Each group that applies is one `playlistItems.insert`, 50 units:
 | Plus an unusual draft | +1 | +50 |
 | Plus a viewer review | +1 | +50 |
 | Plus a focus-hero video | +1 | +50 |
-| Clip | 0 | 0 |
+| Clip (`Clips`) | 1 | 50 |
 
-On the channel's 200 newest videos (2026-10-22) every one was ranked Storm League, 43% had a draft note and 17% were focus-hero videos, so a video cost about 3.6 inserts, 180 units. Production turns `Mode` off (#507): the `Storm League` playlist held the whole channel, and at the stream's 60 or so games a day 180 units a video is about 10,800 units, more than the pool. Without it a video costs about 130 units, and 72 a day fit in `LibraryUnitsPerDay` 9,500. The `Storm League` playlist on the channel keeps its videos and is not filled any further. `YouTubeQuotaPlan.PlaylistUnitsPerVideo` makes the same estimate from the groups that are on, and the uploader warns at start when `MaxPublicPerDay` videos would cost more than the library pass may spend.
+On the channel's 200 newest videos (2026-10-22) every one was ranked Storm League, 43% had a draft note and 17% were focus-hero videos, so a video cost about 3.6 inserts, 180 units. Production turns `Mode` off (#507): the `Storm League` playlist held the whole channel, and at the stream's 60 or so games a day 180 units a video is about 10,800 units, more than the pool. Without it a video costs about 130 units, and 72 a day fit in `LibraryUnitsPerDay` 9,500. The `Storm League` playlist on the channel keeps its videos and is not filled any further. `YouTubeQuotaPlan.PlaylistUnitsPerVideo` makes the same estimate from the groups that are on, and the uploader warns at start when `MaxPublicPerDay` videos would cost more than the library pass may spend. That estimate is for full matches only: each public clip adds one `Clips` insert, 50 units. At the stream's real 55 to 60 games a day (about 7,800 units) that leaves room for about 30 clips a day; on a day with more, the newest videos still go first and the rest wait for the next quota day.
 
 ### Retired playlists
 
