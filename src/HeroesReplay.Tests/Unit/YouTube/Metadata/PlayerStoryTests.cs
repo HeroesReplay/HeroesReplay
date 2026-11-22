@@ -40,7 +40,7 @@ public sealed class PlayerStoryTests
         Assert.Equal(PlayerStoryKind.WinStreak, story.Kind);
         Assert.Equal("Kerrigan rides a 9-game win streak", story.Title);
         Assert.Equal(
-            "Story: Blue's Kerrigan came into this game on 9 Storm League wins in a row.",
+            "Story: The Blue Kerrigan player came into this game on 9 Storm League wins in a row.",
             story.Line
         );
     }
@@ -92,7 +92,7 @@ public sealed class PlayerStoryTests
         );
 
         Assert.Equal("600-game Murky main", main.Title);
-        Assert.Equal("Story: Red's Murky has played 600 Storm League games on Murky.", main.Line);
+        Assert.Equal("Story: The Red Murky player has played 600 Storm League games on Murky.", main.Line);
         Assert.Equal(PlayerStoryKind.OneTrick, trick.Kind);
         Assert.Equal("The Abathur one-trick", trick.Title);
     }
@@ -122,7 +122,7 @@ public sealed class PlayerStoryTests
 
         Assert.Equal(PlayerStoryKind.WorstHero, story.Kind);
         Assert.Equal("Gall: their worst hero lately. Bold.", story.Title);
-        Assert.Contains("went 2-8 on Gall over the last 60 days", story.Line);
+        Assert.Contains("went 2-8 on Gall in their last 60 Storm League games", story.Line);
     }
 
     [Fact]
@@ -152,7 +152,7 @@ public sealed class PlayerStoryTests
         Assert.Null(Climb(80, 6));
         Assert.Equal("Muradin on a +51 MMR climb", Climb(51.1, 20).Title);
         Assert.Equal(
-            "Story: Red's Muradin gained 51 Storm League MMR over their last 20 games.",
+            "Story: The Red Muradin player gained 51 Storm League MMR over their last 20 games.",
             Climb(51.1, 20).Line
         );
     }
@@ -207,7 +207,7 @@ public sealed class PlayerStoryTests
         Assert.Equal("Kerrigan rides a 9-game win streak", metadata.PlayerStory);
         Assert.Equal(StatHookPicker.Attribution, metadata.DescriptionLines[0]);
         Assert.Contains(
-            "Story: Blue's Kerrigan came into this game on 9 Storm League wins in a row.",
+            "Story: The Blue Kerrigan player came into this game on 9 Storm League wins in a row.",
             metadata.DescriptionLines
         );
     }

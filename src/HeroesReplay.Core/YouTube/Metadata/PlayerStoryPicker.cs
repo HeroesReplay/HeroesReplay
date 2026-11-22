@@ -85,7 +85,7 @@ public static class PlayerStoryPicker
     {
         PlayerHistory history = player.History;
         string hero = player.Hero.Trim();
-        string whose = Team(player.Team) + hero;
+        string whose = $"The {Team(player.Team)}{hero} player";
 
         int streak = Math.Abs(history.Streak);
         if (settings.Streaks && streak >= Math.Max(2, settings.StreakMinGames))
@@ -152,7 +152,7 @@ public static class PlayerStoryPicker
                 );
             string line = careerTrick
                 ? $"{whose} has played {Number(career)} Storm League games on {hero}"
-                : $"{whose} played {hero} in {history.HeroGames} of their last {history.Games} Storm League games";
+                : $"{whose} picked {hero} in {history.HeroGames} of their last {history.Games} Storm League games";
             yield return (
                 new PlayerStory(PlayerStoryKind.OneTrick, hero, title, Line(line)),
                 70 + 10 * Math.Min(1, history.HeroShare)
@@ -172,14 +172,14 @@ public static class PlayerStoryPicker
                         Rotate(
                             seed,
                             $"{hero}: their worst hero lately. Bold.",
-                            $"Comfort pick? {hero} has been their worst hero lately",
+                            $"Bold pick? {hero} has been their worst hero lately",
                             $"Against the odds: {hero} ({record} lately)",
                             $"Risky pick: {hero}, {record} lately",
                             $"{hero} despite a {record} record lately",
                             $"Their lowest win rate lately: {hero}"
                         ),
                         Line(
-                            $"{whose} went {record} on {hero} over the last {Days(settings)} days, the lowest win rate of their heroes"
+                            $"{whose} went {record} on {hero} in their last {history.Games} Storm League games, the lowest win rate of their heroes"
                         )
                     ),
                     75
@@ -202,7 +202,7 @@ public static class PlayerStoryPicker
                             $"Best in their pool: {hero}, {record}"
                         ),
                         Line(
-                            $"{whose} went {record} on {hero} over the last {Days(settings)} days, the best win rate of their heroes"
+                            $"{whose} went {record} on {hero} in their last {history.Games} Storm League games, the best win rate of their heroes"
                         )
                     ),
                     55
@@ -256,12 +256,10 @@ public static class PlayerStoryPicker
     private static string Team(int team) =>
         team switch
         {
-            0 => "Blue's ",
-            1 => "Red's ",
+            0 => "Blue ",
+            1 => "Red ",
             _ => string.Empty,
         };
-
-    private static int Days(PlayerStorySettings settings) => Math.Max(1, settings.LookbackDays);
 
     private static string Number(int value) => value.ToString(CultureInfo.InvariantCulture);
 

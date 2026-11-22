@@ -54,7 +54,7 @@ public class PlayerStorySettings
     public int MainMinCareerGames { get; set; } = 300;
 
     /// <summary>Best or worst hero lately: games a hero needs in the history to be compared.</summary>
-    public int LatelyMinGames { get; set; } = 8;
+    public int LatelyMinGames { get; set; } = 10;
 
     /// <summary>Best hero lately: its win rate in the history, 0 to 1.</summary>
     public double BestMinWinRate { get; set; } = 0.6;
