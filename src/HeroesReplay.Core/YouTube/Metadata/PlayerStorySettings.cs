@@ -24,12 +24,22 @@ public class PlayerStorySettings
 
     /// <summary>
     /// MMR gained or lost over the last <see cref="MmrGames"/> games. Heroes Profile moves a
-    /// Storm League MMR about 2 to 5 points a game (measured 2026-11-22).
+    /// settled Storm League MMR a median 3.6 points a game, 7.5 at the 90th percentile (1,176
+    /// games, measured 2026-11-22), so 20 coin-flip games drift about 20 points: 50 is a real run.
     /// </summary>
-    public double ClimbMinMmr { get; set; } = 30;
+    public double ClimbMinMmr { get; set; } = 50;
 
     /// <summary>How many of the latest games a climb or slide adds up.</summary>
     public int MmrGames { get; set; } = 20;
+
+    /// <summary>A climb or slide needs at least this many games with an MMR change.</summary>
+    public int ClimbMinGames { get; set; } = 10;
+
+    /// <summary>
+    /// A game that moved MMR more than this is a placement or a fresh account (seen: +780 over 6
+    /// games), so a window holding one tells no climb.
+    /// </summary>
+    public double ClimbMaxGameMmr { get; set; } = 60;
 
     /// <summary>One-trick: the share of the latest games on this hero, 0 to 1.</summary>
     public double OneTrickMinShare { get; set; } = 0.7;

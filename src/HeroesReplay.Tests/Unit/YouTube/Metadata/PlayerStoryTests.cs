@@ -126,6 +126,38 @@ public sealed class PlayerStoryTests
     }
 
     [Fact]
+    public void Pick_AClimbNeedsFiftyMmrOverTenGamesOrMore()
+    {
+        PlayerStory Climb(double mmr, int games) =>
+            PlayerStoryPicker.Pick(
+                new[]
+                {
+                    Facts(
+                        1,
+                        "Muradin",
+                        new PlayerHistory
+                        {
+                            Games = 40,
+                            MmrChange = mmr,
+                            MmrGames = games,
+                        }
+                    ),
+                },
+                0,
+                null,
+                On
+            );
+
+        Assert.Null(Climb(33, 20));
+        Assert.Null(Climb(80, 6));
+        Assert.Equal("Muradin on a +51 MMR climb", Climb(51.1, 20).Title);
+        Assert.Equal(
+            "Story: Red's Muradin gained 51 Storm League MMR over their last 20 games.",
+            Climb(51.1, 20).Line
+        );
+    }
+
+    [Fact]
     public void Pick_NothingWhenOff_ForANamedHero_OrWithoutAStory()
     {
         PlayerStoryFacts[] players =
@@ -267,7 +299,7 @@ public sealed class PlayerStoryTests
                 new PlayerHistory
                 {
                     Games = 40,
-                    MmrChange = 45,
+                    MmrChange = 65,
                     MmrGames = 20,
                 },
                 null
@@ -277,7 +309,7 @@ public sealed class PlayerStoryTests
                 new PlayerHistory
                 {
                     Games = 40,
-                    MmrChange = -45,
+                    MmrChange = -65,
                     MmrGames = 20,
                 },
                 null

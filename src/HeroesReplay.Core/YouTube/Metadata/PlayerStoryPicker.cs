@@ -213,6 +213,7 @@ public static class PlayerStoryPicker
         if (
             settings.Climbs
             && history.MmrChange is double change
+            && history.MmrGames >= Math.Max(1, settings.ClimbMinGames)
             && Math.Abs(change) >= Math.Max(1, settings.ClimbMinMmr)
         )
         {

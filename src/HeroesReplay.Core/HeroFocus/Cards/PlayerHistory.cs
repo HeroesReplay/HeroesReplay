@@ -37,7 +37,10 @@ public sealed class PlayerHistory
     /// <summary>Wins in a row (positive) or losses in a row (negative) up to this match.</summary>
     public int Streak { get; set; }
 
-    /// <summary>The MMR change summed over <see cref="MmrGames"/> latest games, or null.</summary>
+    /// <summary>
+    /// The MMR change summed over <see cref="MmrGames"/> latest games, or null when there is none
+    /// or a placement-sized jump is among them.
+    /// </summary>
     public double? MmrChange { get; set; }
 
     /// <summary>How many games <see cref="MmrChange"/> adds up.</summary>
@@ -114,7 +117,8 @@ public static class PlayerHistoryMath
             .Where(match => match.MmrChange is double change && !double.IsNaN(change))
             .Select(match => match.MmrChange.Value)
             .ToList();
-        if (changes.Count > 0)
+        double maxGame = settings.ClimbMaxGameMmr > 0 ? settings.ClimbMaxGameMmr : double.MaxValue;
+        if (changes.Count > 0 && changes.All(change => Math.Abs(change) <= maxGame))
         {
             history.MmrChange = Math.Round(changes.Sum(), 1);
             history.MmrGames = changes.Count;
