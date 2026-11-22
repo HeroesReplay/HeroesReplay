@@ -24,7 +24,7 @@ public class PlayerStorySettings
 
     /// <summary>
     /// MMR gained or lost over the last <see cref="MmrGames"/> games. Heroes Profile moves a
-    /// settled Storm League MMR a median 3.6 points a game, 7.5 at the 90th percentile (1,176
+    /// settled Storm League MMR a median 3.8 points a game, 7.7 at the 90th percentile (2,950
     /// games, measured 2026-11-22), so 20 coin-flip games drift about 20 points: 50 is a real run.
     /// </summary>
     public double ClimbMinMmr { get; set; } = 50;

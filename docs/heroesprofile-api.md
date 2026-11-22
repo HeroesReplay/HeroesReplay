@@ -127,7 +127,7 @@ All of these calls, and the player lookups below, go through one `HeroesProfileC
 
 - The query is `battletag`, `region`, `game_type=sl`, `start_date` (the match date less `LookbackDays`, 60) and `end_date` (the match date), with no `hero`. A cold query answers 202 and a job, as above.
 - Rows come newest first, 100 a page, and one page of a busy player is about 800 KB. Only the first page is read. Replay ids are not in time order, so rows are ordered by `game_date`.
-- Each row has `player_change`, the player's Storm League MMR change for that game, and `hero.name` and `hero.attribute_id`. A settled player moves a median 3.7 points a game; placement games move tens to hundreds.
+- Each row has `player_change`, the player's Storm League MMR change for that game, and `hero.name` and `hero.attribute_id`. A settled player moves a median 3.8 points a game; placement games move tens to hundreds.
 - 403 `player_unavailable` is a private profile: the player is marked `Private` on the card and never told. Any other 401 or 403 stops lookups until a restart. Anything else leaves the player `Unknown` for `RetryAfter` (6 h).
 - At most `LookupsPerStep` (10) calls a step, counted against `WeeklyCallBudget` (10,000) in `Data\HeroesProfile\players\history-calls.json`, apart from the player records' `calls.json`. The privacy feed is read first, as for player records.
 - Only the summary goes on the card, never the games, and the card is deleted once the replay is spectated. A story names the hero only, and its description carries the attribution line.

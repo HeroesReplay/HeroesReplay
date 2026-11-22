@@ -386,7 +386,7 @@ The download role fills each waiting focus card's human players with a `History`
 
 The highest score wins. Each kind rotates five to seven wordings by replay id. A focus title (`X focus`) wins the lead, and a hero the title already names is skipped; with a highlight title, the story goes in the description only. The numbers go on a `Story:` line after the `Stats:` line, for example `Story: The Red Dehaka player came into this game on 7 Storm League losses in a row.`, and the Heroes Profile attribution is added as for a hook.
 
-Calibration (2026-11-22, 1,808 games of 40 players from the October corpus): a settled MMR moves a median 3.7 points a game, 6.6 at the 90th percentile, so 20 even games drift about 20 points and 50 is a real run. A fresh account moved +780 over 6 games, which is placement, hence `ClimbMaxGameMmr`. `players/matches` answers the newest 100 games, so lines count games, not days.
+Calibration (2026-11-22, 2,950 games of 70 players in 7 replays from the October corpus): a settled MMR moves a median 3.8 points a game, 7.7 at the 90th percentile, so 20 even games drift about 20 points and 50 is a real run. Five of the 7 replays got a story: two win streaks, two loss streaks and a +79 climb. A fresh account moved +780 over 6 games, which is placement, hence `ClimbMaxGameMmr`. `players/matches` answers the newest 100 games, so lines count games, not days.
 
 ### Match highlights
 
