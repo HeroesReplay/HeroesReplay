@@ -1,5 +1,4 @@
 using System;
-using System.Linq;
 using HeroesReplay.Core.Analysis.Insights.Bosses;
 using HeroesReplay.Core.Analysis.Insights.BSteps;
 using HeroesReplay.Core.Clips;

@@ -1,5 +1,4 @@
 using System;
-using System.Linq;
 using HeroesReplay.Core.Analysis.Insights;
 using HeroesReplay.Core.Analysis.Insights.Pirates;
 using HeroesReplay.Core.Analysis.Insights.Snapshot;
