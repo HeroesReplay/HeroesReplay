@@ -1,4 +1,5 @@
 using System;
+using HeroesReplay.Core.Clips;
 using HeroesReplay.Core.HeroFocus.Picking;
 using HeroesReplay.Core.Replays;
 
@@ -104,6 +105,57 @@ public sealed class SpectatorStatus
     /// the player. Null for any other replay. The Twitch process names it in chat once.
     /// </summary>
     public SpectatorHeroFocusStatus HeroFocus { get; set; }
+
+    /// <summary>
+    /// What the clip passes of this spectate process did, counted since it started. Null until
+    /// the first recorded match ends. A pass that fails is only a warning in the log, so these
+    /// counts are how a watcher sees that clips stopped being cut.
+    /// </summary>
+    public SpectatorClipStatus Clips { get; set; }
+}
+
+public sealed class SpectatorClipStatus
+{
+    /// <summary>Recorded matches whose clip pass ran.</summary>
+    public int Sessions { get; set; }
+
+    /// <summary>Clips the replays gave that the camera showed.</summary>
+    public int OnCamera { get; set; }
+
+    /// <summary>Clips the replays gave that the camera did not show, so were not cut.</summary>
+    public int NotOnCamera { get; set; }
+
+    public int Cut { get; set; }
+
+    /// <summary>Clips the camera showed that were not cut, and passes that threw.</summary>
+    public int Failed { get; set; }
+
+    public string LastFailure { get; set; }
+
+    public DateTimeOffset? LastFailureAt { get; set; }
+
+    public DateTimeOffset? LastCutAt { get; set; }
+
+    /// <summary>Adds one pass, or one pass that threw (<paramref name="result"/> null).</summary>
+    public void Add(ClipExportResult result, string error, DateTimeOffset now)
+    {
+        Sessions++;
+        OnCamera += result?.OnCamera ?? 0;
+        NotOnCamera += result?.NotOnCamera ?? 0;
+        Cut += result?.Cut ?? 0;
+        Failed += result == null ? 1 : result.Failed;
+        if (result?.Cut > 0)
+        {
+            LastCutAt = now;
+        }
+
+        string failure = error ?? result?.Failure;
+        if (failure != null && (result == null || result.Failed > 0))
+        {
+            LastFailure = failure;
+            LastFailureAt = now;
+        }
+    }
 }
 
 public sealed class SpectatorHeroFocusStatus

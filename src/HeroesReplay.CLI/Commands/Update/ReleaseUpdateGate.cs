@@ -70,7 +70,7 @@ public sealed class ReleaseUpdateGate : IReleaseUpdateGate
             }
 
             ReleaseOffer? offer = Pick(
-                GitHubReleaseJson.Read(json, assetName, local),
+                GitHubReleaseJson.Read(json, assetName, local, release.AllowDowngrade),
                 ReleaseSkipList.Load(),
                 out string skipped
             );
@@ -109,6 +109,18 @@ public sealed class ReleaseUpdateGate : IReleaseUpdateGate
             await using (FileStream file = File.Create(zipPath))
             {
                 await zip.CopyToAsync(file, cancellationToken).ConfigureAwait(false);
+            }
+
+            if (!found.Matches(zipPath))
+            {
+                logger.LogWarning(
+                    "Release {Version} was not installed. The downloaded {Asset} does not have the SHA-256 the release records ({Sha256}).",
+                    found.Version,
+                    assetName,
+                    found.Sha256
+                );
+                Directory.Delete(staging, recursive: true);
+                return false;
             }
 
             string extracted = Path.Combine(staging, "extract");

@@ -70,7 +70,15 @@ public static class YouTubeReplayMatch
 
         foreach (string part in title.Split(" - ", StringSplitOptions.RemoveEmptyEntries))
         {
-            if (int.TryParse(part.Trim(), out int id) && id > 0)
+            if (
+                int.TryParse(
+                    part.Trim(),
+                    NumberStyles.None,
+                    CultureInfo.InvariantCulture,
+                    out int id
+                )
+                && id > 0
+            )
             {
                 replayId = id;
                 return true;

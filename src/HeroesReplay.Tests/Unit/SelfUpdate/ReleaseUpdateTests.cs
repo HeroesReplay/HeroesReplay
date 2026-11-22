@@ -48,6 +48,78 @@ public class ReleaseUpdateTests
         Assert.Equal("https://example.test/app.zip", offer?.DownloadUrl);
     }
 
+    [Theory]
+    [InlineData("v1.0.0-1137", "v1.0.0-1138", true)]
+    [InlineData("v1.0.0-1137", "v1.0.0-1136", false)]
+    [InlineData("v1.0.0-1137", "v0.9.0-2000", false)]
+    [InlineData("abc123", "v1.0.0-1", true)]
+    [InlineData("v1.0.0-1137", "hotfix", true)]
+    public void Read_OffersOnlyANewerRelease(string installed, string latest, bool offered)
+    {
+        string json = ReleaseJson(latest, digest: null);
+
+        Assert.Equal(
+            offered,
+            GitHubReleaseJson.Read(json, "heroesreplay-win-x64.zip", installed) != null
+        );
+        Assert.NotNull(
+            GitHubReleaseJson.Read(
+                json,
+                "heroesreplay-win-x64.zip",
+                installed,
+                allowDowngrade: true
+            )
+        );
+    }
+
+    [Fact]
+    public void Matches_ChecksTheZipAgainstTheReleaseDigest()
+    {
+        string zip = Path.Combine(Path.GetTempPath(), "hr-digest-" + Path.GetRandomFileName());
+        try
+        {
+            File.WriteAllText(zip, "release");
+            string sha = Convert.ToHexString(
+                System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(zip))
+            );
+            ReleaseOffer? good = GitHubReleaseJson.Read(
+                ReleaseJson("v1.0.0-2", "sha256:" + sha),
+                "heroesreplay-win-x64.zip",
+                "v1.0.0-1"
+            );
+            ReleaseOffer? bad = GitHubReleaseJson.Read(
+                ReleaseJson("v1.0.0-2", "sha256:" + new string('0', 64)),
+                "heroesreplay-win-x64.zip",
+                "v1.0.0-1"
+            );
+            ReleaseOffer? none = GitHubReleaseJson.Read(
+                ReleaseJson("v1.0.0-2", digest: null),
+                "heroesreplay-win-x64.zip",
+                "v1.0.0-1"
+            );
+
+            Assert.Equal(sha.ToLowerInvariant(), good?.Sha256);
+            Assert.True(good?.Matches(zip));
+            Assert.False(bad?.Matches(zip));
+            Assert.Null(none?.Sha256);
+            Assert.True(none?.Matches(zip));
+        }
+        finally
+        {
+            File.Delete(zip);
+        }
+    }
+
+    private static string ReleaseJson(string tag, string digest)
+    {
+        string digestJson = digest == null ? "null" : "\"" + digest + "\"";
+        return "{ \"tag_name\": \""
+            + tag
+            + "\", \"assets\": [ { \"name\": \"heroesreplay-win-x64.zip\", \"browser_download_url\": \"https://example.test/app.zip\", \"digest\": "
+            + digestJson
+            + " } ] }";
+    }
+
     [Fact]
     public void CopyPublish_PreparesTheReleaseAndLeavesTheQueueAlone()
     {

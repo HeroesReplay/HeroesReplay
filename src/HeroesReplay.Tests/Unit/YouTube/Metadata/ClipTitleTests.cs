@@ -243,6 +243,17 @@ public class ClipTitleTests
         );
     }
 
+    [Fact]
+    public void TheGameName_IsNotFoundInsideAnotherWord()
+    {
+        var game = new GameNameSettings();
+        string title = "Hanzo lands every skillshots - Cursed Hollow - 66698689";
+
+        Assert.Equal(title + " - Heroes of the Storm", game.Append(title, 100));
+        Assert.Equal(title + " - HotS", game.Append(title, title.Length + 8));
+        Assert.Equal("Best of HotS - 66698689", game.Append("Best of HotS - 66698689", 26));
+    }
+
     private static string Hook(TeamKillClip clip, int id) =>
         ClipTitle.Compose(
             clip,

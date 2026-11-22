@@ -105,6 +105,12 @@ public static class CommandReference
             Finishes
         ),
         new(
+            "calculators clips",
+            "A folder of replays (`--directory`, `--recursive` for subfolders) and the heroes-data2 catalog under `Location:DataDirectory`.",
+            "Prints each replay's kill clips and the totals; writes `--output` (`.md`) when given. Read-only for the replays.",
+            "0 when at least one replay was read. 1 for a missing folder, an `--output` that is not `.md`, or no replays in it. 2 when no replay parsed."
+        ),
+        new(
             "calculators compositions",
             "A folder of replays and the heroes-data2 catalog under `Location:DataDirectory`.",
             "Writes `--output` (`.md` or `.csv`) when given; otherwise prints only. Read-only for the replays.",

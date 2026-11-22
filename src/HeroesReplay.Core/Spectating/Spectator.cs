@@ -604,103 +604,99 @@ public class Spectator : ISpectator
 
     private async Task PanelLoopAsync()
     {
-        Panel current = Panel.None;
+        var panels = new PanelDirector();
         TimeSpan second = TimeSpan.FromSeconds(1);
-        TimeSpan timeShown = TimeSpan.Zero;
-        bool visible = false;
-        bool chatRequested = false;
 
-        while (!LinkedTokenSource.IsCancellationRequested)
+        try
         {
-            if (State != State.TimerDetected)
+            // A spectate that died with a viewer's panel up left it marked as showing.
+            panelRequests.ClearShowing();
+            while (!LinkedTokenSource.IsCancellationRequested)
             {
-                await Task.Delay(second).ConfigureAwait(false);
-                continue;
-            }
-
-            try
-            {
-                Panel next = ChoosePanel(current, visible, ref chatRequested);
-
-                TimeSpan shownLimit = chatRequested
-                    ? panelRequests.ShowDuration
-                    : panelTimes.GetValueOrDefault(current, TimeSpan.FromSeconds(30));
-
-                if (
-                    visible
-                    && current != Panel.None
-                    && (next != current || timeShown >= shownLimit)
-                )
+                if (State != State.TimerDetected)
                 {
-                    using Activity hide = HeroesReplayTelemetry.StartSpan(
-                        "heroesreplay.panel.hide",
-                        sessionActivity
-                    );
-                    hide?.SetTag("panel", current.ToString());
-                    hide?.SetTag("panel.chat_requested", chatRequested);
-                    controller.SendPanel(current);
-                    if (chatRequested)
+                    await Task.Delay(second).ConfigureAwait(false);
+                    continue;
+                }
+
+                try
+                {
+                    Panel request = Panel.None;
+                    if (panelRequests.TryConsume(out Panel requested, out string requestedBy))
                     {
-                        panelRequests.MarkHidden(current);
-                        chatRequested = false;
+                        logger.LogInformation(
+                            "Showing {Panel} for {Duration}s ({User}).",
+                            requested,
+                            (int)panelRequests.ShowDuration.TotalSeconds,
+                            requestedBy
+                        );
+                        request = requested;
                     }
 
-                    visible = false;
-                    timeShown = TimeSpan.Zero;
-                    if (next == current)
-                    {
-                        current = Panel.None;
-                    }
-                }
-
-                if (!visible && next != Panel.None)
-                {
-                    using Activity show = HeroesReplayTelemetry.StartSpan(
-                        "heroesreplay.panel.show",
-                        sessionActivity
+                    PanelStep step = panels.Step(
+                        request,
+                        AutomaticPanel(),
+                        panelRequests.ShowDuration,
+                        panelTimes.GetValueOrDefault(panels.Current, TimeSpan.FromSeconds(30)),
+                        second
                     );
-                    show?.SetTag("panel", next.ToString());
-                    show?.SetTag("panel.chat_requested", chatRequested);
-                    controller.SendPanel(next);
-                    visible = true;
-                    timeShown = TimeSpan.Zero;
-                    current = next;
-                }
 
-                if (visible)
+                    if (step.Hide != Panel.None)
+                    {
+                        using Activity hide = HeroesReplayTelemetry.StartSpan(
+                            "heroesreplay.panel.hide",
+                            sessionActivity
+                        );
+                        hide?.SetTag("panel", step.Hide.ToString());
+                        hide?.SetTag("panel.chat_requested", step.HiddenWasChat);
+                        controller.SendPanel(step.Hide);
+                        if (step.HiddenWasChat)
+                        {
+                            panelRequests.MarkHidden(step.Hide);
+                        }
+                    }
+
+                    if (step.Show != Panel.None)
+                    {
+                        using Activity show = HeroesReplayTelemetry.StartSpan(
+                            "heroesreplay.panel.show",
+                            sessionActivity
+                        );
+                        show?.SetTag("panel", step.Show.ToString());
+                        show?.SetTag("panel.chat_requested", panels.ChatRequested);
+                        controller.SendPanel(step.Show);
+                    }
+
+                    await Task.Delay(second).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) { }
+                catch (Exception e)
                 {
-                    timeShown = timeShown.Add(second);
+                    logger.LogError(e, "Could not complete panel loop");
                 }
-
-                await Task.Delay(second).ConfigureAwait(false);
             }
-            catch (OperationCanceledException) { }
-            catch (Exception e)
+        }
+        finally
+        {
+            // The session ended with a viewer's panel up: it is gone with the match, so the next
+            // request for it is not told it is already visible.
+            if (panels.ChatRequested)
             {
-                logger.LogError(e, "Could not complete panel loop");
+                try
+                {
+                    panelRequests.MarkHidden(panels.Current);
+                }
+                catch (Exception e)
+                {
+                    logger.LogDebug(e, "Could not mark the panel hidden at the session end.");
+                }
             }
         }
     }
 
-    private Panel ChoosePanel(Panel current, bool visible, ref bool chatRequested)
+    /// <summary>The panel the automatic rule wants now: Talents early on and after each talent tier.</summary>
+    private Panel AutomaticPanel()
     {
-        if (panelRequests.TryConsume(out Panel requested, out string requestedBy))
-        {
-            logger.LogInformation(
-                "Showing {Panel} for {Duration}s ({User}).",
-                requested,
-                (int)panelRequests.ShowDuration.TotalSeconds,
-                requestedBy
-            );
-            chatRequested = true;
-            return requested;
-        }
-
-        if (visible && chatRequested && current is Panel.DeathDamageRole or Panel.Talents)
-        {
-            return current;
-        }
-
         if (!panelRequests.AutomaticTalentsEnabled)
         {
             return Panel.None;

@@ -14,5 +14,6 @@ public class CalculatorsCommand : Command
         Subcommands.Add(new CompositionsCommand());
         Subcommands.Add(new InsightsCommand());
         Subcommands.Add(new InterestCommand());
+        Subcommands.Add(new ClipsCommand());
     }
 }

@@ -7,8 +7,20 @@ using HeroesReplay.Core.Shared;
 
 namespace HeroesReplay.Core.Clips;
 
+/// <summary>
+/// The hero killing blows of a replay, for its kill clips. They come from the game's own hero
+/// deaths (<see cref="HeroKills"/>), so a spirit of Chen, D.Va's mech or a copy by Abathur is not
+/// a kill, and a kill on Leoric, Tyrael or Uther counts when the replay names who landed it. A
+/// replay with no such events falls back to the deaths of hero units.
+/// </summary>
 public static class TeamKillDeaths
 {
+    /// <summary>
+    /// A further body of the same partial victim (<see cref="HeroKill.Partial"/>) killed by the
+    /// same player within this long is the same kill. It is the clips' chain window.
+    /// </summary>
+    private static readonly TimeSpan PartialDeathWindow = TimeSpan.FromSeconds(12);
+
     public static IReadOnlyList<TeamKillDeath> FromReplay(
         Replay replay,
         IReadOnlyList<Hero> heroes = null
@@ -29,6 +41,12 @@ public static class TeamKillDeaths
                 indexOf[player] = index;
                 names[player] = HeroName(replay, player, heroes);
             }
+        }
+
+        IReadOnlyList<HeroKill> kills = HeroKills.Read(replay);
+        if (kills != null)
+        {
+            return FromKills(replay.Players, kills, names);
         }
 
         var deaths = new List<TeamKillDeath>();
@@ -70,6 +88,65 @@ public static class TeamKillDeaths
                     )
                 );
             }
+        }
+
+        return deaths;
+    }
+
+    /// <summary>
+    /// The killing blows among the game's own hero deaths (<see cref="HeroKills"/>). A body of The
+    /// Lost Vikings or of Murky that the same player kills again within
+    /// <see cref="PartialDeathWindow"/> is the same kill, so three Vikings are not a triple kill.
+    /// </summary>
+    private static IReadOnlyList<TeamKillDeath> FromKills(
+        Player[] players,
+        IReadOnlyList<HeroKill> kills,
+        Dictionary<Player, string> names
+    )
+    {
+        var deaths = new List<TeamKillDeath>();
+        var lastPartial = new Dictionary<(int Killer, int Victim), TimeSpan>();
+        foreach (HeroKill kill in kills)
+        {
+            if (kill.BlowIndex < 0)
+            {
+                continue;
+            }
+
+            Player killer = players[kill.BlowIndex];
+            Player victim = players[kill.VictimIndex];
+            if (
+                !names.TryGetValue(killer, out string killerName)
+                || killerName == null
+                || !names.TryGetValue(victim, out string victimName)
+                || victimName == null
+            )
+            {
+                continue;
+            }
+
+            if (kill.Partial)
+            {
+                (int, int) pair = (kill.BlowIndex, kill.VictimIndex);
+                bool repeat =
+                    lastPartial.TryGetValue(pair, out TimeSpan last)
+                    && kill.Time - last <= PartialDeathWindow;
+                lastPartial[pair] = kill.Time;
+                if (repeat)
+                {
+                    continue;
+                }
+            }
+
+            deaths.Add(
+                new TeamKillDeath(
+                    kill.Time.FloorSeconds(),
+                    killerName,
+                    victimName,
+                    kill.BlowIndex,
+                    kill.VictimIndex
+                )
+            );
         }
 
         return deaths;

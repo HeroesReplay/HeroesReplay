@@ -34,6 +34,26 @@ public class RecordingClockTests
     }
 
     [Fact]
+    public void CutArguments_LateClip_SeekTheInputToTheLeadThenTheExactFrame()
+    {
+        string[] args = FfmpegArguments.Cut(@"C:\match.mp4", @"C:\clip.mp4", 1500.25, 20);
+
+        Assert.Equal(
+            new[] { "-y", "-ss", "1470.25", "-i", @"C:\match.mp4", "-ss", "30" },
+            args[..7]
+        );
+        Assert.Equal("-t", args[7]);
+        Assert.Equal("20", args[8]);
+    }
+
+    [Fact]
+    public void DurationInside_ARecordingThatEndsFirst_ShortensTheClip()
+    {
+        Assert.Equal(20, FfmpegArguments.DurationInside(40, 20, 85.6));
+        Assert.Equal(5.6, FfmpegArguments.DurationInside(80, 20, 85.6), 3);
+    }
+
+    [Fact]
     public void FitsRecording_RejectsARangePastTheEndOfTheFile()
     {
         Assert.False(FfmpegArguments.FitsRecording(1138, 42, 85.6));

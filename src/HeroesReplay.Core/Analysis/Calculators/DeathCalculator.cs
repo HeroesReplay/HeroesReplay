@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Heroes.ReplayParser;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.HeroesData;
@@ -60,6 +61,64 @@ public class DeathCalculator : IFocusCalculator
                 settings.Weights.PlayerDeath,
                 $"{unit.PlayerControlledBy.Character} killed by {unit.UnitKilledBy?.Name}",
                 victim: unit
+            );
+        }
+
+        OfferDeathsWithNoDeadUnit(timeline);
+    }
+
+    /// <summary>
+    /// A hero the game counts as dead while no hero unit of theirs died: Leoric, who turns into
+    /// his wraith, and Tyrael and Uther, whose unit lives on for a few seconds. No unit death
+    /// shows these to this calculator or to the <see cref="KillCalculator"/>, so the camera never
+    /// saw Leoric die: 336 deaths in 559 replays of the production corpus.
+    /// </summary>
+    private void OfferDeathsWithNoDeadUnit(ReplayTimeline timeline)
+    {
+        IReadOnlyList<HeroKill> kills = HeroKills.Read(timeline.Replay);
+        if (kills == null)
+        {
+            return;
+        }
+
+        Player[] players = timeline.Replay.Players;
+        foreach (HeroKill kill in kills)
+        {
+            if (kill.Body != null)
+            {
+                continue;
+            }
+
+            Player victim = players[kill.VictimIndex];
+            Unit hero = null;
+            foreach (Unit unit in timeline.AliveHeroesAt(kill.Time.FloorSeconds()))
+            {
+                if (unit?.PlayerControlledBy == victim)
+                {
+                    hero = unit;
+                    break;
+                }
+            }
+
+            if (hero == null)
+            {
+                continue;
+            }
+
+            bool byEnemy = false;
+            foreach (int killer in kill.KillerIndexes)
+            {
+                byEnemy |= players[killer].Team != victim.Team;
+            }
+
+            timeline.Offer(
+                kill.Time,
+                GetType(),
+                hero,
+                victim,
+                byEnemy ? settings.Weights.PlayerKill : settings.Weights.PlayerDeath,
+                $"{victim.Character} killed",
+                victim: hero
             );
         }
     }

@@ -224,7 +224,7 @@ public static class FullMatchMetadataBuilder
                 );
         string highlightTitle = HighlightTitle.Compose(
             highlight,
-            TitleMaxCharacters,
+            TitleBudget(options.TitleMarker),
             Lead(titles, input.NamedPlayer, focus),
             highlight != null && highlight.IsAbout(featuredHero) ? null : feature,
             map,
@@ -241,6 +241,7 @@ public static class FullMatchMetadataBuilder
         string title = focusTitle
             ?? highlightTitle
             ?? TitleFor(
+                TitleBudget(options.TitleMarker),
                 titles,
                 input.NamedPlayer,
                 map,
@@ -473,6 +474,7 @@ public static class FullMatchMetadataBuilder
     }
 
     private static string TitleFor(
+        int budget,
         YouTubeTitleSettings titles,
         bool namedPlayer,
         string map,
@@ -488,10 +490,10 @@ public static class FullMatchMetadataBuilder
         // The draft note sits just before the replay id, so it is the first part dropped at 100 characters.
         string lead =
             namedPlayer && titles.NamedPlayerTitles && hero != null ? hero + " focus" : null;
-        return ComposeTitle(lead, feature, map, mode, rank, draft, replayId);
+        return ComposeTitle(budget, lead, feature, map, mode, rank, draft, replayId);
     }
 
-    private static string ComposeTitle(params string[] parts)
+    private static string ComposeTitle(int budget, params string[] parts)
     {
         var current = new List<string>();
         if (parts != null)
@@ -508,7 +510,7 @@ public static class FullMatchMetadataBuilder
         while (current.Count > 1)
         {
             string title = string.Join(" - ", current);
-            if (title.Length <= TitleMaxCharacters)
+            if (title.Length <= budget)
             {
                 return title;
             }
@@ -529,7 +531,7 @@ public static class FullMatchMetadataBuilder
         }
 
         string only = current[0];
-        return only.Length <= TitleMaxCharacters ? only : only.Substring(0, TitleMaxCharacters);
+        return only.Length <= budget ? only : only.Substring(0, Math.Max(0, budget));
     }
 
     private static string Highlights(IReadOnlyList<TeamKillClip> events)

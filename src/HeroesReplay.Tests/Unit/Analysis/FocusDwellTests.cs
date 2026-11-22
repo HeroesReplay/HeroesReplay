@@ -189,6 +189,52 @@ public class FocusDwellTests
         Assert.Equal(third, focus[Second(12)].Target);
     }
 
+    [Theory]
+    [InlineData(20, false)]
+    [InlineData(0, true)]
+    public void HeroWhoWinsOneSecondInThree_KeepsTheCameraOnlyUpToTheMaxHold(
+        int maxHold,
+        bool keepsIt
+    )
+    {
+        // Valla wins seconds 10, 13, 16, ... and Muradin every second between: each gap is
+        // shorter than the dwell, so without a cap Valla would keep the camera to the end.
+        var script = new List<(int, int, Player, float)>
+        {
+            (0, 9, first, 5),
+            (10, 79, third, 5.4f),
+        };
+        for (int win = 10; win < 80; win += 3)
+        {
+            script.Add((win, win, second, 5.5f));
+        }
+
+        IReadOnlyDictionary<TimeSpan, Focus> focus = Analyze(
+            Game(90, first, second, third),
+            Settings(maxHold: maxHold),
+            new Scripted(script.ToArray())
+        );
+
+        Assert.Equal(second, focus[Second(20)].Target);
+        // 20 held seconds are used up after second 39; Muradin wins 41.
+        Assert.Equal(keepsIt ? second : third, focus[Second(41)].Target);
+    }
+
+    [Fact]
+    public void QuietSecondsAfterTheShownHeroDies_MoveToTheNearestLivingHero()
+    {
+        Kill(first, third, at: 10, respawn: 60);
+
+        IReadOnlyDictionary<TimeSpan, Focus> focus = Analyze(
+            Game(40, first, second, third),
+            new Scripted((0, 9, first, 5))
+        );
+
+        Assert.Equal(first, focus[Second(12)].Target);
+        Assert.Equal(second, focus[Second(20)].Target);
+        Assert.Contains("nothing scored since Jaina died", focus[Second(20)].Description);
+    }
+
     private static TimeSpan Second(int second) => TimeSpan.FromSeconds(second);
 
     private static IReadOnlyDictionary<TimeSpan, Focus> Analyze(
@@ -209,7 +255,7 @@ public class FocusDwellTests
             null
         ).GetPlayers(replay);
 
-    private static AppSettings Settings(int dwell = 4) =>
+    private static AppSettings Settings(int dwell = 4, int maxHold = 20) =>
         new()
         {
             Weights = new WeightSettings
@@ -231,6 +277,7 @@ public class FocusDwellTests
                 KillStreakWindow = Second(12),
                 FocusShareDistance = 5,
                 FocusDwellTime = Second(dwell),
+                FocusDwellMaxHold = Second(maxHold),
             },
         };
 

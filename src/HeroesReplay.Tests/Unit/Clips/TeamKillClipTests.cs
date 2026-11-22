@@ -166,6 +166,42 @@ public class TeamKillClipTests
     }
 
     [Fact]
+    public void Select_FourChainedBlowsOverMoreThanTheQuadraSpan_AreNoClip()
+    {
+        // Each blow within 12 s of the last, but 24 s in all: a slow run of kills, not a quadra.
+        IReadOnlyList<TeamKillClip> clips = TeamKillClips.Select(
+            new[]
+            {
+                Death(600, "Kael'thas", "Artanis"),
+                Death(608, "Kael'thas", "Butcher"),
+                Death(616, "Kael'thas", "Chromie"),
+                Death(624, "Kael'thas", "Diablo"),
+            }
+        );
+
+        Assert.Empty(clips);
+    }
+
+    [Fact]
+    public void Select_SixChainedBlows_SaysHowManyKills()
+    {
+        IReadOnlyList<TeamKillClip> clips = TeamKillClips.Select(
+            new[]
+            {
+                Death(100, "Zeratul", "Artanis"),
+                Death(102, "Zeratul", "Butcher"),
+                Death(104, "Zeratul", "Chromie"),
+                Death(106, "Zeratul", "Diablo"),
+                Death(108, "Zeratul", "E.T.C."),
+                Death(118, "Zeratul", "Artanis"),
+            }
+        );
+
+        TeamKillClip clip = Assert.Single(clips);
+        Assert.Equal("Zeratul pentakill, 6 kills (team wipe)", clip.Description);
+    }
+
+    [Fact]
     public void Select_ATripleKillFollowedByAFourthBlow_IsOneQuadraKill()
     {
         // The triple-kill burst must not swallow the fourth blow and cut the clip short.
