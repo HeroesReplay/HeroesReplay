@@ -51,14 +51,14 @@ public sealed class PirateAnalyzer : IInsightAnalyzer<PirateInsights>
             }
 
             int dives = Dives(snapshot, team);
-            if (dives < settings.MinDives || (best != null && best.Dives >= dives))
+            if (best != null && best.Dives >= dives)
             {
                 continue;
             }
 
             best = new PirateInsights
             {
-                Pirates = true,
+                Pirates = dives >= settings.MinDives,
                 Team = team,
                 Carrier = carrier,
                 Sanctification = crew.Any(player =>

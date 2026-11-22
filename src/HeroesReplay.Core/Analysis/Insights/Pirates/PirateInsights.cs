@@ -7,7 +7,9 @@ namespace HeroesReplay.Core.Analysis.Insights.Pirates;
 /// A Juice Pirates game: a team that skips objectives and teamfights to fly or portal into the
 /// enemy base and hit buildings while the defenders are elsewhere. The classic comp is Lt. Morales
 /// with Medivac Dropship carrying the team in, Tyrael with Sanctification keeping them alive; the
-/// "2.0" version swaps the Medivac for Medivh's portals. Empty when no team played it.
+/// "2.0" version swaps the Medivac for Medivh's portals. When a team has a carrier but too few
+/// dives, <see cref="Carrier"/> and <see cref="Dives"/> are still filled (for tuning) and
+/// <see cref="Pirates"/> is false. Empty when neither team has a carrier.
 /// </summary>
 public sealed record PirateInsights
 {
