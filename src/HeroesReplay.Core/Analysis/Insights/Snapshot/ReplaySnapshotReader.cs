@@ -22,8 +22,13 @@ public static class ReplaySnapshotReader
     private const string CampCaptured = "JungleCampCapture";
     private const string TowerPrefix = "TownCannonTower";
 
-    /// <summary>The boss dies at most this long before its camp's capture event (#528).</summary>
-    private static readonly TimeSpan BossKillWindow = TimeSpan.FromSeconds(10);
+    /// <summary>
+    /// The boss dies at most this long before its camp's capture event (#528). The capture
+    /// follows the death by 2 s at the median, but a contested circle holds it back: 25 of 1,275
+    /// captures in the production corpus took more than 10 s, the longest 29 s, and those are the
+    /// captures where the other team may take the boss.
+    /// </summary>
+    private static readonly TimeSpan BossKillWindow = TimeSpan.FromSeconds(30);
 
     /// <summary>The boss dies within this many map units of its camp's position (#528).</summary>
     private const double BossCampRadius = 20;
@@ -40,6 +45,7 @@ public static class ReplaySnapshotReader
         }
 
         settings ??= new InsightsSettings();
+        HeroPositionFill.Apply(replay);
         Player[] players = replay.Players ?? Array.Empty<Player>();
         List<StatEvent> events = (replay.TrackerEvents ?? new List<TrackerEvent>())
             .Select(StatEvent.From)
@@ -99,7 +105,7 @@ public static class ReplaySnapshotReader
             TeamLevels = TeamLevels(replay),
             KillingBlows = KillingBlows(replay, catalog),
             BossCaptures = BossCaptures(replay, players, camps, captures),
-            HeroDeaths = HeroDeaths(players),
+            HeroDeaths = HeroDeaths(replay, players),
             HearthCasts = HearthCasts(replay, players, settings.BSteps),
             Positions = new HeroPositions(players, settings.MaxPositionAge),
         };
@@ -233,8 +239,32 @@ public static class ReplaySnapshotReader
         return bosses.OrderBy(boss => boss.Time).ToArray();
     }
 
-    private static HeroDeath[] HeroDeaths(Player[] players)
+    /// <summary>
+    /// The game's own hero deaths (<see cref="HeroKills"/>), so D.Va's mech, a spirit of Chen or a
+    /// copy by Abathur is not a death and Leoric's is. A replay without those events falls back
+    /// to the deaths of hero units.
+    /// </summary>
+    private static HeroDeath[] HeroDeaths(Replay replay, Player[] players)
     {
+        IReadOnlyList<HeroKill> kills = HeroKills.Read(replay);
+        if (kills != null)
+        {
+            return kills
+                .Where(kill => kill.Point != null)
+                .Select(kill => new HeroDeath(
+                    kill.VictimIndex,
+                    players[kill.VictimIndex].Team,
+                    kill.Time,
+                    kill.Point.Value,
+                    kill.Body?.PlayerKilledBy != null
+                        ? Array.IndexOf(players, kill.Body.PlayerKilledBy)
+                        : kill.BlowIndex
+                ))
+                .OrderBy(death => death.Time)
+                .ThenBy(death => death.PlayerIndex)
+                .ToArray();
+        }
+
         var deaths = new List<HeroDeath>();
         for (int index = 0; index < players.Length; index++)
         {

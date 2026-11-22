@@ -46,6 +46,7 @@ public sealed class ReplayTimeline
             throw new ArgumentNullException(nameof(replay));
         }
 
+        HeroPositionFill.Apply(replay);
         int totalSeconds = Math.Max(1, (int)Math.Ceiling(replay.ReplayLength.TotalSeconds));
         var timeline = new ReplayTimeline(replay, totalSeconds);
 
