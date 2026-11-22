@@ -1,4 +1,6 @@
-﻿using HeroesReplay.Core.HeroFocus.Cards;
+﻿using System.Collections.Generic;
+using System.Linq;
+using HeroesReplay.Core.HeroFocus.Cards;
 using HeroesReplay.Core.MediaPolicy;
 using HeroesReplay.Core.YouTube.Metadata;
 using Xunit;
@@ -218,6 +220,107 @@ public sealed class PlayerStoryTests
         );
         Assert.Equal("Underdog Nova", StatHookPicker.ExtremeTitle("Nova", false, false, 1));
         Assert.Equal("Off-meta Nova", StatHookPicker.ExtremeTitle("Nova", false, true, 1));
+    }
+
+    [Fact]
+    public void Pick_EveryStoryKindHasFiveOrMoreWordings()
+    {
+        var histories = new (PlayerStoryKind Kind, PlayerHistory History, int? Career)[]
+        {
+            (PlayerStoryKind.WinStreak, new PlayerHistory { Games = 40, Streak = 7 }, null),
+            (PlayerStoryKind.LossStreak, new PlayerHistory { Games = 40, Streak = -7 }, null),
+            (PlayerStoryKind.OneTrick, new PlayerHistory { Games = 10, HeroGames = 2 }, 600),
+            (
+                PlayerStoryKind.OneTrick,
+                new PlayerHistory
+                {
+                    Games = 40,
+                    HeroGames = 36,
+                    HeroWins = 20,
+                },
+                null
+            ),
+            (
+                PlayerStoryKind.WorstHero,
+                new PlayerHistory
+                {
+                    Games = 60,
+                    HeroGames = 10,
+                    HeroWins = 2,
+                    WorstHero = true,
+                },
+                null
+            ),
+            (
+                PlayerStoryKind.BestHero,
+                new PlayerHistory
+                {
+                    Games = 60,
+                    HeroGames = 10,
+                    HeroWins = 8,
+                    BestHero = true,
+                },
+                null
+            ),
+            (
+                PlayerStoryKind.Climb,
+                new PlayerHistory
+                {
+                    Games = 40,
+                    MmrChange = 45,
+                    MmrGames = 20,
+                },
+                null
+            ),
+            (
+                PlayerStoryKind.Slide,
+                new PlayerHistory
+                {
+                    Games = 40,
+                    MmrChange = -45,
+                    MmrGames = 20,
+                },
+                null
+            ),
+        };
+
+        foreach ((PlayerStoryKind kind, PlayerHistory history, int? career) in histories)
+        {
+            PlayerStoryFacts[] players = { Facts(0, "Zarya", history, career) };
+            List<string> titles = Enumerable
+                .Range(0, 42)
+                .Select(seed => PlayerStoryPicker.Pick(players, seed, null, On))
+                .Select(story =>
+                {
+                    Assert.Equal(kind, story.Kind);
+                    Assert.Contains("Zarya", story.Title);
+                    Assert.DoesNotContain(" - ", story.Title);
+                    return story.Title;
+                })
+                .Distinct()
+                .ToList();
+
+            Assert.True(titles.Count >= 5, $"{kind}: only {titles.Count} wordings");
+        }
+    }
+
+    [Fact]
+    public void CommunityWording_EachPatchExtremeHasSixWordings_AndUsesTheTopCount()
+    {
+        foreach ((string hero, bool top) in new[] { ("Kerrigan", true), ("Chen", true), ("Nova", false) })
+        {
+            int wordings = Enumerable
+                .Range(0, 12)
+                .Select(seed => StatHookPicker.ExtremeTitle(hero, top, true, seed))
+                .Distinct()
+                .Count();
+            Assert.Equal(6, wordings);
+        }
+
+        Assert.Equal(
+            "Busted? Top-5 Kerrigan this patch",
+            StatHookPicker.ExtremeTitle("Kerrigan", true, true, 2, count: 5)
+        );
     }
 
     private static PlayerStoryFacts Facts(

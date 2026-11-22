@@ -63,11 +63,17 @@ public static class StatHookPicker
         }
 
         string context = Context(stats, gameMode);
-        StatHook hook = (settings.Counters ? Counter(entries, settings, context) : null)
-            ?? (settings.Duos ? Duo(entries, settings, context) : null)
-            ?? (settings.BestMap ? MapEdge(entries, map, settings, context, best: true) : null)
+        StatHook hook = (settings.Counters ? Counter(entries, settings, context, seed) : null)
+            ?? (settings.Duos ? Duo(entries, settings, context, seed) : null)
+            ?? (
+                settings.BestMap ? MapEdge(entries, map, settings, context, seed, best: true) : null
+            )
             ?? (settings.SlipsTheBan ? Ban(entries, map, settings, context, seed) : null)
-            ?? (settings.WorstMap ? MapEdge(entries, map, settings, context, best: false) : null)
+            ?? (
+                settings.WorstMap
+                    ? MapEdge(entries, map, settings, context, seed, best: false)
+                    : null
+            )
             ?? (settings.PatchExtremes ? Extreme(stats, entries, settings, context, seed) : null);
         if (hook == null || string.IsNullOrWhiteSpace(hook.Title))
         {
@@ -78,7 +84,12 @@ public static class StatHookPicker
         return int.TryParse(hook.Title.Trim(), out _) ? null : hook;
     }
 
-    private static StatHook Counter(List<Entry> entries, StatHookSettings settings, string context)
+    private static StatHook Counter(
+        List<Entry> entries,
+        StatHookSettings settings,
+        string context,
+        int seed
+    )
     {
         Entry bestA = null;
         Entry bestB = null;
@@ -124,7 +135,16 @@ public static class StatHookPicker
 
         return new StatHook(
             StatHookKind.Counter,
-            bestA.Name + " counters " + bestB.Name,
+            Wording(
+                settings,
+                seed,
+                bestA.Name + " counters " + bestB.Name,
+                bestA.Name + " hard-counters " + bestB.Name,
+                bestB.Name + "'s nightmare: " + bestA.Name,
+                bestA.Name + " into " + bestB.Name + ": the counter pick",
+                "Counter-pick " + bestA.Name + " vs " + bestB.Name,
+                "Bad news for " + bestB.Name + ": " + bestA.Name
+            ),
             Line(
                 $"{bestA.Name} won {Percent(bestPair.WinRate)} of {bestPair.Games} games against {bestB.Name}, {Points(bestEdge)} points over the {Percent(bestExpected)} their overall win rates predict",
                 context
@@ -132,7 +152,12 @@ public static class StatHookPicker
         );
     }
 
-    private static StatHook Duo(List<Entry> entries, StatHookSettings settings, string context)
+    private static StatHook Duo(
+        List<Entry> entries,
+        StatHookSettings settings,
+        string context,
+        int seed
+    )
     {
         Entry bestA = null;
         Entry bestB = null;
@@ -184,7 +209,16 @@ public static class StatHookPicker
 
         return new StatHook(
             StatHookKind.Duo,
-            bestA.Name + " + " + bestB.Name + " duo",
+            Wording(
+                settings,
+                seed,
+                bestA.Name + " + " + bestB.Name + " duo",
+                bestA.Name + " and " + bestB.Name + ", a proven pair",
+                "Dynamic duo: " + bestA.Name + " + " + bestB.Name,
+                bestA.Name + " + " + bestB.Name + " synergy",
+                "Better together: " + bestA.Name + " and " + bestB.Name,
+                "Power pair " + bestA.Name + " + " + bestB.Name
+            ),
             Line(
                 $"{bestA.Name} and {bestB.Name} won {Percent(bestPair.WinRate)} of {bestPair.Games} games together",
                 context
@@ -201,6 +235,7 @@ public static class StatHookPicker
         string map,
         StatHookSettings settings,
         string context,
+        int seed,
         bool best
     )
     {
@@ -255,7 +290,27 @@ public static class StatHookPicker
         string direction = best ? "over" : "under";
         return new StatHook(
             best ? StatHookKind.BestMap : StatHookKind.WorstMap,
-            chosen.Name + "'s " + which + " map",
+            best
+                ? Wording(
+                    settings,
+                    seed,
+                    chosen.Name + "'s best map",
+                    chosen.Name + " on home turf",
+                    chosen.Name + "'s favourite battleground",
+                    "Right map, right hero: " + chosen.Name,
+                    chosen.Name + " thrives here",
+                    "Prime map for " + chosen.Name
+                )
+                : Wording(
+                    settings,
+                    seed,
+                    chosen.Name + "'s worst map",
+                    chosen.Name + " on hostile ground",
+                    "Wrong map for " + chosen.Name + "?",
+                    chosen.Name + " on their weakest battleground",
+                    "Uphill battle: " + chosen.Name + " on this map",
+                    chosen.Name + " struggles here. Not today?"
+                ),
             Line(
                 $"{chosen.Name} won {Percent(chosenRow.WinRate)} of {chosenRow.Games} games on {chosenRow.Map}, the hero's {which} map, {Points(chosenDelta)} points {direction} {Percent(chosen.Stats.WinRate)} overall",
                 context
@@ -305,14 +360,16 @@ public static class StatHookPicker
 
         return new StatHook(
             StatHookKind.SlipsTheBan,
-            settings.CommunityWording
-                ? Rotate(
-                    seed,
-                    chosen.Name + " slips the ban",
-                    "Nobody banned the " + chosen.Name,
-                    chosen.Name + " got through the ban"
-                )
-                : chosen.Name + " slips the ban",
+            Wording(
+                settings,
+                seed,
+                chosen.Name + " slips the ban",
+                "Nobody banned the " + chosen.Name,
+                chosen.Name + " got through the ban",
+                "Forgot to ban " + chosen.Name + "?",
+                "Unbanned " + chosen.Name + ". Big mistake?",
+                chosen.Name + " left open in the draft"
+            ),
             Line(
                 $"{chosen.Name} is banned in {Percent(chosenRow.BanRate)} of games on {chosenRow.Map}",
                 context
@@ -369,7 +426,7 @@ public static class StatHookPicker
         string end = chosenTop ? "highest" : "lowest";
         return new StatHook(
             chosenTop ? StatHookKind.Powerhouse : StatHookKind.Underdog,
-            ExtremeTitle(chosen.Name, chosenTop, settings.CommunityWording, seed),
+            ExtremeTitle(chosen.Name, chosenTop, settings.CommunityWording, seed, count),
             Line(
                 $"{chosen.Name} won {Percent(chosen.Stats.WinRate)} of {chosen.Stats.Games} games, one of the {count} {end} win rates of the patch",
                 context
@@ -381,7 +438,13 @@ public static class StatHookPicker
     /// <c>Patch powerhouse X</c> or <c>Underdog X</c>; with community wording, also the
     /// community's own forms. "Chen OP, nerf Chen" is the HotS joke for any overperformer.
     /// </summary>
-    public static string ExtremeTitle(string hero, bool top, bool community, int seed)
+    public static string ExtremeTitle(
+        string hero,
+        bool top,
+        bool community,
+        int seed,
+        int count = 3
+    )
     {
         if (!community)
         {
@@ -391,17 +454,44 @@ public static class StatHookPicker
         if (top)
         {
             return HeroDraft.SameName(hero, "Chen")
-                ? Rotate(seed, "Patch powerhouse Chen", "Chen OP. Nerf Chen. (For real)")
+                ? Rotate(
+                    seed,
+                    "Patch powerhouse Chen",
+                    "Chen OP. Nerf Chen. (For real)",
+                    $"Busted? Top-{count} Chen this patch",
+                    "Meta monster Chen",
+                    "Chen is busted. Nerf Chen.",
+                    "Patch king Chen"
+                )
                 : Rotate(
                     seed,
                     "Patch powerhouse " + hero,
                     hero + " OP, nerf Chen",
-                    "Busted? Top-3 " + hero + " this patch"
+                    $"Busted? Top-{count} {hero} this patch",
+                    "Meta monster " + hero,
+                    hero + " is busted right now",
+                    "Patch king " + hero
                 );
         }
 
-        return Rotate(seed, "Underdog " + hero, "Off-meta " + hero, hero + " against the odds");
+        return Rotate(
+            seed,
+            "Underdog " + hero,
+            "Off-meta " + hero,
+            hero + " against the odds",
+            $"Bottom-{count} {hero} this patch",
+            "Unloved " + hero + " this patch",
+            "Patch underdog " + hero
+        );
     }
+
+    /// <summary>The plain title, or with community wording one of its synonyms by seed.</summary>
+    private static string Wording(
+        StatHookSettings settings,
+        int seed,
+        string plain,
+        params string[] synonyms
+    ) => settings.CommunityWording ? Rotate(seed, [plain, .. synonyms]) : plain;
 
     private static string Rotate(int seed, params string[] lines) =>
         lines[Math.Abs(seed) % lines.Length];

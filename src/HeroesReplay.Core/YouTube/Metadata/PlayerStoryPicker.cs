@@ -27,8 +27,9 @@ public sealed record PlayerStory(PlayerStoryKind Kind, string Hero, string Title
 /// Picks at most one story from the players' Heroes Profile history
 /// (<c>YouTube:Titles:PlayerStories</c>). Every story counts only games before the match, so it
 /// never tells the result. The strongest story wins: a long streak, a one-trick or a player on
-/// their worst hero lately beat a climb or a best-hero pick. The wording rotates by replay id, so
-/// the channel does not repeat one line. A hero the title already names is skipped.
+/// their worst hero lately beat a climb or a best-hero pick. Each kind rotates five to seven
+/// wordings by replay id, so the channel does not repeat one line. A hero the title already
+/// names is skipped.
 /// </summary>
 public static class PlayerStoryPicker
 {
@@ -96,13 +97,19 @@ public static class PlayerStoryPicker
                     seed,
                     $"{hero} rides a {n}-game win streak",
                     $"{n} straight wins: can anyone stop this {hero}?",
-                    $"{hero} is on a heater: {n} wins in a row"
+                    $"{hero} is on a heater: {n} wins in a row",
+                    $"Hot streak: {hero} with {n} wins in a row",
+                    $"Unbeaten in {n} games: {hero}",
+                    $"{hero} has won {n} straight. Make it {Number(streak + 1)}?"
                 )
                 : Rotate(
                     seed,
                     $"{hero}, {n} losses deep. Redemption arc?",
                     $"Tilt check: {hero} after {n} straight losses",
-                    $"{hero} needs this one: {n} losses in a row"
+                    $"{hero} needs this one: {n} losses in a row",
+                    $"{hero} on a {n}-game losing streak",
+                    $"Snap the skid? {hero} after {n} straight losses",
+                    $"Breaking point? {hero}, {n} losses in a row"
                 );
             yield return (
                 new PlayerStory(
@@ -129,9 +136,20 @@ public static class PlayerStoryPicker
                     seed,
                     $"{Number(career)}-game {hero} main",
                     $"The {hero} one-trick",
-                    $"{Number(career)} games of {hero} and counting"
+                    $"{Number(career)} games of {hero} and counting",
+                    $"{hero} specialist: {Number(career)} games",
+                    $"{Number(career)} games deep on {hero}",
+                    $"The {hero} main ({Number(career)} games)"
                 )
-                : Rotate(seed, $"The {hero} one-trick", $"{hero} one-trick, nothing else");
+                : Rotate(
+                    seed,
+                    $"The {hero} one-trick",
+                    $"{hero} one-trick, nothing else",
+                    $"{hero} or nothing",
+                    $"All-in on {hero}: {Percent(history.HeroShare)} of their games",
+                    $"Only {hero}: {history.HeroGames} of their last {history.Games} games",
+                    $"{hero} every game"
+                );
             string line = careerTrick
                 ? $"{whose} has played {Number(career)} Storm League games on {hero}"
                 : $"{whose} played {hero} in {history.HeroGames} of their last {history.Games} Storm League games";
@@ -155,7 +173,10 @@ public static class PlayerStoryPicker
                             seed,
                             $"{hero}: their worst hero lately. Bold.",
                             $"Comfort pick? {hero} has been their worst hero lately",
-                            $"Against the odds: {hero} ({record} lately)"
+                            $"Against the odds: {hero} ({record} lately)",
+                            $"Risky pick: {hero}, {record} lately",
+                            $"{hero} despite a {record} record lately",
+                            $"Their lowest win rate lately: {hero}"
                         ),
                         Line(
                             $"{whose} went {record} on {hero} over the last {Days(settings)} days, the lowest win rate of their heroes"
@@ -175,7 +196,10 @@ public static class PlayerStoryPicker
                             seed,
                             $"{hero} on their best hero ({record} lately)",
                             $"Comfort pick: {hero}, {record} lately",
-                            $"{hero}, their go-to ({record})"
+                            $"{hero}, their go-to ({record})",
+                            $"Signature hero: {hero} ({record} lately)",
+                            $"{hero}, their strongest pick lately ({record})",
+                            $"Best in their pool: {hero}, {record}"
                         ),
                         Line(
                             $"{whose} went {record} on {hero} over the last {Days(settings)} days, the best win rate of their heroes"
@@ -202,12 +226,20 @@ public static class PlayerStoryPicker
                         ? Rotate(
                             seed,
                             $"{hero} on a +{points} MMR climb",
-                            $"Climbing fast: +{points} MMR {hero}"
+                            $"Climbing fast: +{points} MMR {hero}",
+                            $"{hero} up {points} MMR in {history.MmrGames} games",
+                            $"On the rise: {hero}, +{points} MMR",
+                            $"+{points} MMR and climbing: {hero}",
+                            $"Ladder climber {hero} (+{points} MMR)"
                         )
                         : Rotate(
                             seed,
                             $"{hero}'s -{points} MMR slide. Turnaround?",
-                            $"Bounce-back game? {hero} is down {points} MMR"
+                            $"Bounce-back game? {hero} is down {points} MMR",
+                            $"{hero} down {points} MMR in {history.MmrGames} games",
+                            $"Rough patch: {hero}, -{points} MMR",
+                            $"Stop the slide? {hero}, -{points} MMR",
+                            $"{hero} looking to win back {points} MMR"
                         ),
                     Line(
                         $"{whose} {(up ? "gained" : "lost")} {points} Storm League MMR over their last {history.MmrGames} games"
@@ -231,6 +263,9 @@ public static class PlayerStoryPicker
     private static int Days(PlayerStorySettings settings) => Math.Max(1, settings.LookbackDays);
 
     private static string Number(int value) => value.ToString(CultureInfo.InvariantCulture);
+
+    private static string Percent(double share) =>
+        Number((int)Math.Round(100 * Math.Min(1, Math.Max(0, share)))) + "%";
 
     private static string Line(string sentence) => StoryLabel + " " + sentence + ".";
 }
