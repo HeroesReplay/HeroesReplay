@@ -36,6 +36,44 @@ public class InsightsSettings
     public BossFightInsightSettings Bosses { get; set; } = new();
 
     public BStepInsightSettings BSteps { get; set; } = new();
+
+    public PirateInsightSettings Pirates { get; set; } = new();
+}
+
+/// <summary>
+/// Juice Pirates (<c>Insights:Pirates</c>): a team that flies (Lt. Morales' Medivac Dropship) or
+/// portals (Medivh) into the enemy base and hits buildings while the defenders are elsewhere.
+/// Defaults are a first guess, not yet measured on the corpus.
+/// </summary>
+public class PirateInsightSettings
+{
+    /// <summary>The talent id Lt. Morales must have taken to count as a carrier.</summary>
+    public string MedivacTalent { get; set; } = "MedivacDropship";
+
+    /// <summary>Tyrael's heroic, reported as a sign of the classic comp (not required).</summary>
+    public string SanctificationTalent { get; set; } = "Sanctification";
+
+    /// <summary>Medivh counts as a carrier (the "2.0" portal version).</summary>
+    public bool Medivh { get; set; } = true;
+
+    /// <summary>How close to an enemy fort, keep or core a hero counts as in the base.</summary>
+    public double Radius { get; set; } = 15;
+
+    public int MinDivers { get; set; } = 3;
+
+    /// <summary>A dive needs the base nearly empty: at most this many enemy heroes there.</summary>
+    public int MaxDefenders { get; set; } = 1;
+
+    public TimeSpan SampleEvery { get; set; } = TimeSpan.FromSeconds(2);
+
+    /// <summary>Samples in a row the dive must last (3 at 2 s is about 5 seconds).</summary>
+    public int MinDiveSamples { get; set; } = 3;
+
+    /// <summary>Dives closer together than this are one dive.</summary>
+    public TimeSpan DiveGap { get; set; } = TimeSpan.FromSeconds(45);
+
+    /// <summary>One dive can be a lucky push; pirates do it again and again.</summary>
+    public int MinDives { get; set; } = 2;
 }
 
 /// <summary>

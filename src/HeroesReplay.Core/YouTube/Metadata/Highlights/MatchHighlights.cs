@@ -29,5 +29,24 @@ public sealed class MatchHighlights : IHighlightSource
                 "Comeback"
             );
         }
+
+        if (context.Insights.Pirates?.Pirates == true)
+        {
+            yield return new Highlight(
+                HighlightKind.JuicePirates,
+                null,
+                new[] { PirateTitle(context.Insights.Pirates), "Juice Pirates" },
+                "Juice Pirates"
+            );
+        }
     }
+
+    /// <summary><c>Juice Pirates: Lt. Morales flies the crew in</c>, or the Medivh version.</summary>
+    public static string PirateTitle(Analysis.Insights.Pirates.PirateInsights pirates) =>
+        pirates.Carrier switch
+        {
+            "Lt. Morales" => "Juice Pirates: Lt. Morales flies the crew in",
+            "Medivh" => "Juice Pirates: Medivh portals the crew in",
+            _ => "Juice Pirates",
+        };
 }

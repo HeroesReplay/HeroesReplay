@@ -19,8 +19,8 @@ public class BossFightClipTests
         Assert.Equal(BossFightClips.StealKind, clip.Kind);
         Assert.Equal("boss steal", TeamKillClips.Title(clip));
         Assert.Equal("Li-Ming", clip.Hero);
-        Assert.Equal(577, clip.HudStartSecond);
-        Assert.Equal(606, clip.HudEndSecond);
+        Assert.Equal(575, clip.HudStartSecond);
+        Assert.Equal(610, clip.HudEndSecond);
         Assert.Equal(
             "Li-Ming steals the boss for Red: Blue had up to 4 heroes on it for 15 s",
             clip.Description
@@ -110,7 +110,7 @@ public class BossFightClipTests
 
         Assert.Equal(BossFightClips.MaxClips, clips.Count);
         Assert.All(clips, clip => Assert.Equal(BossFightClips.StealKind, clip.Kind));
-        Assert.Equal(877, clips[0].HudStartSecond);
+        Assert.Equal(872, clips[0].HudStartSecond);
     }
 
     [Fact]

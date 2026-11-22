@@ -26,7 +26,7 @@ public class BStepClipTests
         Assert.Equal(791, clip.LastDeathSecond);
         Assert.Equal(789 - BStepClips.LeadSeconds, clip.HudStartSecond);
         Assert.Equal(791 + BStepClips.TailSeconds, clip.HudEndSecond);
-        Assert.Equal("Sonya bsteps over Muradin (5 hearth cancels in 1 s)", clip.Description);
+        Assert.Equal("Sonya bsteps over Muradin", clip.Description);
         Assert.Equal("bstep", TeamKillClips.Title(clip));
     }
 
@@ -42,7 +42,7 @@ public class BStepClipTests
         TeamKillClip clip = Assert.Single(BStepClips.Select(Insights(step)));
 
         Assert.Equal(372 + BStepClips.TailSeconds, clip.HudEndSecond);
-        Assert.Equal("Sonya bsteps, then dies (5 hearth cancels in 2 s)", clip.Description);
+        Assert.Equal("Sonya bsteps, then dies", clip.Description);
     }
 
     [Fact]
@@ -90,7 +90,7 @@ public class BStepClipTests
 
         Assert.Equal(300, clip.FirstDeathSecond);
         Assert.Equal(
-            "Sonya bsteps after an ally falls (5 hearth cancels in 1 s)",
+            "Sonya bsteps after an ally falls",
             BStepClips.Description(steps[2])
         );
     }

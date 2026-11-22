@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Heroes.ReplayParser;
@@ -417,14 +418,14 @@ public static class MatchClipExporter
             Title = title,
             PrivacyStatus = youtube?.PrivacyStatus ?? "public",
             CategoryId = youtube?.CategoryId,
-            DescriptionLines = new[]
-            {
-                $"clip:{id}:{clip.Kind}:{clip.Hero}",
-                clip.Description,
-                id == null
-                    ? string.Empty
-                    : $"Heroes Profile Match: https://www.heroesprofile.com/Match/Single/?replayID={id}",
-            }.WhereNotEmpty(),
+            DescriptionLines = new[] { $"clip:{id}:{clip.Kind}:{clip.Hero}" }
+                .Concat(ClipDescription.Compose(clip, map, id))
+                .Append(
+                    id == null
+                        ? string.Empty
+                        : $"Heroes Profile Match: https://www.heroesprofile.com/Match/Single/?replayID={id}"
+                )
+                .WhereNotEmpty(),
             Tags = ClipTags(clip, kind, map, youtube?.Titles?.GameName),
             Hero = string.IsNullOrWhiteSpace(hero) ? null : hero,
             Heroes = string.IsNullOrWhiteSpace(hero) ? null : new[] { hero },

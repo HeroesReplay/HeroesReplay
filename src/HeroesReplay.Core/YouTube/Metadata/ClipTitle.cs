@@ -144,7 +144,7 @@ public static class ClipTitle
         );
 
     /// <summary>FNV-1a: stable across runs and machines, unlike <see cref="string.GetHashCode()"/>.</summary>
-    private static ulong Hash(string text)
+    internal static ulong Hash(string text)
     {
         ulong hash = 14695981039346656037UL;
         foreach (char c in text)
@@ -442,7 +442,14 @@ public static class ClipTitle
                 ClipKind.BStep,
                 1,
                 f => f.VictimCount > 0,
-                f => $"GG no re? {f.Hero} bsteps over {f.Victims}",
+                f => $"No respect: {f.Hero} bsteps over {f.Victims}",
+                Grave
+            ),
+            new(
+                ClipKind.BStep,
+                1,
+                f => f.VictimCount > 0,
+                f => $"{f.Hero} bsteps over {f.Victims}. Rude",
                 Grave
             ),
             new(ClipKind.BStep, 2, f => f.DiedAfter, f => $"{f.Hero} bsteps... then dies", Karma),
@@ -470,14 +477,29 @@ public static class ClipTitle
             ),
             new(ClipKind.BStep, 5, Always, f => $"{f.Hero} bstep BM", Grave),
             new(ClipKind.BStep, 5, Always, f => $"{f.Hero} breaks out the bstep", Grave),
+            new(ClipKind.BStep, 5, Always, f => $"{f.Hero} hits the bstep dance", Grave),
+            new(ClipKind.BStep, -1, f => f.IsHero("Murky"), f => "Mrrgl?! Murky bstep BM", Grave),
             new(
                 ClipKind.BStep,
-                4,
-                f => f.Cycles >= 8,
-                f => $"{f.Hero} bsteps x{f.Cycles} in {f.BStepSeconds}s!?!?",
+                -1,
+                f => f.IsHero("Deckard"),
+                f => "Stay a while and bstep: Deckard BM",
                 Grave
             ),
-            new(ClipKind.BStep, -1, f => f.IsHero("Murky"), f => "Mrrgl?! Murky bstep BM", Grave),
+            new(
+                ClipKind.BStep,
+                -1,
+                f => f.IsHero("Abathur"),
+                f => "Slug life: Abathur bsteps",
+                Grave
+            ),
+            new(
+                ClipKind.BStep,
+                -1,
+                f => f.IsHero("E.T.C.", "ETC"),
+                f => "Mosh pit? No, an E.T.C. bstep",
+                Grave
+            ),
             // Pentakill: the announcer calls five a Mega Kill.
             new(
                 ClipKind.Penta,
@@ -566,13 +588,13 @@ public static class ClipTitle
                 ClipKind.Steal,
                 3,
                 f => f.StarterGroupSeconds >= 25 && f.Other != null,
-                f => $"{f.Other} worked it {f.StarterGroupSeconds}s, {f.Hero} took the boss"
+                f => $"{f.Other} did all the work, {f.Hero} took the boss"
             ),
             new(
                 ClipKind.Steal,
                 3,
                 f => f.StarterGroupSeconds >= 25,
-                f => $"{f.StarterGroupSeconds}s of boss work, stolen by {f.Hero}"
+                f => $"All that boss work, stolen by {f.Hero}"
             ),
             new(
                 ClipKind.Steal,
@@ -600,8 +622,7 @@ public static class ClipTitle
                 ClipKind.Defended,
                 1,
                 f => f.PitDeaths >= 3 && f.TogetherSeconds >= 5 && f.Team != null,
-                f =>
-                    $"Boss held: {f.Team} wins a {f.TogetherSeconds}s pit fight, {f.PitDeaths} down"
+                f => $"Boss held: {f.Team} wins the pit fight"
             ),
             new(
                 ClipKind.Defended,
@@ -633,6 +654,47 @@ public static class ClipTitle
             HeroKillLines(new[] { "The Butcher", "Butcher" }, f =>
                 $"Fresh meat! Butcher {f.KindWord}"
             )
+        );
+        // Voice lines and memes the HotS community quotes back (r/heroesofthestorm, the forums).
+        lines.AddRange(HeroKillLines(new[] { "Chen" }, f => $"Chen OP, nerf Chen: {f.KindWord}"));
+        lines.AddRange(
+            HeroKillLines(new[] { "Mal'Ganis" }, f => $"Handsome Mal'Ganis {f.KindWord}")
+        );
+        lines.AddRange(HeroKillLines(new[] { "Xul" }, f => $"XUL! Xul {f.KindWord}"));
+        lines.AddRange(
+            HeroKillLines(new[] { "Kael'thas" }, f => $"Flamestrike! Kael'thas {f.KindWord}")
+        );
+        lines.AddRange(HeroKillLines(new[] { "Nova" }, f => $"Triple Tap! Nova {f.KindWord}"));
+        lines.AddRange(
+            HeroKillLines(new[] { "Ragnaros" }, f => $"By fire be purged! Ragnaros {f.KindWord}")
+        );
+        lines.AddRange(
+            HeroKillLines(new[] { "Zul'jin" }, f => $"Taz'dingo! Zul'jin {f.KindWord}")
+        );
+        lines.AddRange(HeroKillLines(new[] { "Junkrat" }, f => $"Fire in the hole! Junkrat {f.KindWord}"));
+        lines.AddRange(HeroKillLines(new[] { "D.Va" }, f => $"Nerf this! D.Va {f.KindWord}"));
+        lines.AddRange(
+            HeroKillLines(new[] { "Tracer" }, f => $"The cavalry's here! Tracer {f.KindWord}")
+        );
+        lines.AddRange(HeroKillLines(new[] { "E.T.C." }, f => $"Mosh pit! E.T.C. {f.KindWord}"));
+        lines.AddRange(
+            HeroKillLines(new[] { "Sgt. Hammer" }, f => $"Hammer time: Sgt. Hammer {f.KindWord}")
+        );
+        lines.AddRange(
+            HeroKillLines(new[] { "Deathwing" }, f => $"Cataclysm! Deathwing {f.KindWord}")
+        );
+        lines.AddRange(
+            HeroKillLines(new[] { "Gazlowe" }, f => $"Time is money! Gazlowe {f.KindWord}")
+        );
+        lines.AddRange(
+            HeroKillLines(new[] { "Stitches" }, f => $"Stitches wants to play: {f.KindWord}")
+        );
+        lines.AddRange(
+            HeroKillLines(new[] { "Arthas" }, f => $"Frostmourne hungers: Arthas {f.KindWord}")
+        );
+        lines.AddRange(HeroKillLines(new[] { "Li Li" }, f => $"Li Li, the menace: {f.KindWord}"));
+        lines.AddRange(
+            HeroKillLines(new[] { "Deckard" }, f => $"Stay a while and die: Deckard {f.KindWord}")
         );
         return lines;
     }

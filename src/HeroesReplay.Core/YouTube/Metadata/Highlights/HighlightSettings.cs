@@ -22,6 +22,7 @@ public class HighlightSettings
         nameof(HighlightKind.TripleKill),
         nameof(HighlightKind.CoreRace),
         nameof(HighlightKind.Comeback),
+        nameof(HighlightKind.JuicePirates),
         nameof(HighlightKind.Award),
         nameof(HighlightKind.DeathlessCarry),
         nameof(HighlightKind.KillLeader),
