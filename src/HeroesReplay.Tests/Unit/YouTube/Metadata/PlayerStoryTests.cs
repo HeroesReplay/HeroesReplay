@@ -307,7 +307,9 @@ public sealed class PlayerStoryTests
     [Fact]
     public void CommunityWording_EachPatchExtremeHasSixWordings_AndUsesTheTopCount()
     {
-        foreach ((string hero, bool top) in new[] { ("Kerrigan", true), ("Chen", true), ("Nova", false) })
+        foreach (
+            (string hero, bool top) in new[] { ("Kerrigan", true), ("Chen", true), ("Nova", false) }
+        )
         {
             int wordings = Enumerable
                 .Range(0, 12)
