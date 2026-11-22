@@ -7,6 +7,9 @@
 # lists under obs\, and the published build writes the zip's obs\bundle.manifest (schema 2).
 # The zip never carries appsettings.secrets.json or OBS service.json (the stream key).
 # version.txt is $Version exactly, with no newline: the update compares it to the release tag.
+# $Version is the tag, v plus a SemVer version (v1.2.3, or v0.0.0-ci.N from ci.yml). The publish
+# stamps the assemblies with it (-p:Version without the v): the exe's file and product version,
+# and the informational version the services report (1.2.3+<commit>), match the tag.
 # runtime.txt is the .NET runtime the packaged exe runs on (#462), from its `check runtime`.
 param(
     [Parameter(Mandatory = $true)][string]$OutputPath,
@@ -17,6 +20,13 @@ param(
 $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $false
 
+$semVer = '^[vV](?<version>(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?)$'
+if ($Version -notmatch $semVer) {
+    throw "-Version '$Version' is not v plus a SemVer version, such as v1.2.3."
+}
+
+$assemblyVersion = $Matches.version
+
 $root = Split-Path -Parent $PSScriptRoot
 $zip = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputPath)
 $temp = if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { [System.IO.Path]::GetTempPath() }
@@ -24,7 +34,7 @@ $out = Join-Path $temp ('heroesreplay-publish-' + [System.IO.Path]::GetRandomFil
 
 Push-Location $root
 try {
-    dotnet publish src/HeroesReplay.CLI/HeroesReplay.CLI.csproj -c $Configuration -r win-x64 --self-contained true -o $out --nologo
+    dotnet publish src/HeroesReplay.CLI/HeroesReplay.CLI.csproj -c $Configuration -r win-x64 --self-contained true -o $out --nologo "-p:Version=$assemblyVersion"
     if ($LASTEXITCODE -ne 0) {
         throw "dotnet publish exited $LASTEXITCODE"
     }
