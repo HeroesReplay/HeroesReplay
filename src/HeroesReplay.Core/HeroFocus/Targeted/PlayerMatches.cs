@@ -6,14 +6,20 @@ using System.Text.Json;
 
 namespace HeroesReplay.Core.HeroFocus.Targeted;
 
-/// <summary>One game from a player's match history.</summary>
+/// <summary>
+/// One game from a player's match history: its hero (name and attribute id) and the player's
+/// MMR change in it (<c>player_change</c>, about 2 to 5 points a game) when the answer has them.
+/// </summary>
 public sealed record PlayerMatch(
     int ReplayId,
     DateTime PlayedAtUtc,
     bool Won,
     int Kills,
     int Deaths,
-    int Assists
+    int Assists,
+    string Hero = null,
+    string AttributeId = null,
+    double? MmrChange = null
 )
 {
     /// <summary>(Kills + assists) per death, a death-free game counting as one death.</summary>
@@ -75,7 +81,10 @@ public static class PlayerMatches
                         HeroLeaderboard.Number(row, "winner") == 1,
                         Count(row, "kills"),
                         Count(row, "deaths"),
-                        Count(row, "assists")
+                        Count(row, "assists"),
+                        HeroText(row, "name"),
+                        HeroText(row, "attribute_id"),
+                        HeroLeaderboard.Number(row, "player_change")
                     )
                 );
             }
@@ -96,6 +105,10 @@ public static class PlayerMatches
             .ThenByDescending(match => match.PlayedAtUtc)
             .ThenByDescending(match => match.ReplayId)
             .ToList();
+
+    /// <summary>A field of the row's <c>hero</c> object.</summary>
+    private static string HeroText(JsonElement row, string name) =>
+        row.TryGetProperty("hero", out JsonElement hero) ? HeroLeaderboard.Text(hero, name) : null;
 
     private static int Count(JsonElement row, string name) =>
         HeroLeaderboard.Number(row, name) is double value ? (int)value : 0;

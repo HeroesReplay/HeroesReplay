@@ -47,7 +47,8 @@ public static class StatHookPicker
         string map,
         IReadOnlyCollection<string> namedHeroes,
         StatHookSettings settings,
-        string gameMode = null
+        string gameMode = null,
+        int seed = 0
     )
     {
         if (stats?.Heroes == null || roster == null || roster.Count == 0 || settings == null)
@@ -65,9 +66,9 @@ public static class StatHookPicker
         StatHook hook = (settings.Counters ? Counter(entries, settings, context) : null)
             ?? (settings.Duos ? Duo(entries, settings, context) : null)
             ?? (settings.BestMap ? MapEdge(entries, map, settings, context, best: true) : null)
-            ?? (settings.SlipsTheBan ? Ban(entries, map, settings, context) : null)
+            ?? (settings.SlipsTheBan ? Ban(entries, map, settings, context, seed) : null)
             ?? (settings.WorstMap ? MapEdge(entries, map, settings, context, best: false) : null)
-            ?? (settings.PatchExtremes ? Extreme(stats, entries, settings, context) : null);
+            ?? (settings.PatchExtremes ? Extreme(stats, entries, settings, context, seed) : null);
         if (hook == null || string.IsNullOrWhiteSpace(hook.Title))
         {
             return null;
@@ -266,7 +267,8 @@ public static class StatHookPicker
         List<Entry> entries,
         string map,
         StatHookSettings settings,
-        string context
+        string context,
+        int seed
     )
     {
         if (string.IsNullOrWhiteSpace(map))
@@ -303,7 +305,14 @@ public static class StatHookPicker
 
         return new StatHook(
             StatHookKind.SlipsTheBan,
-            chosen.Name + " slips the ban",
+            settings.CommunityWording
+                ? Rotate(
+                    seed,
+                    chosen.Name + " slips the ban",
+                    "Nobody banned the " + chosen.Name,
+                    chosen.Name + " got through the ban"
+                )
+                : chosen.Name + " slips the ban",
             Line(
                 $"{chosen.Name} is banned in {Percent(chosenRow.BanRate)} of games on {chosenRow.Map}",
                 context
@@ -316,7 +325,8 @@ public static class StatHookPicker
         HeroStatsSnapshot stats,
         List<Entry> entries,
         StatHookSettings settings,
-        string context
+        string context,
+        int seed
     )
     {
         int count = settings.ExtremesCount;
@@ -359,13 +369,42 @@ public static class StatHookPicker
         string end = chosenTop ? "highest" : "lowest";
         return new StatHook(
             chosenTop ? StatHookKind.Powerhouse : StatHookKind.Underdog,
-            (chosenTop ? "Patch powerhouse " : "Underdog ") + chosen.Name,
+            ExtremeTitle(chosen.Name, chosenTop, settings.CommunityWording, seed),
             Line(
                 $"{chosen.Name} won {Percent(chosen.Stats.WinRate)} of {chosen.Stats.Games} games, one of the {count} {end} win rates of the patch",
                 context
             )
         );
     }
+
+    /// <summary>
+    /// <c>Patch powerhouse X</c> or <c>Underdog X</c>; with community wording, also the
+    /// community's own forms. "Chen OP, nerf Chen" is the HotS joke for any overperformer.
+    /// </summary>
+    public static string ExtremeTitle(string hero, bool top, bool community, int seed)
+    {
+        if (!community)
+        {
+            return (top ? "Patch powerhouse " : "Underdog ") + hero;
+        }
+
+        if (top)
+        {
+            return HeroDraft.SameName(hero, "Chen")
+                ? Rotate(seed, "Patch powerhouse Chen", "Chen OP. Nerf Chen. (For real)")
+                : Rotate(
+                    seed,
+                    "Patch powerhouse " + hero,
+                    hero + " OP, nerf Chen",
+                    "Busted? Top-3 " + hero + " this patch"
+                );
+        }
+
+        return Rotate(seed, "Underdog " + hero, "Off-meta " + hero, hero + " against the odds");
+    }
+
+    private static string Rotate(int seed, params string[] lines) =>
+        lines[Math.Abs(seed) % lines.Length];
 
     private static List<Entry> Entries(
         HeroStatsSnapshot stats,
