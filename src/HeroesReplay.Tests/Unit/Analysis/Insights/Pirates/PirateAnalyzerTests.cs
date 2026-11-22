@@ -57,7 +57,9 @@ public class PirateAnalyzerTests
     {
         SnapshotPlayer morales = InsightFixtures.Player(0, 0, "Lt. Morales") with
         {
-            Talents = medivac ? new[] { "MedicHeroicAbilityMedivacDropship" } : new[] { "MedicHeroicAbilityStimDrone" },
+            Talents = medivac
+                ? new[] { "MedicHeroicAbilityMedivacDropship" }
+                : new[] { "MedicHeroicAbilityStimDrone" },
         };
         SnapshotPlayer tyrael = InsightFixtures.Player(1, 0, "Tyrael") with
         {
@@ -89,7 +91,9 @@ public class PirateAnalyzerTests
         {
             positions.Path(
                 player.Index,
-                player.Team == 0 ? divePath : _ => defendersHome ? RedKeep : InsightFixtures.BlueCore
+                player.Team == 0
+                    ? divePath
+                    : _ => defendersHome ? RedKeep : InsightFixtures.BlueCore
             );
         }
 

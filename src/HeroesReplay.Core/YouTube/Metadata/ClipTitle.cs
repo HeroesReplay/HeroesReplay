@@ -668,10 +668,10 @@ public static class ClipTitle
         lines.AddRange(
             HeroKillLines(new[] { "Ragnaros" }, f => $"By fire be purged! Ragnaros {f.KindWord}")
         );
+        lines.AddRange(HeroKillLines(new[] { "Zul'jin" }, f => $"Taz'dingo! Zul'jin {f.KindWord}"));
         lines.AddRange(
-            HeroKillLines(new[] { "Zul'jin" }, f => $"Taz'dingo! Zul'jin {f.KindWord}")
+            HeroKillLines(new[] { "Junkrat" }, f => $"Fire in the hole! Junkrat {f.KindWord}")
         );
-        lines.AddRange(HeroKillLines(new[] { "Junkrat" }, f => $"Fire in the hole! Junkrat {f.KindWord}"));
         lines.AddRange(HeroKillLines(new[] { "D.Va" }, f => $"Nerf this! D.Va {f.KindWord}"));
         lines.AddRange(
             HeroKillLines(new[] { "Tracer" }, f => $"The cavalry's here! Tracer {f.KindWord}")

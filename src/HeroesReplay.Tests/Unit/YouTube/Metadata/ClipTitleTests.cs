@@ -45,7 +45,9 @@ public class ClipTitleTests
     [Fact]
     public void BstepLines_NeverCountTheCancels_OrSayGgNoRe()
     {
-        foreach (ClipTitle.Line line in ClipTitle.Lines.Where(l => l.Kind == ClipTitle.ClipKind.BStep))
+        foreach (
+            ClipTitle.Line line in ClipTitle.Lines.Where(l => l.Kind == ClipTitle.ClipKind.BStep)
+        )
         {
             string text = line.Text(Everything(line.Kind));
 
@@ -252,7 +254,19 @@ public class ClipTitleTests
 
     private static IEnumerable<TeamKillClip> Clips()
     {
-        foreach (string hero in new[] { "The Lost Vikings", "Murky", "Chromie", "Cho", "Deckard", "E.T.C.", "Sgt. Hammer", "Ragnaros" })
+        foreach (
+            string hero in new[]
+            {
+                "The Lost Vikings",
+                "Murky",
+                "Chromie",
+                "Cho",
+                "Deckard",
+                "E.T.C.",
+                "Sgt. Hammer",
+                "Ragnaros",
+            }
+        )
         {
             yield return Kill(hero, 3, 100, 101);
             yield return Kill(hero, 4, 100, 106);

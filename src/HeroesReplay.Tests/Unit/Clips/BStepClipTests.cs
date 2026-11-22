@@ -89,10 +89,7 @@ public class BStepClipTests
         TeamKillClip clip = Assert.Single(BStepClips.Select(Insights(steps)));
 
         Assert.Equal(300, clip.FirstDeathSecond);
-        Assert.Equal(
-            "Sonya bsteps after an ally falls",
-            BStepClips.Description(steps[2])
-        );
+        Assert.Equal("Sonya bsteps after an ally falls", BStepClips.Description(steps[2]));
     }
 
     private static BStep Step(int start, int end, params BStepDeath[] deaths) =>

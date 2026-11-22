@@ -41,7 +41,9 @@ public sealed class PirateAnalyzer : IInsightAnalyzer<PirateInsights>
         PirateInsights best = null;
         for (int team = 0; team < 2; team++)
         {
-            List<SnapshotPlayer> crew = snapshot.Players.Where(player => player.Team == team).ToList();
+            List<SnapshotPlayer> crew = snapshot
+                .Players.Where(player => player.Team == team)
+                .ToList();
             string carrier = Carrier(crew);
             if (carrier == null)
             {
@@ -92,15 +94,24 @@ public sealed class PirateAnalyzer : IInsightAnalyzer<PirateInsights>
     private int Dives(ReplaySnapshot snapshot, int team)
     {
         int enemy = 1 - team;
-        int[] attackers = snapshot.Players.Where(p => p.Team == team).Select(p => p.Index).ToArray();
-        int[] defenders = snapshot.Players.Where(p => p.Team == enemy).Select(p => p.Index).ToArray();
-        List<Town> towns = (snapshot.Towns ?? Array.Empty<Town>()).Where(town => town.Team == enemy).ToList();
+        int[] attackers = snapshot
+            .Players.Where(p => p.Team == team)
+            .Select(p => p.Index)
+            .ToArray();
+        int[] defenders = snapshot
+            .Players.Where(p => p.Team == enemy)
+            .Select(p => p.Index)
+            .ToArray();
+        List<Town> towns = (snapshot.Towns ?? Array.Empty<Town>())
+            .Where(town => town.Team == enemy)
+            .ToList();
         MapPoint core = snapshot.Cores[enemy];
 
         int dives = 0;
         int streak = 0;
         TimeSpan? lastDive = null;
-        TimeSpan step = settings.SampleEvery <= TimeSpan.Zero ? TimeSpan.FromSeconds(2) : settings.SampleEvery;
+        TimeSpan step =
+            settings.SampleEvery <= TimeSpan.Zero ? TimeSpan.FromSeconds(2) : settings.SampleEvery;
         for (TimeSpan time = snapshot.GatesOpen; time <= snapshot.End; time += step)
         {
             bool diving = Targets(snapshot, towns, core, time)
@@ -146,7 +157,12 @@ public sealed class PirateAnalyzer : IInsightAnalyzer<PirateInsights>
         yield return core;
     }
 
-    private int Near(ReplaySnapshot snapshot, IEnumerable<int> players, MapPoint target, TimeSpan time) =>
+    private int Near(
+        ReplaySnapshot snapshot,
+        IEnumerable<int> players,
+        MapPoint target,
+        TimeSpan time
+    ) =>
         players.Count(index =>
             snapshot.Positions.TryGet(index, time, out MapPoint point)
             && point.DistanceTo(target) <= settings.Radius

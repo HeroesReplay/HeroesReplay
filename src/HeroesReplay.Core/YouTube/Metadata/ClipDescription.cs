@@ -119,25 +119,14 @@ public static class ClipDescription
             c =>
                 $"{c.F.Other} brought the whole squad to the boss, and {c.Hero} still found a way to take it."
         ),
-        new(
-            ClipTitle.ClipKind.Steal,
-            3,
-            Always,
-            c =>
-                $"{c.Hero} slips into the boss pit at just the right moment and takes the boss{c.ForTeam}{c.OnMap}."
+        new(ClipTitle.ClipKind.Steal, 3, Always, c =>
+            $"{c.Hero} slips into the boss pit at just the right moment and takes the boss{c.ForTeam}{c.OnMap}."
         ),
-        new(
-            ClipTitle.ClipKind.Steal,
-            3,
-            Always,
-            c => $"Never leave a boss half-finished. {c.Hero} makes them pay{c.OnMap}."
+        new(ClipTitle.ClipKind.Steal, 3, Always, c =>
+            $"Never leave a boss half-finished. {c.Hero} makes them pay{c.OnMap}."
         ),
-        new(
-            ClipTitle.ClipKind.Steal,
-            3,
-            Always,
-            c =>
-                $"Why do the work when you can just take it? {c.Hero} with the cheeky boss steal{c.OnMap}."
+        new(ClipTitle.ClipKind.Steal, 3, Always, c =>
+            $"Why do the work when you can just take it? {c.Hero} with the cheeky boss steal{c.OnMap}."
         ),
         // Boss defended.
         new(
@@ -154,17 +143,11 @@ public static class ClipDescription
             c =>
                 $"It all kicks off at the boss pit, and {c.Hero} comes out on top to secure it{c.ForTeam}."
         ),
-        new(
-            ClipTitle.ClipKind.Defended,
-            2,
-            Always,
-            c => $"A tense fight at the boss, and {c.Hero} holds their nerve to secure it{c.ForTeam}."
+        new(ClipTitle.ClipKind.Defended, 2, Always, c =>
+            $"A tense fight at the boss, and {c.Hero} holds their nerve to secure it{c.ForTeam}."
         ),
-        new(
-            ClipTitle.ClipKind.Defended,
-            2,
-            Always,
-            c => $"The enemy wanted this boss. {c.Hero} had other plans{c.OnMap}."
+        new(ClipTitle.ClipKind.Defended, 2, Always, c =>
+            $"The enemy wanted this boss. {c.Hero} had other plans{c.OnMap}."
         ),
         // Bstep.
         new(
@@ -197,13 +180,11 @@ public static class ClipDescription
             ClipTitle.ClipKind.BStep,
             3,
             c => c.F.AllyBefore,
-            c => $"A teammate goes down, and {c.Hero}'s first thought is... a bstep? Interesting priorities."
+            c =>
+                $"A teammate goes down, and {c.Hero}'s first thought is... a bstep? Interesting priorities."
         ),
-        new(
-            ClipTitle.ClipKind.BStep,
-            4,
-            Always,
-            c => $"{c.Hero} breaks out the bstep{c.OnMap}. Too easy?"
+        new(ClipTitle.ClipKind.BStep, 4, Always, c =>
+            $"{c.Hero} breaks out the bstep{c.OnMap}. Too easy?"
         ),
         // Kills.
         new(
@@ -212,23 +193,14 @@ public static class ClipDescription
             c => c.F.Wiped,
             c => $"{c.Hero} takes on the whole enemy team and leaves no one standing. Pentakill!"
         ),
-        new(
-            ClipTitle.ClipKind.Penta,
-            1,
-            Always,
-            c => $"Five kills, one {c.Hero}. A pentakill{c.OnMap} worth watching twice."
+        new(ClipTitle.ClipKind.Penta, 1, Always, c =>
+            $"Five kills, one {c.Hero}. A pentakill{c.OnMap} worth watching twice."
         ),
-        new(
-            ClipTitle.ClipKind.Quadra,
-            0,
-            Always,
-            c => $"{c.Hero} tears through the fight for four kills, so close to the penta!"
+        new(ClipTitle.ClipKind.Quadra, 0, Always, c =>
+            $"{c.Hero} tears through the fight for four kills, so close to the penta!"
         ),
-        new(
-            ClipTitle.ClipKind.Triple,
-            0,
-            Always,
-            c => $"{c.Hero} cleans up the fight with a triple kill{c.OnMap}."
+        new(ClipTitle.ClipKind.Triple, 0, Always, c =>
+            $"{c.Hero} cleans up the fight with a triple kill{c.OnMap}."
         ),
     };
 }

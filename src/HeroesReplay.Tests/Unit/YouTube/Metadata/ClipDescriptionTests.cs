@@ -21,12 +21,18 @@ public class ClipDescriptionTests
 
         for (int id = 66698600; id < 66698620; id++)
         {
-            string text = string.Join(" ", ClipDescription.Compose(clip, "Cursed Hollow", id.ToString()));
+            string text = string.Join(
+                " ",
+                ClipDescription.Compose(clip, "Cursed Hollow", id.ToString())
+            );
 
             Assert.Contains("Illidan", text, StringComparison.Ordinal);
             Assert.DoesNotContain(text, char.IsDigit);
             Assert.DoesNotContain("heroes on it", text, StringComparison.Ordinal);
-            Assert.Equal(text, string.Join(" ", ClipDescription.Compose(clip, "Cursed Hollow", id.ToString())));
+            Assert.Equal(
+                text,
+                string.Join(" ", ClipDescription.Compose(clip, "Cursed Hollow", id.ToString()))
+            );
         }
     }
 
@@ -98,7 +104,8 @@ public class ClipDescriptionTests
         }
     }
 
-    private static BossFightInsights Insights(BossFight fight) => new() { Fights = new[] { fight } };
+    private static BossFightInsights Insights(BossFight fight) =>
+        new() { Fights = new[] { fight } };
 
     private static BossFight Steal() =>
         new()
