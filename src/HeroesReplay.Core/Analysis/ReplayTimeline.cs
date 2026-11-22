@@ -352,20 +352,74 @@ public sealed class ReplayTimeline
         }
     }
 
+    /// <summary>
+    /// A second nothing scored keeps the focus before it for this long after that hero died. The
+    /// camera then moves to the nearest living hero, and no longer waits on a dead one.
+    /// </summary>
+    internal const int DeadHoldSeconds = 4;
+
     public void HoldSelectionAcrossEmptySeconds()
     {
         Focus last = null;
+        int deadFor = 0;
         for (int second = 0; second < TotalSeconds; second++)
         {
             if (slots[second] != null)
             {
                 last = slots[second];
+                deadFor = 0;
+                continue;
             }
-            else if (last != null)
+
+            if (last == null)
             {
-                slots[second] = last;
+                continue;
+            }
+
+            if (AliveHero(last.Target, second) != null)
+            {
+                deadFor = 0;
+            }
+            else if (++deadFor > DeadHoldSeconds && NearestLiving(last, second) is Focus moved)
+            {
+                last = moved;
+                deadFor = 0;
+            }
+
+            slots[second] = last;
+        }
+    }
+
+    /// <summary>The living hero nearest to where the held focus's hero died, or null when none is placed.</summary>
+    private Focus NearestLiving(Focus held, int second)
+    {
+        Point from = held.Unit?.PointDied;
+        Unit nearest = null;
+        double best = double.MaxValue;
+        foreach (Unit unit in AliveHeroesAt(second))
+        {
+            if (unit?.PlayerControlledBy == null || !TryGetPoint(unit, second, out Point point))
+            {
+                continue;
+            }
+
+            double apart = from == null ? 0 : point.DistanceTo(from);
+            if (apart < best)
+            {
+                nearest = unit;
+                best = apart;
             }
         }
+
+        return nearest == null
+            ? null
+            : new Focus(
+                typeof(ReplayTimeline),
+                nearest,
+                nearest.PlayerControlledBy,
+                0,
+                $"{nearest.PlayerControlledBy.Character} is nearest, nothing scored since {held.Target?.Character} died"
+            );
     }
 
     /// <summary>

@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Heroes.ReplayParser;
+using Heroes.ReplayParser.MPQFiles;
+using HeroesReplay.Core.Analysis.Insights.Snapshot;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.HeroesData;
 
@@ -11,8 +13,10 @@ namespace HeroesReplay.Core.Analysis.Calculators;
 /// Heroes at a boss (#234). A laning boss belongs to a team and is live while it walks the lane:
 /// a hero near it scores <see cref="WeightSettings.ObjectiveActivity"/>. A pit boss belongs to no
 /// team and only matters while it is being taken: the seconds before it dies in which the team
-/// that kills it has a hero at it score <see cref="WeightSettings.BossCapture"/>. Walking past a
-/// boss pit is roaming.
+/// that kills it has a hero at it, and the seconds from its death to its capture, score
+/// <see cref="WeightSettings.BossCapture"/> for every hero at it. Walking past a boss pit is
+/// roaming. A boss a team started and left alive is not scored: the replay does not record damage
+/// to it.
 /// </summary>
 public class NearBossCalculator : IFocusCalculator
 {
@@ -24,6 +28,14 @@ public class NearBossCalculator : IFocusCalculator
 
     /// <summary>Seconds the taking team may step out of range and still be taking it.</summary>
     internal const int TakeGapSeconds = 3;
+
+    /// <summary>
+    /// The longest a dead boss waits for its capture. In 1,275 corpus captures the wait was 2 s at
+    /// the median and never over 29 s; the long ones are the contested ones.
+    /// </summary>
+    internal const int CaptureMaxSeconds = 30;
+
+    private const string CampCaptured = "JungleCampCapture";
 
     private readonly AppSettings settings;
     private readonly IGameData gameData;
@@ -62,6 +74,11 @@ public class NearBossCalculator : IFocusCalculator
             if (take is { Count: 0 })
             {
                 continue;
+            }
+
+            if (take != null)
+            {
+                ExtendToCapture(timeline, unit, points, take);
             }
 
             bosses.Add((unit, points, take));
@@ -180,6 +197,66 @@ public class NearBossCalculator : IFocusCalculator
         }
 
         return seconds;
+    }
+
+    /// <summary>
+    /// A dead boss is not taken yet: a team captures it by standing in its circle, and the other
+    /// team can still take it there. The seconds from the boss's death to its capture are part of
+    /// the take, when the capture comes within <see cref="CaptureMaxSeconds"/>.
+    /// </summary>
+    internal static void ExtendToCapture(
+        ReplayTimeline timeline,
+        Unit boss,
+        Dictionary<int, Point> points,
+        HashSet<int> take
+    )
+    {
+        if (boss.TimeSpanDied is not TimeSpan died || timeline.Replay.TrackerEvents == null)
+        {
+            return;
+        }
+
+        int diedSecond = Math.Min(died.FloorSeconds(), timeline.TotalSeconds - 1);
+        if (!points.TryGetValue(diedSecond, out Point pit))
+        {
+            return;
+        }
+
+        TimeSpan? captured = null;
+        foreach (TrackerEvent trackerEvent in timeline.Replay.TrackerEvents)
+        {
+            if (
+                trackerEvent == null
+                || trackerEvent.TimeSpan < died
+                || trackerEvent.TimeSpan > died + TimeSpan.FromSeconds(CaptureMaxSeconds)
+            )
+            {
+                continue;
+            }
+
+            StatEvent stat = StatEvent.From(trackerEvent);
+            if (
+                stat?.Name == CampCaptured
+                && stat.Text("CampType")?.Contains("Boss", StringComparison.OrdinalIgnoreCase)
+                    == true
+                && (captured == null || stat.Time < captured)
+            )
+            {
+                captured = stat.Time;
+            }
+        }
+
+        if (captured == null)
+        {
+            return;
+        }
+
+        int last = Math.Min(captured.Value.FloorSeconds(), timeline.TotalSeconds - 1);
+        for (int second = diedSecond + 1; second <= last; second++)
+        {
+            take.Add(second);
+            points[second] = pit;
+        }
     }
 
     private static bool TeamAt(

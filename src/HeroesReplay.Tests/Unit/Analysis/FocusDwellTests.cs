@@ -220,6 +220,21 @@ public class FocusDwellTests
         Assert.Equal(keepsIt ? second : third, focus[Second(41)].Target);
     }
 
+    [Fact]
+    public void QuietSecondsAfterTheShownHeroDies_MoveToTheNearestLivingHero()
+    {
+        Kill(first, third, at: 10, respawn: 60);
+
+        IReadOnlyDictionary<TimeSpan, Focus> focus = Analyze(
+            Game(40, first, second, third),
+            new Scripted((0, 9, first, 5))
+        );
+
+        Assert.Equal(first, focus[Second(12)].Target);
+        Assert.Equal(second, focus[Second(20)].Target);
+        Assert.Contains("nothing scored since Jaina died", focus[Second(20)].Description);
+    }
+
     private static TimeSpan Second(int second) => TimeSpan.FromSeconds(second);
 
     private static IReadOnlyDictionary<TimeSpan, Focus> Analyze(

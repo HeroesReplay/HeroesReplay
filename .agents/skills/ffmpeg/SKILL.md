@@ -37,13 +37,13 @@ ffprobe -v error -show_entries format=duration:stream=index,codec_type,codec_nam
 
 ## Cut a clip
 
-Put `-ss` and `-t` after `-i` so the cut is frame-accurate. Do not crop or scale. The kill can be anywhere in the 1920x1080 frame, and a center crop can remove it. The clip stays the same width and height as the match.
+Seek in two steps: a coarse `-ss` before `-i` to 30 s before the clip (fast, lands on a keyframe), then a fine `-ss` and `-t` after `-i` for the rest, so the cut is frame-accurate and ffmpeg does not decode the whole recording first (`FfmpegArguments.Cut`). A clip in the first 30 s has only the `-ss` after `-i`. Do not crop or scale. The kill can be anywhere in the 1920x1080 frame, and a center crop can remove it. The clip stays the same width and height as the match.
 
 ```powershell
-ffmpeg -y -i match.mp4 -ss 120.0 -t 32.0 -c:v libx264 -crf 20 -preset veryfast -c:a aac -b:a 160k -movflags +faststart clip.mp4
+ffmpeg -y -ss 90.0 -i match.mp4 -ss 30.0 -t 32.0 -c:v libx264 -crf 20 -preset veryfast -c:a aac -b:a 160k -movflags +faststart clip.mp4
 ```
 
-`-ss` is the start in the file. `-t` is the length, not the end timestamp. Re-encode every clip with these settings so they can be joined without a second scale.
+The two `-ss` values add up to the start in the file (here 120 s). `-t` is the length, not the end timestamp. Re-encode every clip with these settings so they can be joined without a second scale.
 
 ## Join clips from one match
 

@@ -51,7 +51,7 @@ public class GameNameSettings
             }
 
             string trimmed = name.Trim();
-            if (title.Contains(trimmed, System.StringComparison.OrdinalIgnoreCase))
+            if (HasWord(title, trimmed))
             {
                 return title;
             }
@@ -64,5 +64,34 @@ public class GameNameSettings
         }
 
         return title;
+    }
+
+    /// <summary>
+    /// The title already has the name as words of its own. "HotS" inside "skillshots" is not the
+    /// game's name, and a title with that word still gets its suffix.
+    /// </summary>
+    private static bool HasWord(string title, string name)
+    {
+        int from = 0;
+        while (from < title.Length)
+        {
+            int at = title.IndexOf(name, from, System.StringComparison.OrdinalIgnoreCase);
+            if (at < 0)
+            {
+                return false;
+            }
+
+            int end = at + name.Length;
+            bool startsWord = at == 0 || !char.IsLetterOrDigit(title[at - 1]);
+            bool endsWord = end == title.Length || !char.IsLetterOrDigit(title[end]);
+            if (startsWord && endsWord)
+            {
+                return true;
+            }
+
+            from = at + 1;
+        }
+
+        return false;
     }
 }

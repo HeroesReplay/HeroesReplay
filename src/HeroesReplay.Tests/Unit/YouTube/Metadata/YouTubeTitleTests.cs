@@ -134,6 +134,42 @@ public class YouTubeTitleTests
     }
 
     [Fact]
+    public void Title_LeavesRoomForTheTestMarker()
+    {
+        var input = new FullMatchMetadataInput
+        {
+            ReplayId = 65550001,
+            Map = "Tomb of the Spider Queen",
+            GameMode = "Storm League " + new string('x', 30),
+            Rank = "Grandmaster",
+            FocusHero = "Illidan",
+            NamedPlayer = true,
+        };
+
+        string plain = FullMatchMetadataBuilder
+            .Build(input, new FullMatchMetadataOptions { Titles = new YouTubeTitleSettings() })
+            .Title;
+        string marked = FullMatchMetadataBuilder
+            .Build(
+                input,
+                new FullMatchMetadataOptions
+                {
+                    Titles = new YouTubeTitleSettings(),
+                    TitleMarker = "[TEST]",
+                }
+            )
+            .Title;
+
+        Assert.True(plain.Length > 93, plain);
+        Assert.True(
+            YouTubeListing.ApplyMarker(marked, "[TEST]").Length
+                <= FullMatchMetadataBuilder.TitleMaxCharacters,
+            marked
+        );
+        Assert.EndsWith("65550001", marked, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ReleaseWindow_FeaturesTheNewestHeroAndIgnoresAnOldOne()
     {
         var titles = new YouTubeTitleSettings { RecentHeroes = Array.Empty<string>() };

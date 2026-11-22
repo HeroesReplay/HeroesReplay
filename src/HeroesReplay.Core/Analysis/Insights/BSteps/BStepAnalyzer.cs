@@ -171,7 +171,10 @@ public sealed class BStepAnalyzer : IInsightAnalyzer<BStepInsights>
     {
         if (death.PlayerIndex == player.Index)
         {
-            return BStepDeathKind.Bstepper;
+            // Only a death during or after the bstep: "bsteps, then dies". A hero who died before
+            // it and bsteps anyway is a Lost Viking with another Viking down, or Murky back from
+            // his egg, and the clip would have nothing to show.
+            return death.Time.TotalSeconds >= start ? BStepDeathKind.Bstepper : null;
         }
 
         if (death.KillerIndex == player.Index)

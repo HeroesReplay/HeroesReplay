@@ -252,6 +252,87 @@ public class ActivityFocusTests
     }
 
     [Fact]
+    public void PitBoss_ScoresFromItsDeathToItsCapture()
+    {
+        // Blue kills the boss at 30 s and stands in its circle until the capture at 36 s.
+        var path = Enumerable.Range(0, 40).Select(s => (s, s >= 20 ? 1 : 100, 0)).ToArray();
+        Player blue = Hero("Thrall", 0, path);
+        var boss = new ReplayUnit
+        {
+            Name = "JungleGraveGolemDefender",
+            TimeSpanBorn = TimeSpan.Zero,
+            TimeSpanDied = TimeSpan.FromSeconds(30),
+            PlayerKilledBy = blue,
+            PointBorn = new Point { X = 0, Y = 0 },
+        };
+        var game = new GroupedGameData(ReplayUnit.UnitGroup.MercenaryCamp, boss.Name)
+        {
+            BossUnits = new[] { boss.Name },
+        };
+        Replay replay = Game(new[] { blue }, 40, boss);
+        replay.TrackerEvents = new List<TrackerEvent> { BossCaptured(36) };
+
+        IReadOnlyDictionary<TimeSpan, Focus> focus = Analyze(
+            replay,
+            new NearBossCalculator(Settings(), game)
+        );
+
+        Focus capture = focus[TimeSpan.FromSeconds(34)];
+        Assert.Equal(9.0f, capture.Points);
+        Assert.Contains("takes JungleGraveGolemDefender", capture.Description);
+    }
+
+    private static TrackerEvent BossCaptured(int second)
+    {
+        static TrackerEventStructure Key(string key) =>
+            new()
+            {
+                dictionary = new Dictionary<int, TrackerEventStructure>
+                {
+                    [0] = new TrackerEventStructure
+                    {
+                        blob = System.Text.Encoding.UTF8.GetBytes(key),
+                    },
+                },
+            };
+        return new TrackerEvent
+        {
+            TimeSpan = TimeSpan.FromSeconds(second),
+            TrackerEventType = ReplayTrackerEvents.TrackerEventType.StatGameEvent,
+            Data = new TrackerEventStructure
+            {
+                dictionary = new Dictionary<int, TrackerEventStructure>
+                {
+                    [0] = new TrackerEventStructure
+                    {
+                        blob = System.Text.Encoding.UTF8.GetBytes("JungleCampCapture"),
+                    },
+                    [1] = new TrackerEventStructure
+                    {
+                        optionalData = new TrackerEventStructure
+                        {
+                            array = new[]
+                            {
+                                new TrackerEventStructure
+                                {
+                                    dictionary = new Dictionary<int, TrackerEventStructure>
+                                    {
+                                        [0] = Key("CampType"),
+                                        [1] = new TrackerEventStructure
+                                        {
+                                            blob = System.Text.Encoding.UTF8.GetBytes("Boss Camp"),
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        };
+    }
+
+    [Fact]
     public void LaningBoss_ScoresActivityWhileItWalksTheLane()
     {
         Player red = Hero("Leoric", 1, Still(2, 0));
