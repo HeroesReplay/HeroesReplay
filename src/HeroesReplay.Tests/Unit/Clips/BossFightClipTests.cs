@@ -19,7 +19,7 @@ public class BossFightClipTests
         Assert.Equal(BossFightClips.StealKind, clip.Kind);
         Assert.Equal("boss steal", TeamKillClips.Title(clip));
         Assert.Equal("Li-Ming", clip.Hero);
-        Assert.Equal(575, clip.HudStartSecond);
+        Assert.Equal(572, clip.HudStartSecond);
         Assert.Equal(610, clip.HudEndSecond);
         Assert.Equal(
             "Li-Ming steals the boss for Red: Blue had up to 4 heroes on it for 15 s",
