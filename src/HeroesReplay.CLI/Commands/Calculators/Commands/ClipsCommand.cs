@@ -13,6 +13,7 @@ using HeroesReplay.Core.Analysis.Insights.Snapshot;
 using HeroesReplay.Core.Clips;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.HeroesData;
+using HeroesReplay.Core.Shared;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace HeroesReplay.CLI.Commands.Calculators.Commands;
