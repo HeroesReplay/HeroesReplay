@@ -19,6 +19,11 @@ namespace HeroesReplay.Core.Analysis;
 /// Tyrael and Uther keep their unit for seconds after the death.
 /// </param>
 /// <param name="BlowIndex">The player who landed the killing blow, or -1 when it is not known.</param>
+/// <param name="BySummon">
+/// The blow was struck by a unit the killer owns but does not fight in: Misha, Gargantuan, Water
+/// Elemental, a Symbiote's host, a Hanamura turret. The kill is the player's, as the game scores
+/// it, but it happened where the victim died, not where the killer's hero stood.
+/// </param>
 /// <param name="Partial">
 /// The death is one body of several, or a part of a death on the scoreboard: one of The Lost
 /// Vikings, or Murky.
@@ -30,7 +35,8 @@ public sealed record HeroKill(
     MapPoint? Point,
     Unit Body,
     int BlowIndex,
-    bool Partial
+    bool Partial,
+    bool BySummon = false
 );
 
 /// <summary>
@@ -42,9 +48,10 @@ public sealed record HeroKill(
 /// Tyrael and Uther.
 /// <para>
 /// The event names every player credited with the takedown, not the one who landed the blow. The
-/// blow is the matched unit's killer, when that is an enemy player whose hero, vehicle or hero
-/// form struck it. A summon's blow is not its owner's. With no matched unit the blow is known only
-/// when a single enemy is credited.
+/// blow is the matched unit's killer, when that is an enemy player: whatever unit of theirs struck
+/// it, their hero, a vehicle, a hero form or a summon, the game gives the kill to the player
+/// (owner decision 2026-11-22). With no matched unit the blow is known only when a single enemy is
+/// credited.
 /// </para>
 /// </summary>
 public static class HeroKills
@@ -120,6 +127,7 @@ public static class HeroKills
                 : stat.Int("PositionX") is int x && stat.Int("PositionY") is int y
                     ? new MapPoint(x, y)
                 : null;
+            int blow = Blow(players, victim, killers, body);
             kills.Add(
                 new HeroKill(
                     body?.TimeSpanDied ?? stat.Time,
@@ -127,8 +135,11 @@ public static class HeroKills
                     killers,
                     point,
                     body,
-                    Blow(players, victim, killers, body),
-                    body != null && PartialBodies.Contains(body.Name ?? string.Empty)
+                    blow,
+                    body != null && PartialBodies.Contains(body.Name ?? string.Empty),
+                    blow >= 0
+                        && body?.UnitKilledBy != null
+                        && !IsOwnBody(players[blow], body.UnitKilledBy)
                 )
             );
         }
@@ -142,9 +153,10 @@ public static class HeroKills
     }
 
     /// <summary>
-    /// The unit is a body its player fights in, so its blow is the player's own: a hero unit, a map
-    /// vehicle (the Dragon Knight, the Triglav Protector, the Garden Terror) or a hero form
-    /// (Ragnaros's Molten Core). A summon is not (Misha, Azmodan's demons, a Symbiote host).
+    /// The unit is a body its player fights in, so its blow lands where the player is: a hero
+    /// unit, a map vehicle (the Dragon Knight, the Triglav Protector, the Garden Terror) or a hero
+    /// form (Ragnaros's Molten Core). A summon is not (Misha, Azmodan's demons, a Symbiote host):
+    /// its blow is the player's too, but lands where the summon is (<see cref="HeroKill.BySummon"/>).
     /// </summary>
     public static bool IsOwnBody(Player player, Unit unit)
     {
@@ -191,12 +203,7 @@ public static class HeroKills
         if (body != null)
         {
             Player killer = body.PlayerKilledBy;
-            if (
-                killer == null
-                || ReferenceEquals(killer, victim)
-                || killer.Team == victim.Team
-                || (body.UnitKilledBy != null && !IsOwnBody(killer, body.UnitKilledBy))
-            )
+            if (killer == null || ReferenceEquals(killer, victim) || killer.Team == victim.Team)
             {
                 return -1;
             }

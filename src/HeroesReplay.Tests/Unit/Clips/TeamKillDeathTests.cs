@@ -73,7 +73,7 @@ public class TeamKillDeathTests
     }
 
     [Fact]
-    public void FromReplay_SummonBlow_DoesNotCount()
+    public void FromReplay_SummonBlow_CountsForItsOwner()
     {
         var heroUnit = new ReplayUnit { Name = "HeroAzmodan" };
         var summon = new ReplayUnit { Name = "AzmodanDemonWarrior" };
@@ -85,14 +85,15 @@ public class TeamKillDeathTests
         players.Add(Dead("Diablo", killer, heroUnit, 109));
         players.Add(Dead("E.T.C.", killer, summon, 112));
 
-        // The summon's blow is not Azmodan's: four of his own are a quadra kill, not a pentakill.
+        // The game gives the demon's kill to Azmodan (owner decision 2026-11-22): a pentakill.
         TeamKillClip clip = Assert.Single(
             TeamKillClips.Select(TeamKillDeaths.FromReplay(ReplayOf(players)))
         );
-        Assert.Equal(TeamKillClips.TripleKillKind, clip.Kind);
-        Assert.Equal("quadra kill", TeamKillClips.Title(clip));
-        Assert.Equal(4, clip.Kills.Count);
-        Assert.Equal(109, clip.LastDeathSecond);
+        Assert.Equal(TeamKillClips.PentakillKind, clip.Kind);
+        Assert.Equal(5, clip.Kills.Count);
+        Assert.Equal(112, clip.LastDeathSecond);
+        Assert.True(clip.Kills[4].BySummon);
+        Assert.False(clip.Kills[0].BySummon);
     }
 
     [Fact]
