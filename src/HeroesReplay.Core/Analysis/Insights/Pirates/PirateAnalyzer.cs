@@ -121,10 +121,10 @@ public sealed class PirateAnalyzer : IInsightAnalyzer<PirateInsights>
             bool diving =
                 alive >= settings.MinDefendersAlive
                 && Targets(snapshot, towns, core, time)
-                .Any(target =>
-                    Near(snapshot, attackers, target, time) >= settings.MinDivers
-                    && Near(snapshot, defenders, target, time) <= settings.MaxDefenders
-                );
+                    .Any(target =>
+                        Near(snapshot, attackers, target, time) >= settings.MinDivers
+                        && Near(snapshot, defenders, target, time) <= settings.MaxDefenders
+                    );
             streak = diving ? streak + 1 : 0;
             if (streak != settings.MinDiveSamples)
             {
