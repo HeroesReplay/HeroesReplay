@@ -273,7 +273,7 @@ public class GameManager : IGameManager
                 {
                     try
                     {
-                        await MatchClipExporter
+                        ClipExportResult clips = await MatchClipExporter
                             .ExportAsync(
                                 context.Current?.LoadedReplay?.Replay,
                                 context.Current?.LoadedReplay?.ReplayId,
@@ -290,10 +290,12 @@ public class GameManager : IGameManager
                                 settings.Clips
                             )
                             .ConfigureAwait(false);
+                        RecordClipPass(clips, null);
                     }
                     catch (Exception e)
                     {
                         logger.LogWarning(e, "Could not cut clips.");
+                        RecordClipPass(null, e.GetType().Name + ": " + e.Message);
                     }
                 }
                 else
@@ -1755,5 +1757,22 @@ public class GameManager : IGameManager
             ClientInterfaceSeal.FilePath(settings.Location?.DataDirectory),
             newest
         );
+    }
+
+    /// <summary>Counts one clip pass in <c>status.json</c> (<see cref="SpectatorClipStatus"/>).</summary>
+    private void RecordClipPass(ClipExportResult result, string error)
+    {
+        try
+        {
+            statusStore.Patch(status =>
+            {
+                status.Clips ??= new SpectatorClipStatus();
+                status.Clips.Add(result, error, DateTimeOffset.UtcNow);
+            });
+        }
+        catch (Exception e)
+        {
+            logger.LogDebug(e, "Could not record the clip pass in status.json.");
+        }
     }
 }
