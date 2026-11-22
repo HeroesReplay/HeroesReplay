@@ -92,7 +92,9 @@ public class ClipDescriptionTests
 
         for (int id = 66698600; id < 66698610; id++)
         {
-            string text = Assert.Single(ClipDescription.Compose(clip, "Cursed Hollow", id.ToString()));
+            string text = Assert.Single(
+                ClipDescription.Compose(clip, "Cursed Hollow", id.ToString())
+            );
 
             Assert.True(
                 text.Contains(one, StringComparison.OrdinalIgnoreCase)
