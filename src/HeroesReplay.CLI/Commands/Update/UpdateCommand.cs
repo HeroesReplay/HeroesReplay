@@ -571,7 +571,9 @@ public class UpdateCommand : Command
                 Console.WriteLine(
                     string.Equals(found.Version, local, StringComparison.OrdinalIgnoreCase)
                         ? "This install is current."
-                        : "A newer release is available."
+                    : GitHubReleaseJson.Read(json, ReleaseSettings.DefaultAssetName, local) == null
+                        ? "The latest release is older than this install. It is not installed unless Release:AllowDowngrade is set."
+                    : "A newer release is available."
                 );
                 return 0;
             }

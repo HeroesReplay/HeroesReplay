@@ -144,6 +144,15 @@ public sealed class ObserverPanelRequests : IObserverPanelRequests
         });
     }
 
+    public void ClearShowing()
+    {
+        WithState(state =>
+        {
+            state.Showing = null;
+            return 0;
+        });
+    }
+
     private T WithState<T>(Func<StoredPanels, T> change)
     {
         Acquire();

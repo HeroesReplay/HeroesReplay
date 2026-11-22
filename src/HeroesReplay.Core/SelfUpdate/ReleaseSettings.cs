@@ -19,6 +19,12 @@ public class ReleaseSettings
     public string SecretsPath { get; set; } = DefaultSecretsPath;
 
     /// <summary>
+    /// Installs the latest release even when it is older than the installed one. Off by default:
+    /// the self-updater only moves forward, and going back to an older release is done by hand.
+    /// </summary>
+    public bool AllowDowngrade { get; set; }
+
+    /// <summary>
     /// How long <c>apply-release.ps1</c> gives a new install to be healthy
     /// (<see cref="ReleaseHealth"/>) before it restores <c>.previous</c>.
     /// </summary>

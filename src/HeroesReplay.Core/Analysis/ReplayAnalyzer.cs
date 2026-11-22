@@ -235,7 +235,8 @@ public class ReplayAnalyzer : IReplayAnalyzer
         timeline.KeepShotsForDwell(
             settings.Spectate?.FocusDwellTime ?? TimeSpan.Zero,
             settings.Weights?.FocusDwellMargin ?? 0,
-            settings.Weights?.FocusDwellOutcome ?? 0
+            settings.Weights?.FocusDwellOutcome ?? 0,
+            settings.Spectate?.FocusDwellMaxHold ?? TimeSpan.Zero
         );
         if (priorityPlayerIndex is int index && settings.Spectate != null)
         {

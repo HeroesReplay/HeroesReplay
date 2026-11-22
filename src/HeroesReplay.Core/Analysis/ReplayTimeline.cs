@@ -46,6 +46,7 @@ public sealed class ReplayTimeline
             throw new ArgumentNullException(nameof(replay));
         }
 
+        HeroPositionFill.Apply(replay);
         int totalSeconds = Math.Max(1, (int)Math.Ceiling(replay.ReplayLength.TotalSeconds));
         var timeline = new ReplayTimeline(replay, totalSeconds);
 
@@ -351,20 +352,74 @@ public sealed class ReplayTimeline
         }
     }
 
+    /// <summary>
+    /// A second nothing scored keeps the focus before it for this long after that hero died. The
+    /// camera then moves to the nearest living hero, and no longer waits on a dead one.
+    /// </summary>
+    internal const int DeadHoldSeconds = 4;
+
     public void HoldSelectionAcrossEmptySeconds()
     {
         Focus last = null;
+        int deadFor = 0;
         for (int second = 0; second < TotalSeconds; second++)
         {
             if (slots[second] != null)
             {
                 last = slots[second];
+                deadFor = 0;
+                continue;
             }
-            else if (last != null)
+
+            if (last == null)
             {
-                slots[second] = last;
+                continue;
+            }
+
+            if (AliveHero(last.Target, second) != null)
+            {
+                deadFor = 0;
+            }
+            else if (++deadFor > DeadHoldSeconds && NearestLiving(last, second) is Focus moved)
+            {
+                last = moved;
+                deadFor = 0;
+            }
+
+            slots[second] = last;
+        }
+    }
+
+    /// <summary>The living hero nearest to where the held focus's hero died, or null when none is placed.</summary>
+    private Focus NearestLiving(Focus held, int second)
+    {
+        Point from = held.Unit?.PointDied;
+        Unit nearest = null;
+        double best = double.MaxValue;
+        foreach (Unit unit in AliveHeroesAt(second))
+        {
+            if (unit?.PlayerControlledBy == null || !TryGetPoint(unit, second, out Point point))
+            {
+                continue;
+            }
+
+            double apart = from == null ? 0 : point.DistanceTo(from);
+            if (apart < best)
+            {
+                nearest = unit;
+                best = apart;
             }
         }
+
+        return nearest == null
+            ? null
+            : new Focus(
+                typeof(ReplayTimeline),
+                nearest,
+                nearest.PlayerControlledBy,
+                0,
+                $"{nearest.PlayerControlledBy.Character} is nearest, nothing scored since {held.Target?.Character} died"
+            );
     }
 
     /// <summary>
@@ -433,7 +488,17 @@ public sealed class ReplayTimeline
     /// <paramref name="dwell"/> cuts it too, or the death would happen off camera, and the shot
     /// ends when the hero it shows dies.
     /// </summary>
-    public void KeepShotsForDwell(TimeSpan dwell, float margin, float outcome)
+    /// <param name="maxHold">
+    /// The most seconds one shot may be kept over other heroes (seconds its own hero did not
+    /// win); zero for no limit. Past it the shot is kept only inside its first
+    /// <paramref name="dwell"/>, so the next hero who wins takes the camera.
+    /// </param>
+    public void KeepShotsForDwell(
+        TimeSpan dwell,
+        float margin,
+        float outcome,
+        TimeSpan maxHold = default
+    )
     {
         int shortest = Math.Max(0, (int)dwell.TotalSeconds);
         if (shortest <= 1)
@@ -441,9 +506,12 @@ public sealed class ReplayTimeline
             return;
         }
 
+        int longest = maxHold > TimeSpan.Zero ? (int)maxHold.TotalSeconds : int.MaxValue;
+
         Player shown = null;
         Focus shot = null;
         int started = 0;
+        int held = 0;
         for (int second = 0; second < TotalSeconds; second++)
         {
             Focus winner = slots[second];
@@ -466,7 +534,10 @@ public sealed class ReplayTimeline
                 kept != null
                 && !(IsOutcome(winner, outcome) && winner.Points >= shot.Points + margin)
                 && !LeadsIntoDeathWithin(winner, second, shortest)
-                && (second - started < shortest || WinsAgainWithin(shown, second, shortest))
+                && (
+                    second - started < shortest
+                    || (held < longest && WinsAgainWithin(shown, second, shortest))
+                )
             )
             {
                 slots[second] = new Focus(
@@ -479,12 +550,14 @@ public sealed class ReplayTimeline
                 {
                     Victim = shot.Victim,
                 };
+                held++;
                 continue;
             }
 
             shown = winner.Target;
             shot = winner;
             started = second;
+            held = 0;
         }
     }
 

@@ -15,6 +15,12 @@ public enum HighlightKind
     /// <summary>The team whose core survived was far behind on buildings or levels.</summary>
     Comeback,
 
+    /// <summary>
+    /// A Juice Pirates team: Lt. Morales' Medivac (or Medivh's portals) diving an empty enemy
+    /// base again and again instead of fighting for objectives.
+    /// </summary>
+    JuicePirates,
+
     /// <summary>No deaths and many kills.</summary>
     DeathlessCarry,
 

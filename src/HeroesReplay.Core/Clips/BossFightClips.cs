@@ -27,9 +27,9 @@ public static class BossFightClips
     /// <summary>A clip shows at most this much of the fight before the capture.</summary>
     public const int MaxFightSeconds = 35;
 
-    public const int LeadSeconds = 3;
+    public const int LeadSeconds = 8;
 
-    public const int TailSeconds = 6;
+    public const int TailSeconds = 10;
 
     /// <param name="insights">The replay's boss fights.</param>
     /// <param name="killClips">Pentakill and triple-kill clips already cut; an overlapping fight is skipped.</param>

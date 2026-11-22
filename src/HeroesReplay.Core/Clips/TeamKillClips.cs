@@ -81,7 +81,8 @@ public readonly record struct TeamKillClip(
 /// (<see cref="TeamKillClip.WipedTeam"/>, #369). Only a pentakill makes a replay Notable
 /// (<see cref="MediaPolicy.ReplayMediaEvidence.Accepted"/>).</item>
 /// <item><b>Quadra kill:</b> exactly four blows chained like a pentakill's, each within the
-/// window of the previous one: a pentakill one blow short. Its kind is
+/// window of the previous one, and all four within <see cref="QuadraSpanSeconds"/>: a pentakill
+/// one blow short. Four blows spread over a longer time are no clip. Its kind is
 /// <see cref="TripleKillKind"/> and its title <c>quadra kill</c>. A triple-kill burst inside it
 /// is part of that clip, so the clip never stops at the third blow.</item>
 /// <item><b>Triple kill (#511):</b> a burst of three or more blows within
@@ -103,6 +104,13 @@ public static class TeamKillClips
     /// the earliest, so a quadra kill is never dropped for a triple kill.
     /// </summary>
     public const int MaxTripleKills = 2;
+
+    /// <summary>
+    /// The longest a quadra kill lasts from its first blow to its fourth. Chained blows alone
+    /// allow 36 s (three gaps of 12 s), and in the production corpus half of such "quadra kills"
+    /// took 15 s or more: a slow run of kills that the title oversold as one short of a pentakill.
+    /// </summary>
+    public const int QuadraSpanSeconds = 20;
 
     /// <summary>The word a clip's title and tags use for its kind (<c>triple kill</c>, <c>quadra kill</c>, <c>boss steal</c>).</summary>
     public static string Title(TeamKillClip clip) =>
@@ -241,15 +249,26 @@ public static class TeamKillClips
                             blows[blows.Length - 1].Second,
                             leadSeconds,
                             tailSeconds,
-                            UniqueVictims(blows) >= 5
-                                ? hero + " pentakill (team wipe)"
-                                : hero + " pentakill",
+                            hero
+                                + " pentakill"
+                                + (
+                                    blows.Length > 5
+                                        ? string.Create(
+                                            CultureInfo.InvariantCulture,
+                                            $", {blows.Length} kills"
+                                        )
+                                        : string.Empty
+                                )
+                                + (UniqueVictims(blows) >= 5 ? " (team wipe)" : string.Empty),
                             blows,
                             player
                         )
                     );
                 }
-                else if (streak.Kills == 4)
+                else if (
+                    streak.Kills == 4
+                    && streak.EndSecond - streak.StartSecond <= QuadraSpanSeconds
+                )
                 {
                     chained.Add(streak);
                     TeamKillBlow[] blows = Blows(victims, offset, streak.Kills);
@@ -293,7 +312,8 @@ public static class TeamKillClips
                         burst.EndSecond,
                         leadSeconds,
                         tailSeconds,
-                        hero + (burst.Kills >= 4 ? " quadra kill" : " triple kill"),
+                        // Four blows inside a burst are always a chained quadra kill or pentakill above.
+                        hero + " triple kill",
                         blows,
                         player
                     )

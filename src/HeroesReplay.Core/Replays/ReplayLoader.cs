@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Threading.Tasks;
 using Heroes.ReplayParser;
+using HeroesReplay.Core.Analysis;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Telemetry;
 using Microsoft.Extensions.Logging;
@@ -50,6 +51,7 @@ public class ReplayLoader : IReplayLoader
             {
                 activity?.SetTag("replay.map", replay?.Map);
                 activity?.SetTag("replay.version", replay?.ReplayVersion);
+                HeroPositionFill.Apply(replay);
                 return replay;
             }
 

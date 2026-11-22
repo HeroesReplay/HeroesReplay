@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Heroes.ReplayParser;
@@ -36,7 +37,19 @@ public static class MatchClipExporter
         }
     );
 
-    public static async Task ExportAsync(
+    /// <summary>ffprobe reads a duration in well under a second; a hung one is killed after this.</summary>
+    internal static readonly TimeSpan ProbeTimeout = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// ffmpeg cuts a clip in seconds; a hung one is killed after this, so it never holds the end
+    /// of a session, where the game is still open and the next replay waits.
+    /// </summary>
+    internal static readonly TimeSpan CutTimeout = TimeSpan.FromMinutes(3);
+
+    /// <summary>The file ffmpeg writes; it becomes <see cref="ClipFileName"/> only once it is whole.</summary>
+    internal const string PartialClipFileName = "clip.partial.mp4";
+
+    public static async Task<ClipExportResult> ExportAsync(
         Replay replay,
         int? replayId,
         string contextDirectory,
@@ -59,12 +72,23 @@ public static class MatchClipExporter
             || string.IsNullOrWhiteSpace(contextDirectory)
         )
         {
-            return;
+            return ClipExportResult.None;
         }
 
         insights ??= new InsightsSettings();
         ReplaySnapshot snapshot = Snapshot(replay, heroes, insights, logger);
-        Func<TeamKillClip, bool> shown = OnCamera(camera, snapshot?.Positions, settings, logger);
+        int notOnCamera = 0;
+        Func<TeamKillClip, bool> onCamera = OnCamera(camera, snapshot?.Positions, settings, logger);
+        Func<TeamKillClip, bool> shown = clip =>
+        {
+            bool showed = onCamera(clip);
+            if (!showed)
+            {
+                notOnCamera++;
+            }
+
+            return showed;
+        };
         // The camera check runs before the triple and quadra kill limit (Select's shown).
         IReadOnlyList<TeamKillClip> kills = TeamKillClips.Select(
             TeamKillDeaths.FromReplay(replay, heroes),
@@ -73,7 +97,7 @@ public static class MatchClipExporter
         var clips = new List<TeamKillClip>(kills);
         clips.AddRange(BossClips(snapshot, insights, kills, shown, logger));
         clips.AddRange(BStepClipsFor(snapshot, insights, clips.ToArray(), shown, logger));
-        await ExportAsync(
+        ClipExportResult result = await ExportAsync(
                 clips,
                 replay,
                 replayId,
@@ -86,6 +110,20 @@ public static class MatchClipExporter
                 ffmpeg
             )
             .ConfigureAwait(false);
+        result = result with { NotOnCamera = notOnCamera };
+        if (result.OnCamera > 0 || notOnCamera > 0)
+        {
+            logger?.LogInformation(
+                "Clips: {OnCamera} on camera, {NotOnCamera} not on camera, {Cut} cut, {Failed} failed{Failure}.",
+                result.OnCamera,
+                result.NotOnCamera,
+                result.Cut,
+                result.Failed,
+                result.Failure == null ? string.Empty : " (" + result.Failure + ")"
+            );
+        }
+
+        return result;
     }
 
     /// <summary>The replay read for the boss fights and hero positions, or null when it cannot be read.</summary>
@@ -207,8 +245,13 @@ public static class MatchClipExporter
         }
     }
 
-    /// <summary>Cuts the given clips out of the finalized recording.</summary>
-    internal static async Task ExportAsync(
+    /// <summary>
+    /// Cuts the given clips out of the finalized recording. A clip is cut into
+    /// <see cref="PartialClipFileName"/> and renamed when whole, so the uploader never sees half a
+    /// clip, and a whole clip left with no entry (the process died between the two) gets its entry
+    /// on the next pass.
+    /// </summary>
+    internal static async Task<ClipExportResult> ExportAsync(
         IReadOnlyList<TeamKillClip> clips,
         Replay replay,
         int? replayId,
@@ -223,9 +266,10 @@ public static class MatchClipExporter
     {
         if (clips == null || clips.Count == 0)
         {
-            return;
+            return ClipExportResult.None;
         }
 
+        var result = new ClipExportResult(OnCamera: clips.Count);
         ffmpeg ??= FfmpegLocator.From(null, null);
 
         string match = RecordingOwnership.SelectFinalizedFile(recordingPath, contextDirectory);
@@ -235,7 +279,7 @@ public static class MatchClipExporter
                 "No finalized OBS recording for {Directory}. Clips were not cut.",
                 contextDirectory
             );
-            return;
+            return result.Fail(clips.Count, "no finalized recording");
         }
 
         match = await WaitUntilReadableAsync(match).ConfigureAwait(false);
@@ -245,14 +289,15 @@ public static class MatchClipExporter
                 "Finalized OBS recording {Path} was not readable. Clips were not cut.",
                 recordingPath
             );
-            return;
+            return result.Fail(clips.Count, "recording not readable");
         }
 
         double? recordingSeconds = null;
         string probeError = null;
         for (int attempt = 1; attempt <= 5; attempt++)
         {
-            (recordingSeconds, probeError) = ProbeDurationSeconds(ffmpeg, match);
+            (recordingSeconds, probeError) = await ProbeDurationSecondsAsync(ffmpeg, match)
+                .ConfigureAwait(false);
             if (recordingSeconds != null || !RetryDurationProbe(probeError))
             {
                 break;
@@ -268,7 +313,7 @@ public static class MatchClipExporter
                 match,
                 string.IsNullOrWhiteSpace(probeError) ? "ffprobe returned no duration." : probeError
             );
-            return;
+            return result.Fail(clips.Count, "recording duration not read");
         }
 
         string ownedDuration = OwnedRecordingDurationLog(match, contextDirectory, recordingSeconds);
@@ -298,6 +343,7 @@ public static class MatchClipExporter
                     clip.HudStartSecond,
                     clip.HudEndSecond
                 );
+                result = result.Fail(1, "no recording time");
                 continue;
             }
 
@@ -310,7 +356,22 @@ public static class MatchClipExporter
                     clip.Hero,
                     start
                 );
+                result = result.Fail(1, "clip starts after the recording ends");
                 continue;
+            }
+
+            double inside = FfmpegArguments.DurationInside(start, duration, recordingSeconds.Value);
+            if (inside < duration)
+            {
+                logger?.LogInformation(
+                    "Recording is {Recording:0.0}s. {Kind} {Hero} is cut {Duration:0.0}s long, not {Wanted:0.0}s.",
+                    recordingSeconds.Value,
+                    clip.Kind,
+                    clip.Hero,
+                    inside,
+                    duration
+                );
+                duration = inside;
             }
 
             string folderName = SafeName($"{clip.Kind}-{clip.Hero}-{clip.HudStartSecond}");
@@ -319,19 +380,35 @@ public static class MatchClipExporter
             string output = Path.Combine(folder, ClipFileName);
             if (File.Exists(output) && new FileInfo(output).Length > 10_000)
             {
+                if (OnlyTheClip(folder))
+                {
+                    // Cut whole, and the process died before its entry: the uploader never saw it.
+                    WriteEntry(folder, entryFileName, clip, replay, replayId, youtube);
+                    logger?.LogInformation(
+                        "Wrote the missing entry of {Kind} {Hero}, cut earlier.",
+                        clip.Kind,
+                        clip.Hero
+                    );
+                }
+
                 written.Add(Row(clip, start, duration, output));
                 continue;
             }
 
-            bool cut = await CutAsync(ffmpeg, match, output, start, duration).ConfigureAwait(false);
-            if (!cut)
+            string partial = Path.Combine(folder, PartialClipFileName);
+            string cutError = await CutAsync(ffmpeg, match, partial, start, duration)
+                .ConfigureAwait(false);
+            if (cutError != null)
             {
-                logger?.LogWarning("ffmpeg did not cut {Path}.", output);
+                logger?.LogWarning("ffmpeg did not cut {Path}. {Error}", output, cutError);
+                result = result.Fail(1, cutError);
                 continue;
             }
 
+            File.Move(partial, output, overwrite: true);
             WriteEntry(folder, entryFileName, clip, replay, replayId, youtube);
             written.Add(Row(clip, start, duration, output));
+            result = result with { Cut = result.Cut + 1 };
             logger?.LogInformation(
                 "Cut {Kind} {Hero} at file {Start:0.0}s for {Duration:0.0}s.",
                 clip.Kind,
@@ -343,7 +420,7 @@ public static class MatchClipExporter
 
         if (written.Count == 0)
         {
-            return;
+            return result;
         }
 
         string index = Path.Combine(contextDirectory, "clips.json");
@@ -352,7 +429,25 @@ public static class MatchClipExporter
                 JsonSerializer.Serialize(written, Index.ListClipIndexRow)
             )
             .ConfigureAwait(false);
+        return result;
     }
+
+    /// <summary>The clip's folder holds nothing but the clip: no entry, no upload record.</summary>
+    private static bool OnlyTheClip(string folder) =>
+        Directory
+            .GetFiles(folder)
+            .All(file =>
+                string.Equals(
+                    Path.GetFileName(file),
+                    ClipFileName,
+                    StringComparison.OrdinalIgnoreCase
+                )
+                || string.Equals(
+                    Path.GetFileName(file),
+                    PartialClipFileName,
+                    StringComparison.OrdinalIgnoreCase
+                )
+            );
 
     private static ClipIndexRow Row(
         TeamKillClip clip,
@@ -417,14 +512,14 @@ public static class MatchClipExporter
             Title = title,
             PrivacyStatus = youtube?.PrivacyStatus ?? "public",
             CategoryId = youtube?.CategoryId,
-            DescriptionLines = new[]
-            {
-                $"clip:{id}:{clip.Kind}:{clip.Hero}",
-                clip.Description,
-                id == null
-                    ? string.Empty
-                    : $"Heroes Profile Match: https://www.heroesprofile.com/Match/Single/?replayID={id}",
-            }.WhereNotEmpty(),
+            DescriptionLines = new[] { $"clip:{id}:{clip.Kind}:{clip.Hero}" }
+                .Concat(ClipDescription.Compose(clip, map, id))
+                .Append(
+                    id == null
+                        ? string.Empty
+                        : $"Heroes Profile Match: https://www.heroesprofile.com/Match/Single/?replayID={id}"
+                )
+                .WhereNotEmpty(),
             Tags = ClipTags(clip, kind, map, youtube?.Titles?.GameName),
             Hero = string.IsNullOrWhiteSpace(hero) ? null : hero,
             Heroes = string.IsNullOrWhiteSpace(hero) ? null : new[] { hero },
@@ -543,7 +638,7 @@ public static class MatchClipExporter
             || error.Contains("ffprobe did not start", StringComparison.OrdinalIgnoreCase)
         );
 
-    private static (double? Seconds, string Error) ProbeDurationSeconds(
+    private static async Task<(double? Seconds, string Error)> ProbeDurationSecondsAsync(
         FfmpegLocator ffmpeg,
         string path
     )
@@ -570,9 +665,20 @@ public static class MatchClipExporter
                 return (null, "ffprobe did not start.");
             }
 
-            string text = process.StandardOutput.ReadToEnd();
-            string error = process.StandardError.ReadToEnd();
-            process.WaitForExit();
+            // Both streams are read at once: a tool that fills one pipe while the other is read to
+            // its end would never exit.
+            Task<string> output = process.StandardOutput.ReadToEndAsync();
+            Task<string> errors = process.StandardError.ReadToEndAsync();
+            if (!await ExitedWithinAsync(process, ProbeTimeout).ConfigureAwait(false))
+            {
+                return (
+                    null,
+                    $"ffprobe did not finish in {ProbeTimeout.TotalSeconds:0}s and was killed."
+                );
+            }
+
+            string text = await output.ConfigureAwait(false);
+            string error = await errors.ConfigureAwait(false);
             if (
                 process.ExitCode == 0
                 && double.TryParse(
@@ -598,7 +704,8 @@ public static class MatchClipExporter
         }
     }
 
-    private static async Task<bool> CutAsync(
+    /// <summary>Null when the clip was cut whole into <paramref name="output"/>, else why not.</summary>
+    private static async Task<string> CutAsync(
         FfmpegLocator ffmpeg,
         string input,
         string output,
@@ -623,31 +730,86 @@ public static class MatchClipExporter
             using Process process = Process.Start(startInfo);
             if (process == null)
             {
-                return false;
+                return "ffmpeg did not start.";
             }
 
-            await process.StandardError.ReadToEndAsync().ConfigureAwait(false);
-            await process.WaitForExitAsync().ConfigureAwait(false);
+            Task<string> errors = process.StandardError.ReadToEndAsync();
+            if (!await ExitedWithinAsync(process, CutTimeout).ConfigureAwait(false))
+            {
+                DeleteIfPresent(output);
+                return $"ffmpeg did not finish in {CutTimeout.TotalSeconds:0}s and was killed.";
+            }
+
+            string error = await errors.ConfigureAwait(false);
             if (
                 process.ExitCode != 0
                 || !File.Exists(output)
                 || new FileInfo(output).Length < 10_000
             )
             {
-                if (File.Exists(output))
-                {
-                    File.Delete(output);
-                }
-
-                return false;
+                DeleteIfPresent(output);
+                return process.ExitCode != 0
+                    ? $"ffmpeg exit code {process.ExitCode}. {LastLine(error)}"
+                    : "ffmpeg wrote no clip.";
             }
 
-            return true;
+            return null;
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception || ex is IOException)
         {
+            return "ffmpeg was not found. " + ex.Message;
+        }
+    }
+
+    /// <summary>Waits for the tool to exit; one still running after the timeout is killed with its children.</summary>
+    private static async Task<bool> ExitedWithinAsync(Process process, TimeSpan timeout)
+    {
+        using var limit = new System.Threading.CancellationTokenSource(timeout);
+        try
+        {
+            await process.WaitForExitAsync(limit.Token).ConfigureAwait(false);
+            return true;
+        }
+        catch (OperationCanceledException)
+        {
+            try
+            {
+                process.Kill(entireProcessTree: true);
+            }
+            catch (Exception ex)
+                when (ex is InvalidOperationException || ex is System.ComponentModel.Win32Exception)
+            {
+                // Already gone.
+            }
+
             return false;
         }
+    }
+
+    private static void DeleteIfPresent(string path)
+    {
+        try
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+        catch (IOException)
+        {
+            // A killed ffmpeg can hold the file a moment longer; the next cut overwrites it.
+        }
+    }
+
+    private static string LastLine(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return string.Empty;
+        }
+
+        string[] lines = text.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        return lines[^1].Trim();
     }
 
     private static string SafeName(string value)

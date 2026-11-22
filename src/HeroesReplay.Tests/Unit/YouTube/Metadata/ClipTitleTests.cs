@@ -43,6 +43,35 @@ public class ClipTitleTests
     }
 
     [Fact]
+    public void BstepLines_NeverCountTheCancels_OrSayGgNoRe()
+    {
+        foreach (
+            ClipTitle.Line line in ClipTitle.Lines.Where(l => l.Kind == ClipTitle.ClipKind.BStep)
+        )
+        {
+            string text = line.Text(Everything(line.Kind));
+
+            Assert.DoesNotContain(text, char.IsDigit);
+            Assert.DoesNotContain("gg no re", text, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    [Fact]
+    public void BossLines_NeverCountSeconds()
+    {
+        foreach (
+            ClipTitle.Line line in ClipTitle.Lines.Where(l =>
+                l.Kind is ClipTitle.ClipKind.Steal or ClipTitle.ClipKind.Defended
+            )
+        )
+        {
+            string text = line.Text(Everything(line.Kind));
+
+            Assert.DoesNotMatch(@"\d+\s?s\b", text);
+        }
+    }
+
+    [Fact]
     public void EveryClip_FitsWithTheMarker_AndKeepsTheReplayId()
     {
         var titles = new YouTubeTitleSettings();
@@ -214,6 +243,17 @@ public class ClipTitleTests
         );
     }
 
+    [Fact]
+    public void TheGameName_IsNotFoundInsideAnotherWord()
+    {
+        var game = new GameNameSettings();
+        string title = "Hanzo lands every skillshots - Cursed Hollow - 66698689";
+
+        Assert.Equal(title + " - Heroes of the Storm", game.Append(title, 100));
+        Assert.Equal(title + " - HotS", game.Append(title, title.Length + 8));
+        Assert.Equal("Best of HotS - 66698689", game.Append("Best of HotS - 66698689", 26));
+    }
+
     private static string Hook(TeamKillClip clip, int id) =>
         ClipTitle.Compose(
             clip,
@@ -225,7 +265,19 @@ public class ClipTitleTests
 
     private static IEnumerable<TeamKillClip> Clips()
     {
-        foreach (string hero in new[] { "The Lost Vikings", "Murky", "Chromie", "Cho" })
+        foreach (
+            string hero in new[]
+            {
+                "The Lost Vikings",
+                "Murky",
+                "Chromie",
+                "Cho",
+                "Deckard",
+                "E.T.C.",
+                "Sgt. Hammer",
+                "Ragnaros",
+            }
+        )
         {
             yield return Kill(hero, 3, 100, 101);
             yield return Kill(hero, 4, 100, 106);
