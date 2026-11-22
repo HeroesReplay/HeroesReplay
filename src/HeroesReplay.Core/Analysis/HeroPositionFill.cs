@@ -8,7 +8,7 @@ using Heroes.ReplayParser.MPQFiles;
 namespace HeroesReplay.Core.Analysis;
 
 /// <summary>
-/// Positions for two heroes the parser leaves almost without any. The parser estimates a hero's
+/// Positions for the heroes the parser leaves almost without any. The parser estimates a hero's
 /// position from its player's right-clicks, and skips every player whose hero units have more than
 /// one name. In the production corpus a hero has a position no older than 4 s for 92 % of its
 /// living seconds, but D.Va (mech and pilot) for 29 % and Gall, who never moves himself, for
@@ -18,13 +18,18 @@ namespace HeroesReplay.Core.Analysis;
 /// <item><b>Gall</b> rides Cho: he gets Cho's positions.</item>
 /// <item><b>D.Va</b> is one body at a time: her right-clicks are walked for the body alive at the
 /// time, the way the parser walks every other hero's.</item>
+/// <item><b>The Lost Vikings</b> are three bodies ordered apart, so their right-clicks cannot be
+/// walked: each Viking is placed between the places the replay measured for it.</item>
 /// </list>
-/// The Lost Vikings (three bodies ordered apart) and Abathur stay as the parser left them.
+/// Abathur stays as the parser left him: his body sits in his base, and that is where it is.
 /// </summary>
 public static class HeroPositionFill
 {
     /// <summary>The parser's own walking speed for an estimated position, in map units a second.</summary>
     private const double SpeedPerSecond = 5.0;
+
+    /// <summary>The longest gap between two measured places of a Viking that is filled in.</summary>
+    private const int InterpolateSeconds = 20;
 
     private static readonly ConditionalWeakTable<Replay, object> Filled = new();
 
@@ -55,6 +60,61 @@ public static class HeroPositionFill
             {
                 WalkOrders(replay, player);
             }
+            else if (units.All(unit => unit?.Name is "HeroOlaf" or "HeroBaleog" or "HeroErik"))
+            {
+                Interpolate(player);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Each Viking between two places the replay measured for it. The game records where a unit
+    /// in a fight is every few seconds, and a Viking pushing a lane is in one most of the time;
+    /// two samples at most <see cref="InterpolateSeconds"/> apart are joined by a straight walk.
+    /// </summary>
+    private static void Interpolate(Player player)
+    {
+        foreach (Unit unit in player.HeroUnits)
+        {
+            List<Position> measured = OnePerSecond(
+                (unit.Positions ?? new List<Position>()).Where(position =>
+                    position?.Point != null && !position.IsEstimated
+                )
+            );
+            if (measured.Count < 2)
+            {
+                continue;
+            }
+
+            var walked = new List<Position>(unit.Positions);
+            for (int index = 1; index < measured.Count; index++)
+            {
+                Position from = measured[index - 1];
+                Position to = measured[index];
+                int seconds = (int)(to.TimeSpan - from.TimeSpan).TotalSeconds;
+                if (seconds < 2 || seconds > InterpolateSeconds)
+                {
+                    continue;
+                }
+
+                for (int step = 1; step < seconds; step++)
+                {
+                    walked.Add(
+                        new Position
+                        {
+                            TimeSpan = from.TimeSpan + TimeSpan.FromSeconds(step),
+                            Point = new Point
+                            {
+                                X = from.Point.X + (to.Point.X - from.Point.X) * step / seconds,
+                                Y = from.Point.Y + (to.Point.Y - from.Point.Y) * step / seconds,
+                            },
+                            IsEstimated = true,
+                        }
+                    );
+                }
+            }
+
+            unit.Positions = OnePerSecond(walked);
         }
     }
 
