@@ -50,7 +50,7 @@ public class ClipDescriptionTests
     }
 
     [Fact]
-    public void ABstep_NeverCountsTheCancels_AndExplainsTheTaunt()
+    public void ABstep_NeverCountsTheCancels_NorExplainsWhatABstepIs()
     {
         TeamKillClip clip = BStepClips.Clip(
             new BStep
@@ -73,8 +73,66 @@ public class ClipDescriptionTests
         Assert.Contains("Muradin", lines[0], StringComparison.Ordinal);
         Assert.DoesNotContain(lines[0], char.IsDigit);
         Assert.DoesNotContain("hearth cancels", string.Join(" ", lines), StringComparison.Ordinal);
-        Assert.Equal(ClipDescription.BStepExplainer, lines[^1]);
+        Assert.Single(lines);
+        Assert.DoesNotContain("Hearthstone", lines[0], StringComparison.Ordinal);
     }
+
+    [Theory]
+    [InlineData(0, 3, "had killed Sonya three times", "after dying to Muradin three times")]
+    [InlineData(2, 0, "third time Sonya has taken down Muradin", "third kill on them")]
+    [InlineData(3, 2, "traded kills all game", "traded kills all game")]
+    public void ABstep_TellsHowItCameAbout_RevengeOrDomination(
+        int killsOnRival,
+        int deathsToRival,
+        string one,
+        string other
+    )
+    {
+        TeamKillClip clip = BStepClips.Clip(Rivalry(killsOnRival, deathsToRival));
+
+        for (int id = 66698600; id < 66698610; id++)
+        {
+            string text = Assert.Single(ClipDescription.Compose(clip, "Cursed Hollow", id.ToString()));
+
+            Assert.True(
+                text.Contains(one, StringComparison.OrdinalIgnoreCase)
+                    || text.Contains(other, StringComparison.OrdinalIgnoreCase),
+                text
+            );
+            Assert.DoesNotContain(text, char.IsDigit);
+        }
+    }
+
+    [Fact]
+    public void ABstep_AfterOneEarlierMeeting_IsNoRivalry()
+    {
+        TeamKillClip clip = BStepClips.Clip(Rivalry(1, 1));
+
+        string text = Assert.Single(ClipDescription.Compose(clip, "Cursed Hollow", "66698600"));
+
+        Assert.DoesNotContain("revenge", text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("all game", text, StringComparison.Ordinal);
+        Assert.Contains("Muradin", text, StringComparison.Ordinal);
+    }
+
+    private static BStep Rivalry(int killsOnRival, int deathsToRival) =>
+        new()
+        {
+            PlayerIndex = 0,
+            Team = 0,
+            Hero = "Sonya",
+            StartSecond = 300,
+            EndSecond = 304,
+            Cycles = 9,
+            Deaths = new[]
+            {
+                new BStepDeath(5, "Muradin", 298, BStepDeathKind.KilledByBstepper, false, 0),
+            },
+            RivalIndex = 5,
+            Rival = "Muradin",
+            EarlierKillsOnRival = killsOnRival,
+            EarlierDeathsToRival = deathsToRival,
+        };
 
     [Fact]
     public void EveryLine_NamesNoNumbers()
@@ -96,6 +154,9 @@ public class ClipDescriptionTests
                 KilledByOther = true,
                 StarterMost = 5,
                 PitDeaths = 4,
+                Rival = "Uther",
+                KillsOnRival = 3,
+                DeathsToRival = 2,
             };
             string text = line.Text(new ClipDescription.Context(facts, false, "Cursed Hollow"));
 

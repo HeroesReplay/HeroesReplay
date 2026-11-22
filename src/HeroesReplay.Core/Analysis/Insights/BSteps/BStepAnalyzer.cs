@@ -106,6 +106,17 @@ public sealed class BStepAnalyzer : IInsightAnalyzer<BStepInsights>
             .Where(gap => gap <= settings.MaxGapSeconds)
             .OrderBy(gap => gap)
             .ToList();
+        IReadOnlyList<BStepDeath> deaths = Deaths(snapshot, player, start, end);
+        BStepDeath rival = deaths
+            .Where(death => !death.After && death.Kind == BStepDeathKind.KilledByBstepper)
+            .OrderBy(death => death.Second)
+            .FirstOrDefault();
+        List<HeroDeath> earlier =
+            rival == null
+                ? new List<HeroDeath>()
+                : (snapshot.HeroDeaths ?? Array.Empty<HeroDeath>())
+                    .Where(death => death.Time.TotalSeconds < rival.Second)
+                    .ToList();
         return new BStep
         {
             PlayerIndex = player.Index,
@@ -115,7 +126,16 @@ public sealed class BStepAnalyzer : IInsightAnalyzer<BStepInsights>
             EndSecond = (int)Math.Floor(end),
             Cycles = cycles.Count,
             MedianGapSeconds = gaps.Count == 0 ? 0 : Math.Round(gaps[gaps.Count / 2], 2),
-            Deaths = Deaths(snapshot, player, start, end),
+            Deaths = deaths,
+            RivalIndex = rival?.PlayerIndex ?? -1,
+            Rival = rival?.Hero,
+            // How the bstep came about: dominating that hero, or revenge on them.
+            EarlierKillsOnRival = earlier.Count(death =>
+                death.PlayerIndex == rival.PlayerIndex && death.KillerIndex == player.Index
+            ),
+            EarlierDeathsToRival = earlier.Count(death =>
+                death.PlayerIndex == player.Index && death.KillerIndex == rival.PlayerIndex
+            ),
         };
     }
 
