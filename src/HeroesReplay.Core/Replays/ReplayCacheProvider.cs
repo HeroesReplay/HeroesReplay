@@ -15,6 +15,7 @@ using HeroesReplay.Core.Requests;
 using HeroesReplay.Core.Shared;
 using HeroesReplay.Core.Spectating.Session;
 using HeroesReplay.Core.Telemetry;
+using HeroesReplay.Core.YouTube.Metadata;
 using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay.Core.Replays;
@@ -326,6 +327,7 @@ public sealed class ReplayCacheProvider : IReplayProvider
                     request?.Request != null || IsRequest(next),
                     focusPlan
                 ),
+                PlayerStories = PlayerStorySource.For(settings, replayId),
             };
         }
 

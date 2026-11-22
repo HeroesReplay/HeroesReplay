@@ -17,6 +17,12 @@ public class StatHookSettings
     public bool WorstMap { get; set; } = true;
     public bool PatchExtremes { get; set; } = true;
 
+    /// <summary>
+    /// Word the patch extremes and the ban hook the way players do (<c>X OP, nerf Chen</c>,
+    /// <c>Off-meta X</c>, <c>Nobody banned the X</c>), rotating by replay id with the plain form.
+    /// </summary>
+    public bool CommunityWording { get; set; }
+
     /// <summary><c>A counters B</c>: games of A against B.</summary>
     public int CounterMinGames { get; set; } = 250;
 

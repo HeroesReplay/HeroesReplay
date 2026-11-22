@@ -162,20 +162,54 @@ public sealed class ReleaseCacheTests : IDisposable
     [InlineData("v1.0.0-978", "v1.0.0-977", 1)]
     [InlineData("v1.0.0-1000", "v1.0.0-999", 1)]
     [InlineData("v1.1.0-1", "v1.0.0-999", 1)]
-    [InlineData("v1.0.0", "v1.0.0-0", 0)]
     [InlineData("v1.0.0-5", "v1.0.0-5", 0)]
-    public void ReleaseVersion_OrdersByEachNumber(string left, string right, int sign)
+    // The move to semantic versioning: every pre-SemVer tag is a 1.0.0 prerelease, so the first
+    // semantic release (v1.1.0) and any later one is newer than production's v1.0.0-1137.
+    [InlineData("v1.1.0", "v1.0.0-1137", 1)]
+    [InlineData("v1.0.1", "v1.0.0-1137", 1)]
+    [InlineData("v2.0.0", "v1.0.0-99999", 1)]
+    [InlineData("v1.0.0", "v1.0.0-1137", 1)]
+    [InlineData("v1.10.0", "v1.9.9", 1)]
+    [InlineData("v1.2.10", "v1.2.9", 1)]
+    [InlineData("v1.2.3", "v1.2.3", 0)]
+    [InlineData("V1.2.3", "v1.2.3", 0)]
+    [InlineData("v1.2.3+abc", "v1.2.3", 0)]
+    [InlineData("v2.0.0", "v2.0.0-rc.1", 1)]
+    [InlineData("v2.0.0-rc.2", "v2.0.0-rc.1", 1)]
+    [InlineData("v2.0.0-rc.10", "v2.0.0-rc.9", 1)]
+    [InlineData("v2.0.0-beta", "v2.0.0-alpha.9", 1)]
+    [InlineData("v2.0.0-alpha.1", "v2.0.0-alpha", 1)]
+    [InlineData("v2.0.0-alpha", "v2.0.0-1", 1)]
+    public void ReleaseVersion_OrdersBySemVerPrecedence(string left, string right, int sign)
     {
         Assert.True(ReleaseVersion.TryParse(left, out ReleaseVersion a));
         Assert.True(ReleaseVersion.TryParse(right, out ReleaseVersion b));
         Assert.Equal(sign, Math.Sign(a.CompareTo(b)));
+        Assert.Equal(-sign, Math.Sign(b.CompareTo(a)));
+    }
+
+    [Theory]
+    [InlineData("v1.0.0-1137", "v1.0.0-1137")]
+    [InlineData(" v1.2.3 ", "v1.2.3")]
+    [InlineData("v1.2.3-rc.1+sha.abc", "v1.2.3-rc.1")]
+    public void ReleaseVersion_FormatsAsItsTag(string tag, string text)
+    {
+        Assert.True(ReleaseVersion.TryParse(tag, out ReleaseVersion version));
+        Assert.Equal(text, version.ToString());
     }
 
     [Theory]
     [InlineData("")]
     [InlineData("skipped-releases.txt")]
-    [InlineData("v1.0.0-alpha.3")]
     [InlineData("1.0.0")]
+    [InlineData("v1.0")]
+    [InlineData("v1.0.0.5")]
+    [InlineData("v01.0.0")]
+    [InlineData("v1.0.0-")]
+    [InlineData("v1.0.0-01")]
+    [InlineData("v1.0.0-a..b")]
+    [InlineData("v1.0.0+")]
+    [InlineData("hotfix")]
     public void ReleaseVersion_RefusesWhatIsNotAReleaseTag(string name)
     {
         Assert.False(ReleaseVersion.TryParse(name, out _));

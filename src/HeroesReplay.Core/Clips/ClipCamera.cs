@@ -120,7 +120,9 @@ public static class ClipCamera
     /// Whether the camera showed one killing blow: it followed the killer at that second, or the
     /// killer and the victim were both on the screen around the hero it followed. The victim is
     /// placed where it stood a second before it died; a victim that cannot be placed is judged by
-    /// the killer alone.
+    /// the killer alone. A blow by a summon (<see cref="TeamKillBlow.BySummon"/>) is on screen when
+    /// the victim is, whatever the killer's hero does: Abathur sits in his base while his Symbiote
+    /// kills across the map.
     /// </summary>
     public static bool ShowsBlow(
         int killer,
@@ -134,6 +136,19 @@ public static class ClipCamera
         if (camera == null || !camera.TryGetValue(time, out Focus focus) || focus == null)
         {
             return false;
+        }
+
+        if (blow.BySummon)
+        {
+            // A summon struck it, wherever its owner stood: the blow is where the victim died.
+            return focus.Index == blow.VictimKey
+                || (
+                    positions != null
+                    && blow.VictimKey >= 0
+                    && positions.TryGet(focus.Index, time, out MapPoint followed)
+                    && Victim(positions, blow.VictimKey, time, out MapPoint struck)
+                    && OnScreen(followed, struck, settings)
+                );
         }
 
         if (focus.Index == killer)
@@ -189,6 +204,24 @@ public static class ClipCamera
         return positions.TryGet(victim, death, out point);
     }
 
+    /// <summary>The clip's blow nearest in time to <paramref name="second"/>, when a summon struck it.</summary>
+    private static TeamKillBlow? SummonBlowAt(TeamKillClip clip, int second)
+    {
+        TeamKillBlow? nearest = null;
+        foreach (TeamKillBlow blow in clip.Kills ?? Array.Empty<TeamKillBlow>())
+        {
+            if (
+                nearest == null
+                || Math.Abs(blow.Second - second) < Math.Abs(nearest.Value.Second - second)
+            )
+            {
+                nearest = blow;
+            }
+        }
+
+        return nearest is { BySummon: true, VictimKey: >= 0 } ? nearest : null;
+    }
+
     private static bool At(
         TeamKillClip clip,
         IReadOnlyDictionary<TimeSpan, Focus> camera,
@@ -206,6 +239,31 @@ public static class ClipCamera
             return false;
         }
 
+        TimeSpan time = TimeSpan.FromSeconds(second);
+        // Around a summon's blow the clip happens at its victim, not at the killer's hero.
+        TeamKillBlow? summon = clip.Point == null ? SummonBlowAt(clip, second) : null;
+        if (summon is TeamKillBlow struck)
+        {
+            if (focus.Index == struck.VictimKey)
+            {
+                return true;
+            }
+
+            return positions != null
+                && positions.TryGet(focus.Index, time, out MapPoint followed)
+                && Victim(
+                    positions,
+                    struck.VictimKey,
+                    TimeSpan.FromSeconds(struck.Second),
+                    out MapPoint victim
+                )
+                && (
+                    clip.OnScreen
+                        ? OnScreen(followed, victim, settings)
+                        : followed.DistanceTo(victim) <= settings.CameraRadius
+                );
+        }
+
         if (clip.Player >= 0 && focus.Index == clip.Player)
         {
             return true;
@@ -216,7 +274,6 @@ public static class ClipCamera
             return false;
         }
 
-        TimeSpan time = TimeSpan.FromSeconds(second);
         MapPoint place;
         if (clip.Point is MapPoint point)
         {

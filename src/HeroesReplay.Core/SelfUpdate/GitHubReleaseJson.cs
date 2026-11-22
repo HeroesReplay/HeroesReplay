@@ -39,7 +39,7 @@ public static class GitHubReleaseJson
     /// A release is offered only when it is newer than the installed one. The "latest" release is
     /// whatever GitHub marks so, which after a deleted or re-marked release can be an older build,
     /// and an older build must not replace a newer one by itself. When either version is not a
-    /// release tag (<see cref="ReleaseVersion"/>) they cannot be ordered, and any different tag is
+    /// SemVer release tag (<see cref="ReleaseVersion"/>) they cannot be ordered, and any different tag is
     /// offered, as it is with <paramref name="allowDowngrade"/>.
     /// </summary>
     public static ReleaseOffer? Read(

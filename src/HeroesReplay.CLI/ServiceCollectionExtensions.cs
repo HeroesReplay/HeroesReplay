@@ -788,13 +788,21 @@ public static class ServiceCollectionExtensions
                 sp.GetRequiredService<ILogger<FocusTargetedFetch>>()
             );
         });
+        services.TryAddSingleton(sp => new PlayerHistoryRefresh(
+            HeroesProfileCallerFor(sp),
+            sp.GetRequiredService<PlayerHeroStatsStore>(),
+            sp.GetRequiredService<AppSettings>().YouTube?.Titles?.PlayerStories,
+            PlayerStatsFor(sp).JobTimeout,
+            sp.GetRequiredService<ILogger<PlayerHistoryRefresh>>()
+        ));
         services.TryAddSingleton(sp => new HeroFocusDownload(
             sp.GetRequiredService<FocusCardRefresh>(),
             sp.GetRequiredService<FocusStrengthRefresh>(),
             sp.GetRequiredService<PlayerPrivacySync>(),
             sp.GetRequiredService<AppSettings>().Focus,
             sp.GetRequiredService<ILogger<HeroFocusDownload>>(),
-            targeted: sp.GetRequiredService<FocusTargetedFetch>()
+            targeted: sp.GetRequiredService<FocusTargetedFetch>(),
+            history: sp.GetRequiredService<PlayerHistoryRefresh>()
         ));
         return services;
     }

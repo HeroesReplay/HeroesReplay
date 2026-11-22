@@ -12,14 +12,22 @@ public readonly record struct TeamKillDeath(
     string KillerHero,
     string VictimHero,
     int KillerKey = -1,
-    int VictimKey = -1
+    int VictimKey = -1,
+    bool BySummon = false
 );
 
 /// <summary>
 /// One killing blow of a clip. <see cref="VictimKey"/> is the victim's player index, or -1 when
 /// it is not known; the camera check places the victim with it (<see cref="ClipCamera"/>).
+/// <see cref="BySummon"/> says a summon of the killer struck it (<see cref="HeroKill.BySummon"/>),
+/// so the camera check looks for the victim, not for the killer's hero.
 /// </summary>
-public readonly record struct TeamKillBlow(int Second, string Victim, int VictimKey = -1);
+public readonly record struct TeamKillBlow(
+    int Second,
+    string Victim,
+    int VictimKey = -1,
+    bool BySummon = false
+);
 
 public readonly record struct TeamKillClip(
     string Kind,
@@ -340,7 +348,12 @@ public static class TeamKillClips
         for (int i = 0; i < count; i++)
         {
             TeamKillDeath death = deaths[offset + i];
-            blows[i] = new TeamKillBlow(death.Second, death.VictimHero, death.VictimKey);
+            blows[i] = new TeamKillBlow(
+                death.Second,
+                death.VictimHero,
+                death.VictimKey,
+                death.BySummon
+            );
         }
 
         return blows;

@@ -7,6 +7,8 @@ on:
 
 permissions:
   contents: write
+  # The release pull request's labels pick the SemVer bump (tools/next-version.ps1).
+  pull-requests: read
 
 jobs:
   publish:
@@ -25,11 +27,21 @@ jobs:
       - name: Fetch HeroesClientSDK
         shell: pwsh
         run: pwsh -NoProfile -File tools/restore-sdk-package.ps1
-      - uses: gittools/actions/gitversion/setup@v4.7.2
-        with:
-          versionSpec: 6.8.x
-      - id: gitversion
-        uses: gittools/actions/gitversion/execute@v4.7.2
+      # Semantic versioning: vMAJOR.MINOR.PATCH. The merged release PR's label release:major or
+      # release:minor (or "+semver: major|minor" in the merge commit) picks the bump; otherwise a
+      # patch. A re-run of a commit that is already tagged reuses its tag. tools/next-version.ps1.
+      - name: Pick the release version
+        id: version
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MESSAGE: ${{ github.event.head_commit.message }}
+        run: |
+          $labels = gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/pulls" --jq '[.[].labels[].name] | join(",")'
+          if ($LASTEXITCODE -ne 0) {
+            throw "Could not read the release pull request's labels (gh exited $LASTEXITCODE)."
+          }
+          & ./tools/next-version.ps1 -Labels "$labels" -Message $env:MESSAGE
       - name: Build
         run: dotnet build heroes-replay.slnx -c Release --nologo
       - name: Unit tests
@@ -38,10 +50,10 @@ jobs:
         run: dotnet test heroes-replay.slnx -c Release --no-build --nologo -p:TestCategory=Smoke
       - name: Package release zip
         shell: pwsh
-        run: pwsh -NoProfile -File tools/package-release.ps1 -OutputPath heroesreplay-win-x64.zip -Version 'v${{ steps.gitversion.outputs.semVer }}' -Configuration Release
+        run: pwsh -NoProfile -File tools/package-release.ps1 -OutputPath heroesreplay-win-x64.zip -Version '${{ steps.version.outputs.version }}' -Configuration Release
       - name: Verify release zip
         shell: pwsh
-        run: pwsh -NoProfile -File tools/verify-release.ps1 -ZipPath heroesreplay-win-x64.zip -Version 'v${{ steps.gitversion.outputs.semVer }}'
+        run: pwsh -NoProfile -File tools/verify-release.ps1 -ZipPath heroesreplay-win-x64.zip -Version '${{ steps.version.outputs.version }}'
       # The release notes name the .NET runtime the zip's runtime.txt records and the SDK that built
       # it (#462). The runtime-currency workflow reads the "Runtime:" line of the latest release.
       - name: Read the release runtime
@@ -65,7 +77,7 @@ jobs:
       - name: Check the release tag
         shell: pwsh
         env:
-          TAG: v${{ steps.gitversion.outputs.semVer }}
+          TAG: ${{ steps.version.outputs.version }}
         run: |
           if (git tag --list $env:TAG) {
             $commit = git rev-list -n 1 $env:TAG
@@ -76,9 +88,9 @@ jobs:
       # Without target_commitish, GitHub creates a new tag on the default branch (develop).
       - uses: softprops/action-gh-release@v3
         with:
-          tag_name: v${{ steps.gitversion.outputs.semVer }}
+          tag_name: ${{ steps.version.outputs.version }}
           target_commitish: ${{ github.sha }}
-          name: v${{ steps.gitversion.outputs.semVer }}
+          name: ${{ steps.version.outputs.version }}
           files: heroesreplay-win-x64.zip
           fail_on_unmatched_files: true
           body: |

@@ -84,7 +84,8 @@ public static class TeamKillDeaths
                         killerName,
                         victim,
                         killerKey,
-                        indexOf[player]
+                        indexOf[player],
+                        unit.UnitKilledBy != null && !HeroKills.IsOwnBody(killer, unit.UnitKilledBy)
                     )
                 );
             }
@@ -144,7 +145,8 @@ public static class TeamKillDeaths
                     killerName,
                     victimName,
                     kill.BlowIndex,
-                    kill.VictimIndex
+                    kill.VictimIndex,
+                    kill.BySummon
                 )
             );
         }
@@ -153,8 +155,9 @@ public static class TeamKillDeaths
     }
 
     /// <summary>
-    /// The dead unit is one player's hero unit, and the killing unit is a different
-    /// player's hero unit on the other team. Summons, structures, and suicides are not blows.
+    /// The dead unit is one player's hero unit, and a player on the other team killed it, with
+    /// their hero or with a unit of theirs (a summon's kill is its owner's). Structures and
+    /// suicides are not blows.
     /// </summary>
     private static bool IsEnemyHeroUnitBlow(Player victim, Unit unit, out Player killer)
     {
@@ -165,15 +168,7 @@ public static class TeamKillDeaths
         }
 
         killer = unit.PlayerKilledBy;
-        Unit blow = unit.UnitKilledBy;
-        if (
-            killer == null
-            || ReferenceEquals(killer, victim)
-            || killer.Team == victim.Team
-            || blow == null
-            || killer.HeroUnits == null
-            || !killer.HeroUnits.Contains(blow)
-        )
+        if (killer == null || ReferenceEquals(killer, victim) || killer.Team == victim.Team)
         {
             return false;
         }

@@ -23,6 +23,7 @@ public sealed class HeroFocusDownload
     private readonly FocusStrengthRefresh strength;
     private readonly PlayerPrivacySync privacy;
     private readonly FocusTargetedFetch targeted;
+    private readonly PlayerHistoryRefresh history;
     private readonly HeroFocusSettings settings;
     private readonly ILogger<HeroFocusDownload> logger;
     private readonly Func<TimeSpan, CancellationToken, Task> delay;
@@ -34,10 +35,12 @@ public sealed class HeroFocusDownload
         HeroFocusSettings settings,
         ILogger<HeroFocusDownload> logger,
         Func<TimeSpan, CancellationToken, Task> delay = null,
-        FocusTargetedFetch targeted = null
+        FocusTargetedFetch targeted = null,
+        PlayerHistoryRefresh history = null
     )
     {
         this.targeted = targeted;
+        this.history = history;
         this.cards = cards ?? throw new ArgumentNullException(nameof(cards));
         this.strength = strength ?? throw new ArgumentNullException(nameof(strength));
         this.privacy = privacy ?? throw new ArgumentNullException(nameof(privacy));
@@ -91,7 +94,7 @@ public sealed class HeroFocusDownload
 
     /// <summary>
     /// Up to <c>CardsPerStep</c> missing cards, then records for the waiting cards, then the
-    /// privacy feed when it is due, then a targeted fetch when one is due (#433).
+    /// players' match histories when player stories are on, then the privacy feed when it is due, then a targeted fetch when one is due (#433).
     /// </summary>
     public async Task StepAsync(CancellationToken cancellationToken)
     {
@@ -107,6 +110,17 @@ public sealed class HeroFocusDownload
         await strength
             .StepAsync(cards.Cards, cards.Waiting().Select(facts => facts.Key), cancellationToken)
             .ConfigureAwait(false);
+        if (history?.Enabled == true)
+        {
+            await history
+                .StepAsync(
+                    cards.Cards,
+                    cards.Waiting().Select(facts => facts.Key),
+                    cancellationToken
+                )
+                .ConfigureAwait(false);
+        }
+
         if (privacy.IsDue())
         {
             await privacy.SyncAsync(cancellationToken).ConfigureAwait(false);

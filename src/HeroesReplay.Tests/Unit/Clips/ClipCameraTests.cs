@@ -279,6 +279,37 @@ public class ClipCameraTests
     }
 
     [Fact]
+    public void ABlowByASummon_IsOnScreenWhenItsVictimIs_WhereverTheKillerStands()
+    {
+        // Abathur in his base, his Symbiote's kill next to Hanzo.
+        var positions = new Positions();
+        positions.Stand(Qhira, new MapPoint(20, 20), 457, 458);
+        positions.Stand(Hanzo, HanzoStands, 457, 458);
+        positions.Stand(7, new MapPoint(HanzoStands.X + 3, HanzoStands.Y + 2), 457, 458);
+        var blow = new TeamKillBlow(458, "Rehgar", 7, BySummon: true);
+
+        Assert.True(
+            ClipCamera.ShowsBlow(
+                Qhira,
+                blow,
+                Camera((458, 458, Hanzo)),
+                positions,
+                new ClipSettings()
+            )
+        );
+        // The camera on the killer's hero shows the base, not the kill.
+        Assert.False(
+            ClipCamera.ShowsBlow(
+                Qhira,
+                blow,
+                Camera((458, 458, Qhira)),
+                positions,
+                new ClipSettings()
+            )
+        );
+    }
+
+    [Fact]
     public void ABstep_NeedsTheBstepperOnScreen_NotJustNearTheFollowedHero()
     {
         var positions = new Positions();

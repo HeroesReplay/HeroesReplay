@@ -13,6 +13,8 @@ public class ReleaseVersionLabelTests
     [Theory]
     [InlineData("v1.0.0-614", "1.0.0+e6141f861a9d20a05e93c5f97832f51e77fa33fe", "v1.0.0-614")]
     [InlineData(" v1.0.0-614 ", null, "v1.0.0-614")]
+    [InlineData("v1.1.0", "1.1.0+e6141f861a9d20a05e93c5f97832f51e77fa33fe", "v1.1.0")]
+    [InlineData("", "0.0.0-dev+e6141f861a9d20a05e93c5f97832f51e77fa33fe", "dev e6141f8")]
     [InlineData("", "1.0.0+e6141f861a9d20a05e93c5f97832f51e77fa33fe", "dev e6141f8")]
     [InlineData(null, "1.0.0+abc", "dev abc")]
     [InlineData(null, "1.0.0", "dev")]

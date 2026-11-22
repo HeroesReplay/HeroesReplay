@@ -57,6 +57,7 @@ public static class YouTubeEntryBuilder
             IsCompleteRecording = isCompleteRecording,
             HeroStats = heroStats,
             Insights = insights,
+            PlayerStories = loaded?.PlayerStories,
         };
         FullMatchMetadata metadata = FullMatchMetadataBuilder.Build(
             input,

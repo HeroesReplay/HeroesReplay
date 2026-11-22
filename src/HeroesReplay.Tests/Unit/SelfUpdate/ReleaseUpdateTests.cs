@@ -54,6 +54,14 @@ public class ReleaseUpdateTests
     [InlineData("v1.0.0-1137", "v0.9.0-2000", false)]
     [InlineData("abc123", "v1.0.0-1", true)]
     [InlineData("v1.0.0-1137", "hotfix", true)]
+    // Production moves from the pre-SemVer tags to the first semantic release, and on from there.
+    [InlineData("v1.0.0-1137", "v1.1.0", true)]
+    [InlineData("v1.1.0", "v1.0.0-1137", false)]
+    [InlineData("v1.1.0", "v1.1.1", true)]
+    [InlineData("v1.9.0", "v1.10.0", true)]
+    [InlineData("v1.10.0", "v1.9.0", false)]
+    [InlineData("v1.2.0", "v2.0.0", true)]
+    [InlineData("v2.0.0", "v2.0.0-rc.1", false)]
     public void Read_OffersOnlyANewerRelease(string installed, string latest, bool offered)
     {
         string json = ReleaseJson(latest, digest: null);
