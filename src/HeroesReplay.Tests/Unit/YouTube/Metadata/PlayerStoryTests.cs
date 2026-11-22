@@ -92,7 +92,10 @@ public sealed class PlayerStoryTests
         );
 
         Assert.Equal("600-game Murky main", main.Title);
-        Assert.Equal("Story: The Red Murky player has played 600 Storm League games on Murky.", main.Line);
+        Assert.Equal(
+            "Story: The Red Murky player has played 600 Storm League games on Murky.",
+            main.Line
+        );
         Assert.Equal(PlayerStoryKind.OneTrick, trick.Kind);
         Assert.Equal("The Abathur one-trick", trick.Title);
     }

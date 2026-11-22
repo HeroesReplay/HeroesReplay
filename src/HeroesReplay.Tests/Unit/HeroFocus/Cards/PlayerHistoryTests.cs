@@ -105,9 +105,18 @@ public sealed class PlayerHistoryTests : IDisposable
         // Measured: a fresh account went +780 MMR over 6 games, which is placement, not a climb.
         var matches = new List<PlayerMatch>
         {
-            Game(3, Played.AddHours(-1), won: true) with { MmrChange = 4 },
-            Game(2, Played.AddHours(-2), won: true) with { MmrChange = 210 },
-            Game(1, Played.AddHours(-3), won: true) with { MmrChange = 5 },
+            Game(3, Played.AddHours(-1), won: true) with
+            {
+                MmrChange = 4,
+            },
+            Game(2, Played.AddHours(-2), won: true) with
+            {
+                MmrChange = 210,
+            },
+            Game(1, Played.AddHours(-3), won: true) with
+            {
+                MmrChange = 5,
+            },
         };
 
         PlayerHistory history = PlayerHistoryMath.From(
