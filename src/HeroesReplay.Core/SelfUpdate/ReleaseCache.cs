@@ -275,12 +275,18 @@ public static class ReleaseCache
 }
 
 /// <summary>
-/// A release tag such as <c>v1.0.0-978</c>, ordered by its numbers. A name with no number, or
-/// any part that is not one, is not a release.
+/// A release tag: <c>v</c> and a Semantic Versioning 2.0.0 version, such as <c>v1.2.3</c> or
+/// <c>v1.2.3-rc.1</c>, ordered by SemVer precedence (build metadata after <c>+</c> is ignored).
+/// The tags before semantic versioning, <c>v1.0.0-614</c> to <c>v1.0.0-1137</c>, are 1.0.0
+/// prereleases: they order by their number, and below every <c>v1.0.1</c> or later release, so
+/// an install on one of them takes the first semantic release as newer. A name without the
+/// <c>v</c>, or that is not SemVer, is not a release.
 /// </summary>
-public readonly record struct ReleaseVersion(IReadOnlyList<long> Parts)
+public readonly record struct ReleaseVersion(long Major, long Minor, long Patch, string PreRelease)
     : IComparable<ReleaseVersion>
 {
+    public bool IsPreRelease => !string.IsNullOrEmpty(PreRelease);
+
     public static bool TryParse(string tag, out ReleaseVersion version)
     {
         version = default;
@@ -290,36 +296,134 @@ public readonly record struct ReleaseVersion(IReadOnlyList<long> Parts)
             return false;
         }
 
-        string[] pieces = text.Substring(1).Split('.', '-', '+');
-        var parts = new List<long>(pieces.Length);
-        foreach (string piece in pieces)
+        text = text.Substring(1);
+        int plus = text.IndexOf('+');
+        if (plus >= 0)
         {
-            if (!long.TryParse(piece, out long number) || number < 0)
+            if (!ValidIdentifiers(text[(plus + 1)..], numericRule: false))
             {
                 return false;
             }
 
-            parts.Add(number);
+            text = text[..plus];
         }
 
-        version = new ReleaseVersion(parts);
-        return parts.Count > 0;
+        string preRelease = string.Empty;
+        int dash = text.IndexOf('-');
+        if (dash >= 0)
+        {
+            preRelease = text[(dash + 1)..];
+            if (!ValidIdentifiers(preRelease, numericRule: true))
+            {
+                return false;
+            }
+
+            text = text[..dash];
+        }
+
+        string[] core = text.Split('.');
+        if (
+            core.Length != 3
+            || !TryNumber(core[0], out long major)
+            || !TryNumber(core[1], out long minor)
+            || !TryNumber(core[2], out long patch)
+        )
+        {
+            return false;
+        }
+
+        version = new ReleaseVersion(major, minor, patch, preRelease);
+        return true;
     }
 
     public int CompareTo(ReleaseVersion other)
     {
-        IReadOnlyList<long> mine = Parts ?? Array.Empty<long>();
-        IReadOnlyList<long> theirs = other.Parts ?? Array.Empty<long>();
-        for (int i = 0; i < Math.Max(mine.Count, theirs.Count); i++)
+        int order = Major.CompareTo(other.Major);
+        if (order == 0)
         {
-            long left = i < mine.Count ? mine[i] : 0;
-            long right = i < theirs.Count ? theirs[i] : 0;
-            if (left != right)
+            order = Minor.CompareTo(other.Minor);
+        }
+
+        if (order == 0)
+        {
+            order = Patch.CompareTo(other.Patch);
+        }
+
+        if (order != 0)
+        {
+            return order;
+        }
+
+        // A release ranks above any prerelease of the same version.
+        if (!IsPreRelease || !other.IsPreRelease)
+        {
+            return other.IsPreRelease.CompareTo(IsPreRelease);
+        }
+
+        string[] mine = PreRelease.Split('.');
+        string[] theirs = other.PreRelease.Split('.');
+        for (int i = 0; i < Math.Min(mine.Length, theirs.Length); i++)
+        {
+            bool leftNumber = long.TryParse(mine[i], out long left);
+            bool rightNumber = long.TryParse(theirs[i], out long right);
+            int part = (leftNumber, rightNumber) switch
             {
-                return left.CompareTo(right);
+                (true, true) => left.CompareTo(right),
+                (true, false) => -1,
+                (false, true) => 1,
+                _ => string.CompareOrdinal(mine[i], theirs[i]),
+            };
+            if (part != 0)
+            {
+                return Math.Sign(part);
             }
         }
 
-        return 0;
+        return mine.Length.CompareTo(theirs.Length);
+    }
+
+    /// <summary>The tag, such as <c>v1.2.3</c> or <c>v1.2.3-rc.1</c>.</summary>
+    public override string ToString() =>
+        $"v{Major}.{Minor}.{Patch}" + (IsPreRelease ? "-" + PreRelease : string.Empty);
+
+    private static bool TryNumber(string text, out long number)
+    {
+        number = 0;
+        return text.Length > 0
+            && (text.Length == 1 || text[0] != '0')
+            && text.All(char.IsAsciiDigit)
+            && long.TryParse(text, out number);
+    }
+
+    private static bool ValidIdentifiers(string text, bool numericRule)
+    {
+        if (text.Length == 0)
+        {
+            return false;
+        }
+
+        foreach (string identifier in text.Split('.'))
+        {
+            if (
+                identifier.Length == 0
+                || !identifier.All(c => char.IsAsciiLetterOrDigit(c) || c == '-')
+            )
+            {
+                return false;
+            }
+
+            // SemVer: a numeric prerelease identifier has no leading zero.
+            if (
+                numericRule
+                && identifier.Length > 1
+                && identifier[0] == '0'
+                && identifier.All(char.IsAsciiDigit)
+            )
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 }

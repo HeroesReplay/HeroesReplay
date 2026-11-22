@@ -1,6 +1,9 @@
 using System;
+using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
+using HeroesReplay.Core.SelfUpdate;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.SelfUpdate;
@@ -48,7 +51,7 @@ public class ReleaseWorkflowTests
         Assert.Contains("-p:TestCategory=Smoke", release, StringComparison.Ordinal);
         Assert.True(verify > 0 && upload > verify);
         Assert.Contains(
-            "-Version 'v${{ steps.gitversion.outputs.semVer }}'",
+            "-Version '${{ steps.version.outputs.version }}'",
             release,
             StringComparison.Ordinal
         );
@@ -61,7 +64,7 @@ public class ReleaseWorkflowTests
         // names a commit, so every release was tagged on a develop commit it never shipped.
         string release = ReadRepoFile(".github", "workflows", "release.yml");
         const string Action = "softprops/action-gh-release";
-        const string TagName = "v${{ steps.gitversion.outputs.semVer }}";
+        const string TagName = "${{ steps.version.outputs.version }}";
         int upload = release.IndexOf(Action, StringComparison.Ordinal);
         Assert.True(upload > 0, "release.yml does not publish with " + Action);
         Assert.Equal(upload, release.LastIndexOf(Action, StringComparison.Ordinal));
@@ -277,6 +280,107 @@ public class ReleaseWorkflowTests
         {
             Assert.Contains(secret, verify, StringComparison.Ordinal);
         }
+    }
+
+    /// <summary>
+    /// tools/next-version.ps1 picks the release tag: the newest vX.Y.Z bumped by the release PR's
+    /// label or "+semver:" (patch by default), ignoring the v1.0.0-NNNN tags from before semantic
+    /// versioning, whose first semantic release is v1.1.0.
+    /// </summary>
+    [Theory]
+    [InlineData("v1.0.0-1136,v1.0.0-1137", "", "", "", "v1.1.0")]
+    [InlineData("v1.0.0-1137", "release:major", "", "", "v2.0.0")]
+    [InlineData("v1.0.0-1137,v1.1.0", "", "", "", "v1.1.1")]
+    [InlineData("v1.0.0-1137,v1.1.0", "release:minor", "", "", "v1.2.0")]
+    [InlineData("v1.1.0,v1.1.1", "dependencies, Release:Major", "", "", "v2.0.0")]
+    [InlineData("v1.9.3,v1.10.0,v1.2.7", "", "", "", "v1.10.1")]
+    [InlineData("v1.4.2", "", "Merge pull request #600\n\nRelease +semver: minor", "", "v1.5.0")]
+    [InlineData("v1.4.2", "release:patch", "", "", "v1.4.3")]
+    [InlineData("v1.4.2,v2.0.0-rc.1", "", "", "", "v1.4.3")]
+    // A re-run of a master commit that is already tagged keeps its tag.
+    [InlineData("v1.4.2,v1.4.3", "release:major", "", "v1.4.3", "v1.4.3")]
+    public void NextVersion_BumpsTheNewestSemVerTag(
+        string tags,
+        string labels,
+        string message,
+        string headTags,
+        string expected
+    )
+    {
+        string tag = RunNextVersion(tags, labels, message, headTags);
+
+        Assert.Equal(expected, tag);
+        Assert.True(ReleaseVersion.TryParse(tag, out ReleaseVersion next));
+        foreach (string old in tags.Split(',', StringSplitOptions.RemoveEmptyEntries))
+        {
+            // Every release orders above the stable tags before it and the v1.0.0-NNNN ones.
+            bool legacy = old.StartsWith("v1.0.0-", StringComparison.Ordinal);
+            if (
+                old != headTags
+                && ReleaseVersion.TryParse(old, out ReleaseVersion earlier)
+                && (legacy || !earlier.IsPreRelease)
+            )
+            {
+                Assert.True(
+                    next.CompareTo(earlier) > 0,
+                    $"{tag} does not order above {old}."
+                );
+            }
+        }
+    }
+
+    [Fact]
+    public void Package_StampsTheAssembliesWithTheSemVerTag()
+    {
+        string package = ReadRepoFile("tools", "package-release.ps1");
+
+        Assert.Contains("\"-p:Version=$assemblyVersion\"", package, StringComparison.Ordinal);
+        Assert.Contains("-notmatch $semVer", package, StringComparison.Ordinal);
+        Assert.Contains("<VersionSuffix>dev</VersionSuffix>", ReadRepoFile("Directory.Build.props"));
+        Assert.False(File.Exists(Path.Combine(RepoRoot(), "GitVersion.yml")));
+        Assert.DoesNotContain("gitversion", ReadRepoFile(".github", "workflows", "release.yml"));
+    }
+
+    private static string RunNextVersion(
+        string tags,
+        string labels,
+        string message,
+        string headTags
+    )
+    {
+        static string List(string csv) =>
+            "@("
+            + string.Join(
+                ",",
+                csv.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                    .Select(item => "'" + item.Trim() + "'")
+            )
+            + ")";
+
+        string script = Path.Combine(RepoRoot(), "tools", "next-version.ps1");
+        string command =
+            $"& '{script}' -Tags {List(tags)} -HeadTags {List(headTags)} "
+            + $"-Labels '{labels}' -Message \"{message.Replace("\n", "`n")}\"";
+        var start = new ProcessStartInfo("pwsh")
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+        };
+        foreach (string argument in new[] { "-NoProfile", "-NonInteractive", "-Command", command })
+        {
+            start.ArgumentList.Add(argument);
+        }
+
+        start.Environment.Remove("GITHUB_OUTPUT");
+        using Process process = Process.Start(start);
+        string output = process.StandardOutput.ReadToEnd();
+        string error = process.StandardError.ReadToEnd();
+        process.WaitForExit();
+        Assert.True(process.ExitCode == 0, $"next-version.ps1 exited {process.ExitCode}: {error}");
+        return output
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Last();
     }
 
     private static string ReadRepoFile(params string[] parts)
