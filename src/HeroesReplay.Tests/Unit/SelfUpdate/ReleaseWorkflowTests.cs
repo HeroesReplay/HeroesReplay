@@ -321,10 +321,7 @@ public class ReleaseWorkflowTests
                 && (legacy || !earlier.IsPreRelease)
             )
             {
-                Assert.True(
-                    next.CompareTo(earlier) > 0,
-                    $"{tag} does not order above {old}."
-                );
+                Assert.True(next.CompareTo(earlier) > 0, $"{tag} does not order above {old}.");
             }
         }
     }
@@ -336,7 +333,10 @@ public class ReleaseWorkflowTests
 
         Assert.Contains("\"-p:Version=$assemblyVersion\"", package, StringComparison.Ordinal);
         Assert.Contains("-notmatch $semVer", package, StringComparison.Ordinal);
-        Assert.Contains("<VersionSuffix>dev</VersionSuffix>", ReadRepoFile("Directory.Build.props"));
+        Assert.Contains(
+            "<VersionSuffix>dev</VersionSuffix>",
+            ReadRepoFile("Directory.Build.props")
+        );
         Assert.False(File.Exists(Path.Combine(RepoRoot(), "GitVersion.yml")));
         Assert.DoesNotContain("gitversion", ReadRepoFile(".github", "workflows", "release.yml"));
     }
