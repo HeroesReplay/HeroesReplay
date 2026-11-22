@@ -434,7 +434,17 @@ public sealed class ReplayTimeline
     /// <paramref name="dwell"/> cuts it too, or the death would happen off camera, and the shot
     /// ends when the hero it shows dies.
     /// </summary>
-    public void KeepShotsForDwell(TimeSpan dwell, float margin, float outcome)
+    /// <param name="maxHold">
+    /// The most seconds one shot may be kept over other heroes (seconds its own hero did not
+    /// win); zero for no limit. Past it the shot is kept only inside its first
+    /// <paramref name="dwell"/>, so the next hero who wins takes the camera.
+    /// </param>
+    public void KeepShotsForDwell(
+        TimeSpan dwell,
+        float margin,
+        float outcome,
+        TimeSpan maxHold = default
+    )
     {
         int shortest = Math.Max(0, (int)dwell.TotalSeconds);
         if (shortest <= 1)
@@ -442,9 +452,12 @@ public sealed class ReplayTimeline
             return;
         }
 
+        int longest = maxHold > TimeSpan.Zero ? (int)maxHold.TotalSeconds : int.MaxValue;
+
         Player shown = null;
         Focus shot = null;
         int started = 0;
+        int held = 0;
         for (int second = 0; second < TotalSeconds; second++)
         {
             Focus winner = slots[second];
@@ -467,7 +480,10 @@ public sealed class ReplayTimeline
                 kept != null
                 && !(IsOutcome(winner, outcome) && winner.Points >= shot.Points + margin)
                 && !LeadsIntoDeathWithin(winner, second, shortest)
-                && (second - started < shortest || WinsAgainWithin(shown, second, shortest))
+                && (
+                    second - started < shortest
+                    || (held < longest && WinsAgainWithin(shown, second, shortest))
+                )
             )
             {
                 slots[second] = new Focus(
@@ -480,12 +496,14 @@ public sealed class ReplayTimeline
                 {
                     Victim = shot.Victim,
                 };
+                held++;
                 continue;
             }
 
             shown = winner.Target;
             shot = winner;
             started = second;
+            held = 0;
         }
     }
 

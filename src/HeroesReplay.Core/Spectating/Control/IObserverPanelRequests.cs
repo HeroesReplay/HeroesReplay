@@ -12,6 +12,9 @@ public interface IObserverPanelRequests
     ObserverPanelTryResult TryRequest(Panel panel, string username);
     bool TryConsume(out Panel panel, out string requestedBy);
     void MarkHidden(Panel panel);
+
+    /// <summary>No panel a viewer asked for is up: a new match starts with none.</summary>
+    void ClearShowing();
 }
 
 public readonly record struct ObserverPanelTryResult(

@@ -76,6 +76,14 @@ public class SpectateSettings
     public TimeSpan FocusDwellTime { get; set; } = TimeSpan.FromSeconds(4);
 
     /// <summary>
+    /// The most seconds one shot may be kept over other heroes, counting only the seconds its own
+    /// hero did not win. A hero who wins one second in every <see cref="FocusDwellTime"/> could
+    /// otherwise keep the camera for minutes while a fight elsewhere, which never cuts a shot,
+    /// went unseen. Past this the next hero who wins takes the camera. Zero turns the cap off.
+    /// </summary>
+    public TimeSpan FocusDwellMaxHold { get; set; } = TimeSpan.FromSeconds(20);
+
+    /// <summary>
     /// How long a solo laner and one enemy hero must stay alone together to count as a duel
     /// (<c>Weights:SoloLaneDuel</c>, #437). Heroes that only pass each other, or trade for a few
     /// seconds, do not take the camera; at 12 s the duels add no camera swaps.
