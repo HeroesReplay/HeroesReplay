@@ -64,6 +64,13 @@ public class PirateInsightSettings
     /// <summary>A dive needs the base nearly empty: at most this many enemy heroes there.</summary>
     public int MaxDefenders { get; set; } = 1;
 
+    /// <summary>
+    /// And at least this many enemy heroes alive (elsewhere): an empty base after a won teamfight
+    /// is a push, not a backdoor. Without it 19 of 1,757 corpus games were flagged, mostly normal
+    /// comps finishing a fight.
+    /// </summary>
+    public int MinDefendersAlive { get; set; } = 4;
+
     public TimeSpan SampleEvery { get; set; } = TimeSpan.FromSeconds(2);
 
     /// <summary>Samples in a row the dive must last (3 at 2 s is about 5 seconds).</summary>

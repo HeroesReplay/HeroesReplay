@@ -14,7 +14,8 @@ namespace HeroesReplay.Core.Analysis.Insights.Pirates;
 /// standing) or core, with at most <see cref="PirateInsightSettings.MaxDefenders"/> enemy heroes
 /// there, for <see cref="PirateInsightSettings.MinDiveSamples"/> samples in a row. Dives closer than
 /// <see cref="PirateInsightSettings.DiveGap"/> are one dive. A normal late push brings defenders,
-/// so the empty-base rule is what tells a backdoor apart.
+/// and a push after a won fight finds the defenders dead, so a dive also needs at least
+/// <see cref="PirateInsightSettings.MinDefendersAlive"/> enemy heroes alive somewhere else.
 /// </summary>
 public sealed class PirateAnalyzer : IInsightAnalyzer<PirateInsights>
 {
@@ -114,7 +115,12 @@ public sealed class PirateAnalyzer : IInsightAnalyzer<PirateInsights>
             settings.SampleEvery <= TimeSpan.Zero ? TimeSpan.FromSeconds(2) : settings.SampleEvery;
         for (TimeSpan time = snapshot.GatesOpen; time <= snapshot.End; time += step)
         {
-            bool diving = Targets(snapshot, towns, core, time)
+            // A push after a won fight also finds an empty base, but the defenders are dead. A
+            // backdoor happens while they are alive and somewhere else.
+            int alive = defenders.Count(index => snapshot.Positions.TryGet(index, time, out _));
+            bool diving =
+                alive >= settings.MinDefendersAlive
+                && Targets(snapshot, towns, core, time)
                 .Any(target =>
                     Near(snapshot, attackers, target, time) >= settings.MinDivers
                     && Near(snapshot, defenders, target, time) <= settings.MaxDefenders

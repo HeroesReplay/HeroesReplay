@@ -42,6 +42,23 @@ public class PirateAnalyzerTests
     }
 
     [Fact]
+    public void AnEmptyBase_BecauseTheDefendersAreDead_IsAPush()
+    {
+        var positions = new ScriptedPositions();
+        foreach (SnapshotPlayer player in Crew(medivac: true))
+        {
+            positions.Path(player.Index, player.Team == 0 ? Dives() : _ => null);
+        }
+
+        PirateInsights pirates = new PirateAnalyzer(new PirateInsightSettings()).Analyze(
+            InsightFixtures.Snapshot(Crew(medivac: true), positions)
+        );
+
+        Assert.False(pirates.Pirates);
+        Assert.Equal(0, pirates.Dives);
+    }
+
+    [Fact]
     public void OneDive_IsNotEnough()
     {
         Func<TimeSpan, MapPoint?> once = time =>
