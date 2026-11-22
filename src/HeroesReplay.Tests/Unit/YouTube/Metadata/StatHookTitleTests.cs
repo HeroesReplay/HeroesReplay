@@ -284,7 +284,7 @@ public sealed class StatHookTitleTests : IDisposable
     }
 
     [Fact]
-    public void AppSettings_ShipStatHooksOffInProduction_OnInDev()
+    public void AppSettings_ShipStatHooksOnInDevAndProduction_OffInTheBase()
     {
         string basePath = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
         IConfigurationRoot baseConfig = new ConfigurationBuilder().AddJsonFile(basePath).Build();
@@ -322,12 +322,12 @@ public sealed class StatHookTitleTests : IDisposable
 
         Assert.True(hooks.CommunityWording);
 
-        // Dev (private, dry run) tries hooks and player stories; production waits for samples.
+        // Dev and production tell hooks and player stories; the base file leaves them off.
         foreach (
             (string overlay, bool on) in new[]
             {
                 ("appsettings.dev.json", true),
-                ("appsettings.prod.json", false),
+                ("appsettings.prod.json", true),
             }
         )
         {

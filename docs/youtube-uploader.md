@@ -349,7 +349,7 @@ A hero is featured when its name is in `RecentHeroes`, or when the catalog `rele
 
 ### Statistics hooks
 
-A title can also name a Heroes Profile statistic about the heroes in the match (issue #272). It is off in the base and prod files and on in dev (`YouTube:Titles:StatHooks:Enabled`) until it is proven. With it on, the download role keeps the statistics, and spectate reads them when it writes `youtube-entry.json`.
+A title can also name a Heroes Profile statistic about the heroes in the match (issue #272). It is on in dev and prod and off in the base file (`YouTube:Titles:StatHooks:Enabled`). With it on, the download role keeps the statistics, and spectate reads them when it writes `youtube-entry.json`.
 
 A hook takes the draft note's slot, just before the replay id, so it is the first part dropped at 100 characters. A draft note wins the slot: a match with a draft note gets no hook. There is at most one hook, and it never has a number in it. The first kind, in this order, with a match that clears its thresholds wins; within a kind the strongest match wins.
 
@@ -372,7 +372,7 @@ The statistics are one file per major patch and game type, `Data\HeroesProfile\h
 
 ### Player stories
 
-A title can lead with what one player's own Storm League games before the match say about them (`YouTube:Titles:PlayerStories`). It is off in the base and prod files and on in dev. A story names the hero, never the player: `Dehaka, 7 losses deep. Redemption arc?`, not a BattleTag.
+A title can lead with what one player's own Storm League games before the match say about them (`YouTube:Titles:PlayerStories`). It is on in dev and prod and off in the base file. A story names the hero, never the player: `Dehaka, 7 losses deep. Redemption arc?`, not a BattleTag.
 
 The download role fills each waiting focus card's human players with a `History` summary from Heroes Profile's `players/matches` (`PlayerHistoryRefresh`, after the strength step; the calls are in `docs/heroesprofile-api.md`). Only the summary is kept on the card, never the games: how many games, the streak, the MMR change, the record on this hero, and whether it is their best or worst hero. Spectate reads the card when it loads the replay (the card is deleted once the replay is spectated) and `PlayerStoryPicker` picks at most one story. Every count stops strictly before the match's time and leaves out the match itself, so a story never tells the result. A private profile is marked `Private` and never told; a failed or out-of-budget lookup is `Unknown` and retried after `RetryAfter` (6 h).
 
