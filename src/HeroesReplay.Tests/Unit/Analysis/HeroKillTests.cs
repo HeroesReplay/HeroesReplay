@@ -112,7 +112,7 @@ public class HeroKillTests
     }
 
     [Fact]
-    public void Read_VehicleBlowIsThePlayers_SummonBlowIsNot()
+    public void Read_VehicleAndSummonBlows_AreThePlayers()
     {
         Replay replay = Match(out Player killer, out _);
         var dragon = new ReplayUnit { Name = "VehicleDragon" };
@@ -123,7 +123,8 @@ public class HeroKillTests
 
         IReadOnlyList<HeroKill> kills = HeroKills.Read(replay);
 
-        Assert.Equal(new[] { 0, -1, 0 }, kills.Select(kill => kill.BlowIndex));
+        Assert.Equal(new[] { 0, 0, 0 }, kills.Select(kill => kill.BlowIndex));
+        Assert.Equal(new[] { false, true, false }, kills.Select(kill => kill.BySummon));
     }
 
     [Fact]
