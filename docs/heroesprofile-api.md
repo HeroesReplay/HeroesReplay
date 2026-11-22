@@ -121,6 +121,17 @@ All of these calls, and the player lookups below, go through one `HeroesProfileC
 - **Limits.** The fetch makes at most one attempt per `Focus:Targeted:Interval` (2 h), stops while `MaxWaiting` (2) fetched replays wait, and counts its own calls against `WeeklyCallBudget` (2,000).
 - **What it stores.** `Data\Focus\targeted.json` keeps hero attribute ids and replay ids only, never a player.
 
+### Player history (YouTube player stories)
+
+`PlayerHistoryRefresh` (download role) asks `players/matches` for each human player on a waiting focus card, for `YouTube:Titles:PlayerStories` (`docs/youtube-uploader.md`). Measured on 2026-11-22 with our key:
+
+- The query is `battletag`, `region`, `game_type=sl`, `start_date` (the match date less `LookbackDays`, 60) and `end_date` (the match date), with no `hero`. A cold query answers 202 and a job, as above.
+- Rows come newest first, 100 a page, and one page of a busy player is about 800 KB. Only the first page is read. Replay ids are not in time order, so rows are ordered by `game_date`.
+- Each row has `player_change`, the player's Storm League MMR change for that game, and `hero.name` and `hero.attribute_id`. A settled player moves a median 3.7 points a game; placement games move tens to hundreds.
+- 403 `player_unavailable` is a private profile: the player is marked `Private` on the card and never told. Any other 401 or 403 stops lookups until a restart. Anything else leaves the player `Unknown` for `RetryAfter` (6 h).
+- At most `LookupsPerStep` (10) calls a step, counted against `WeeklyCallBudget` (10,000) in `Data\HeroesProfile\players\history-calls.json`, apart from the player records' `calls.json`. The privacy feed is read first, as for player records.
+- Only the summary goes on the card, never the games, and the card is deleted once the replay is spectated. A story names the hero only, and its description carries the attribution line.
+
 Auth is `Authorization: Bearer` ([Migrating](https://www.heroesprofile.com/Api/Migrating)). The v1 key is `op://Heroes Replay/Heroes Profile API Key/password` (skill `op-service-account`). The old `api.heroesprofile.com` `api_token` key is not accepted.
 
 ## Twitch extension

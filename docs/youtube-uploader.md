@@ -349,7 +349,7 @@ A hero is featured when its name is in `RecentHeroes`, or when the catalog `rele
 
 ### Statistics hooks
 
-A title can also name a Heroes Profile statistic about the heroes in the match (issue #272). It is off everywhere (`YouTube:Titles:StatHooks:Enabled` false in the base, dev, and prod files) until it is proven. With it on, the download role keeps the statistics, and spectate reads them when it writes `youtube-entry.json`.
+A title can also name a Heroes Profile statistic about the heroes in the match (issue #272). It is off in the base and prod files and on in dev (`YouTube:Titles:StatHooks:Enabled`) until it is proven. With it on, the download role keeps the statistics, and spectate reads them when it writes `youtube-entry.json`.
 
 A hook takes the draft note's slot, just before the replay id, so it is the first part dropped at 100 characters. A draft note wins the slot: a match with a draft note gets no hook. There is at most one hook, and it never has a number in it. The first kind, in this order, with a match that clears its thresholds wins; within a kind the strongest match wins.
 
@@ -362,11 +362,31 @@ A hook takes the draft note's slot, just before the replay id, so it is the firs
 | Worst map | `Cursed Hollow - Valla's worst map - ...` | The reverse of best map. |
 | Underdog or powerhouse | `Underdog Medivh`, `Patch powerhouse Mal'Ganis` | Among the 3 (`ExtremesCount`) lowest or highest win rates of the patch, counting heroes with at least 500 games (`ExtremesMinGames`). |
 
+With `CommunityWording` (true in `appsettings.json`), each kind rotates six wordings by replay id instead of one, so the channel does not repeat a title shape: `Valla hard-counters Alexstrasza`, `Dynamic duo: Valla + Whitemane`, `Genji on home turf`, `Forgot to ban Qhira?`, `Meta monster Mal'Ganis`, `Unloved Medivh this patch`. The powerhouse set borrows the community's own forms from the Blizzard forums' balance threads, `X OP, nerf Chen` and `Busted? Top-3 X this patch` (the number is `ExtremesCount`); Chen himself gets `Chen OP. Nerf Chen. (For real)`. The first wording of each kind is the plain one above. Off, the plain wording is the only one.
+
 A hero the title already names, as `X focus` or `Ft. X`, is skipped, and so is any pair with that hero. Heroes are matched to the statistics by the heroes-data2 `AttributeId`, which is Heroes Profile's `attribute_id`. Each kind has its own switch: `Counters`, `Duos`, `BestMap`, `SlipsTheBan`, `WorstMap`, `PatchExtremes`.
 
 The numbers go on a `Stats:` line in the description, for example `Stats: Valla and Whitemane won 56.7% of 577 games together (Storm League, patch 2.57).` Heroes Profile's terms require the attribution on the same screen as its data, so whenever a hook is used the second description line, right after the Twitch link and inside what YouTube shows before "more", is `Data provided by Heroes Profile: https://www.heroesprofile.com/`. The `Stats:` label is not one the library pass reads (`Map:`, `Mode:`, `Rank:`, `Build:`, `Draft:`, `Featured:`), and a hook is never a bare number, so `TryReadTitleId` and the playlist filing read a hooked title the same way.
 
 The statistics are one file per major patch and game type, `Data\HeroesProfile\hero-stats\2.57-sl.json`, keyed by `attribute_id`: each hero's wins and games on every map (and its ban rate there), against each enemy hero, and with each ally. The download role writes it, never spectate. While hooks are on it checks every `HeroesProfileApi:HeroStats:CheckInterval` (1 h) and fetches the newest major patch again when the file is older than `RefreshInterval` (24 h), for each `GameTypes` entry (Storm League). Files of patches older than the newest two are deleted. Spectate uses the file for the replay's own patch and game type only when it is younger than `MaxAge` (72 h); a missing, unreadable, or stale file leaves the title as before. `heroesreplay heroesprofile hero-stats` fetches it once by hand. The calls and their limits are in `docs/heroesprofile-api.md`.
+
+### Player stories
+
+A title can lead with what one player's own Storm League games before the match say about them (`YouTube:Titles:PlayerStories`). It is off in the base and prod files and on in dev. A story names the hero, never the player: `Dehaka, 7 losses deep. Redemption arc?`, not a BattleTag.
+
+The download role fills each waiting focus card's human players with a `History` summary from Heroes Profile's `players/matches` (`PlayerHistoryRefresh`, after the strength step; the calls are in `docs/heroesprofile-api.md`). Only the summary is kept on the card, never the games: how many games, the streak, the MMR change, the record on this hero, and whether it is their best or worst hero. Spectate reads the card when it loads the replay (the card is deleted once the replay is spectated) and `PlayerStoryPicker` picks at most one story. Every count stops strictly before the match's time and leaves out the match itself, so a story never tells the result. A private profile is marked `Private` and never told; a failed or out-of-budget lookup is `Unknown` and retried after `RetryAfter` (6 h).
+
+| Story | Example title | When (each threshold is a setting) | Score |
+| --- | --- | --- | --- |
+| Win or loss streak | `Raynor is on a heater: 6 wins in a row` | At least 5 in a row (`StreakMinGames`). | 50 + 5 per game |
+| One-trick or main | `The Auriel one-trick`, `600-game Murky main` | 70% of at least 20 latest games on this hero (`OneTrickMinShare`, `OneTrickMinGames`), or 300 career games on it from the focus strength record (`MainMinCareerGames`). | 70 to 80 |
+| Worst hero | `Risky pick: Gall, 2-8 lately` | Their lowest win rate among heroes with 10 or more games (`LatelyMinGames`), at most 40% (`WorstMaxWinRate`). | 75 |
+| Best hero | `Signature hero: Tyrael (8-2 lately)` | Their highest such win rate, at least 60% (`BestMinWinRate`). | 55 |
+| Climb or slide | `On the rise: Muradin, +51 MMR` | At least 50 MMR (`ClimbMinMmr`) over the last 20 games (`MmrGames`), with 10 or more of them (`ClimbMinGames`) and none moving more than 60 (`ClimbMaxGameMmr`). | 40 + half the MMR |
+
+The highest score wins. Each kind rotates five to seven wordings by replay id. A focus title (`X focus`) wins the lead, and a hero the title already names is skipped; with a highlight title, the story goes in the description only. The numbers go on a `Story:` line after the `Stats:` line, for example `Story: The Red Dehaka player came into this game on 7 Storm League losses in a row.`, and the Heroes Profile attribution is added as for a hook.
+
+Calibration (2026-11-22, 1,808 games of 40 players from the October corpus): a settled MMR moves a median 3.7 points a game, 6.6 at the 90th percentile, so 20 even games drift about 20 points and 50 is a real run. A fresh account moved +780 over 6 games, which is placement, hence `ClimbMaxGameMmr`. `players/matches` answers the newest 100 games, so lines count games, not days.
 
 ### Match highlights
 
@@ -432,7 +452,7 @@ None of these lines starts with a label the library pass reads.
 - `heroesreplay youtube preview --replay <file> [--insights]` prints the title, description and tags a replay would get, offline.
 - `heroesreplay calculators insights --directory <folder> --recursive --output report.md` measures how often each insight fires on a corpus. The thresholds are in `Insights`.
 
-The description starts with `Twitch: https://twitch.tv/saltysadism`, then the Heroes Profile attribution when a statistics hook was used, `Full match.` when the recording completed, the replay id, the Heroes Profile match link, date, build, map, mode, rank, the featured hero when one was named, the draft note with its composition labels, `Featuring:` when a new hero is in the title, the `Stats:` line of a hook, each pentakill as a highlight (`Highlights: Valla pentakill (team wipe)` when it wiped the team), and the requestor when it was a paid upload. The Blue and Red roster lines name each player without the BattleTag number, because YouTube turns `#1234` into a hashtag. Average MMR is not written. The winner is not included. Category id is `20`. Tags come from the map, mode, rank, hero, those events, and each composition label. The entry records `TemplateVersion` 10 (9 had no triple kill, objective or award highlights, 8 no focus-hero titles, 7 no match highlights, 6 no statistics hook).
+The description starts with `Twitch: https://twitch.tv/saltysadism`, then the Heroes Profile attribution when a statistics hook was used, `Full match.` when the recording completed, the replay id, the Heroes Profile match link, date, build, map, mode, rank, the featured hero when one was named, the draft note with its composition labels, `Featuring:` when a new hero is in the title, the `Stats:` line of a hook, the `Story:` line of a player story, each pentakill as a highlight (`Highlights: Valla pentakill (team wipe)` when it wiped the team), and the requestor when it was a paid upload. The Blue and Red roster lines name each player without the BattleTag number, because YouTube turns `#1234` into a hashtag. Average MMR is not written. The winner is not included. Category id is `20`. Tags come from the map, mode, rank, hero, those events, and each composition label. The entry records `TemplateVersion` 11 (10 had no player stories, 9 had no triple kill, objective or award highlights, 8 no focus-hero titles, 7 no match highlights, 6 no statistics hook).
 
 Every `videos.insert`, full match or clip, is built by `UploadBody` with the `snippet,status` parts:
 
