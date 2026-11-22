@@ -271,7 +271,11 @@ public sealed class PlayerHeroStatsStore
         {
             if (
                 string.Equals(file.Name, CallsFileName, StringComparison.OrdinalIgnoreCase)
-                || string.Equals(file.Name, HistoryCallsFileName, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(
+                    file.Name,
+                    HistoryCallsFileName,
+                    StringComparison.OrdinalIgnoreCase
+                )
                 || string.Equals(file.Name, PrivacyFileName, StringComparison.OrdinalIgnoreCase)
             )
             {

@@ -119,9 +119,33 @@ public sealed class PlayerHistoryTests : IDisposable
         Add("Nova", 5, 5);
         var settings = new PlayerStorySettings { LatelyMinGames = 8 };
 
-        PlayerHistory gall = PlayerHistoryMath.From(matches, 1, Played, "Gall", "Gall", settings, Played);
-        PlayerHistory tyrael = PlayerHistoryMath.From(matches, 1, Played, "Tyrael", "Tyrael", settings, Played);
-        PlayerHistory nova = PlayerHistoryMath.From(matches, 1, Played, "Nova", "Nova", settings, Played);
+        PlayerHistory gall = PlayerHistoryMath.From(
+            matches,
+            1,
+            Played,
+            "Gall",
+            "Gall",
+            settings,
+            Played
+        );
+        PlayerHistory tyrael = PlayerHistoryMath.From(
+            matches,
+            1,
+            Played,
+            "Tyrael",
+            "Tyrael",
+            settings,
+            Played
+        );
+        PlayerHistory nova = PlayerHistoryMath.From(
+            matches,
+            1,
+            Played,
+            "Nova",
+            "Nova",
+            settings,
+            Played
+        );
 
         Assert.True(gall.WorstHero);
         Assert.False(gall.BestHero);
@@ -144,7 +168,9 @@ public sealed class PlayerHistoryTests : IDisposable
         card.GameDateUtc = Played;
         card.Players[9].IsAi = true;
 
-        PlayerHistoryRefresh.FillResult result = await Refresh(new PlayerStorySettings { Enabled = true })
+        PlayerHistoryRefresh.FillResult result = await Refresh(
+                new PlayerStorySettings { Enabled = true }
+            )
             .FillAsync(card, 20, CancellationToken.None);
 
         Assert.Equal(9, result.Calls);
@@ -171,7 +197,11 @@ public sealed class PlayerHistoryTests : IDisposable
         card.GameDateUtc = Played;
         PlayerHistoryRefresh refresh = Refresh(new PlayerStorySettings { Enabled = true });
 
-        PlayerHistoryRefresh.FillResult result = await refresh.FillAsync(card, 20, CancellationToken.None);
+        PlayerHistoryRefresh.FillResult result = await refresh.FillAsync(
+            card,
+            20,
+            CancellationToken.None
+        );
 
         Assert.Equal(PlayerHistoryStatus.Private, card.Players[0].History.Status);
         Assert.True(result.Stop);
@@ -198,7 +228,12 @@ public sealed class PlayerHistoryTests : IDisposable
     public void Source_LeavesOutPrivateAndUnreadPlayers()
     {
         FocusCard card = Card(9, Player(0, "Valla", "Demo", "Ranged Assassin"));
-        card.Players[0].History = new PlayerHistory { Status = PlayerHistoryStatus.Known, Games = 30, Streak = 6 };
+        card.Players[0].History = new PlayerHistory
+        {
+            Status = PlayerHistoryStatus.Known,
+            Games = 30,
+            Streak = 6,
+        };
         card.Players[1].History = new PlayerHistory { Status = PlayerHistoryStatus.Private };
         card.Players[2].History = new PlayerHistory
         {

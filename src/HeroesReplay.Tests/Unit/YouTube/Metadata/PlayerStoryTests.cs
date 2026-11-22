@@ -1,5 +1,4 @@
-using System.Collections.Generic;
-using HeroesReplay.Core.HeroFocus.Cards;
+﻿using HeroesReplay.Core.HeroFocus.Cards;
 using HeroesReplay.Core.MediaPolicy;
 using HeroesReplay.Core.YouTube.Metadata;
 using Xunit;
@@ -20,7 +19,16 @@ public sealed class PlayerStoryTests
             new[]
             {
                 Facts(0, "Kerrigan", new PlayerHistory { Games = 40, Streak = 9 }),
-                Facts(1, "Valla", new PlayerHistory { Games = 40, MmrChange = 32, MmrGames = 20 }),
+                Facts(
+                    1,
+                    "Valla",
+                    new PlayerHistory
+                    {
+                        Games = 40,
+                        MmrChange = 32,
+                        MmrGames = 20,
+                    }
+                ),
             },
             replayId: 0,
             namedHeroes: null,
@@ -38,7 +46,10 @@ public sealed class PlayerStoryTests
     [Fact]
     public void Pick_RotatesTheWordingByReplayId()
     {
-        PlayerStoryFacts[] players = { Facts(1, "Valla", new PlayerHistory { Games = 30, Streak = -6 }) };
+        PlayerStoryFacts[] players =
+        {
+            Facts(1, "Valla", new PlayerHistory { Games = 30, Streak = -6 }),
+        };
 
         string first = PlayerStoryPicker.Pick(players, 0, null, On).Title;
         string second = PlayerStoryPicker.Pick(players, 1, null, On).Title;
@@ -51,13 +62,28 @@ public sealed class PlayerStoryTests
     public void Pick_ACareerMainOrAOneTrick()
     {
         PlayerStory main = PlayerStoryPicker.Pick(
-            new[] { Facts(1, "Murky", new PlayerHistory { Games = 10, HeroGames = 2 }, career: 600) },
+            new[]
+            {
+                Facts(1, "Murky", new PlayerHistory { Games = 10, HeroGames = 2 }, career: 600),
+            },
             0,
             null,
             On
         );
         PlayerStory trick = PlayerStoryPicker.Pick(
-            new[] { Facts(0, "Abathur", new PlayerHistory { Games = 40, HeroGames = 36, HeroWins = 20 }) },
+            new[]
+            {
+                Facts(
+                    0,
+                    "Abathur",
+                    new PlayerHistory
+                    {
+                        Games = 40,
+                        HeroGames = 36,
+                        HeroWins = 20,
+                    }
+                ),
+            },
             0,
             null,
             On
@@ -78,7 +104,13 @@ public sealed class PlayerStoryTests
                 Facts(
                     1,
                     "Gall",
-                    new PlayerHistory { Games = 60, HeroGames = 10, HeroWins = 2, WorstHero = true }
+                    new PlayerHistory
+                    {
+                        Games = 60,
+                        HeroGames = 10,
+                        HeroWins = 2,
+                        WorstHero = true,
+                    }
                 ),
             },
             0,
@@ -94,7 +126,10 @@ public sealed class PlayerStoryTests
     [Fact]
     public void Pick_NothingWhenOff_ForANamedHero_OrWithoutAStory()
     {
-        PlayerStoryFacts[] players = { Facts(0, "Kerrigan", new PlayerHistory { Games = 40, Streak = 9 }) };
+        PlayerStoryFacts[] players =
+        {
+            Facts(0, "Kerrigan", new PlayerHistory { Games = 40, Streak = 9 }),
+        };
 
         Assert.Null(PlayerStoryPicker.Pick(players, 0, null, new PlayerStorySettings()));
         Assert.Null(PlayerStoryPicker.Pick(players, 0, new[] { "Kerrigan" }, On));
@@ -120,7 +155,10 @@ public sealed class PlayerStoryTests
                 Rank = "Diamond 2",
                 Roster = new ReplayMediaPlayer[] { Blue("Kerrigan"), Red("Valla") },
                 IsCompleteRecording = true,
-                PlayerStories = new[] { Facts(0, "Kerrigan", new PlayerHistory { Games = 40, Streak = 9 }) },
+                PlayerStories = new[]
+                {
+                    Facts(0, "Kerrigan", new PlayerHistory { Games = 40, Streak = 9 }),
+                },
             },
             new FullMatchMetadataOptions
             {
@@ -151,7 +189,10 @@ public sealed class PlayerStoryTests
                 GameMode = "Storm League",
                 Rank = "Diamond 2",
                 Roster = new ReplayMediaPlayer[] { Blue("Kerrigan"), Red("Valla") },
-                PlayerStories = new[] { Facts(0, "Kerrigan", new PlayerHistory { Games = 40, Streak = 9 }) },
+                PlayerStories = new[]
+                {
+                    Facts(0, "Kerrigan", new PlayerHistory { Games = 40, Streak = 9 }),
+                },
             },
             new FullMatchMetadataOptions { Titles = new YouTubeTitleSettings() }
         );
@@ -171,12 +212,20 @@ public sealed class PlayerStoryTests
     [Fact]
     public void CommunityWording_ChenGetsTheOriginalJoke_AndPlainWordingIsUnchanged()
     {
-        Assert.Equal("Chen OP. Nerf Chen. (For real)", StatHookPicker.ExtremeTitle("Chen", true, true, 1));
+        Assert.Equal(
+            "Chen OP. Nerf Chen. (For real)",
+            StatHookPicker.ExtremeTitle("Chen", true, true, 1)
+        );
         Assert.Equal("Underdog Nova", StatHookPicker.ExtremeTitle("Nova", false, false, 1));
         Assert.Equal("Off-meta Nova", StatHookPicker.ExtremeTitle("Nova", false, true, 1));
     }
 
-    private static PlayerStoryFacts Facts(int team, string hero, PlayerHistory history, int? career = null)
+    private static PlayerStoryFacts Facts(
+        int team,
+        string hero,
+        PlayerHistory history,
+        int? career = null
+    )
     {
         history.Status = PlayerHistoryStatus.Known;
         return new PlayerStoryFacts(team, hero, history, career);

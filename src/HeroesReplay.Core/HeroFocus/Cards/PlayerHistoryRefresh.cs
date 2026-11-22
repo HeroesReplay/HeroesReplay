@@ -174,7 +174,12 @@ public sealed class PlayerHistoryRefresh
                         clock()
                     );
                     break;
-                case 403 when string.Equals(answer.ErrorCode, "player_unavailable", StringComparison.Ordinal):
+                case 403
+                    when string.Equals(
+                        answer.ErrorCode,
+                        "player_unavailable",
+                        StringComparison.Ordinal
+                    ):
                     player.History = Mark(PlayerHistoryStatus.Private);
                     break;
                 case 401:

@@ -85,7 +85,8 @@ public static class PlayerHistoryMath
                 match != null
                 && match.ReplayId != replayId
                 && match.PlayedAtUtc < playedAtUtc
-                && playedAtUtc - match.PlayedAtUtc <= TimeSpan.FromDays(Math.Max(1, settings.LookbackDays))
+                && playedAtUtc - match.PlayedAtUtc
+                    <= TimeSpan.FromDays(Math.Max(1, settings.LookbackDays))
             )
             .GroupBy(match => match.ReplayId)
             .Select(group => group.First())
@@ -119,7 +120,9 @@ public static class PlayerHistoryMath
             history.MmrGames = changes.Count;
         }
 
-        List<PlayerMatch> onHero = before.Where(match => SameHero(match, hero, attributeId)).ToList();
+        List<PlayerMatch> onHero = before
+            .Where(match => SameHero(match, hero, attributeId))
+            .ToList();
         history.HeroGames = onHero.Count;
         history.HeroWins = onHero.Count(match => match.Won);
 
@@ -128,7 +131,9 @@ public static class PlayerHistoryMath
             .Where(match => !string.IsNullOrWhiteSpace(match.AttributeId ?? match.Hero))
             .GroupBy(match => Key(match), StringComparer.OrdinalIgnoreCase)
             .Where(group => group.Count() >= minGames)
-            .Select(group => (group.Key, Rate: (double)group.Count(match => match.Won) / group.Count()))
+            .Select(group =>
+                (group.Key, Rate: (double)group.Count(match => match.Won) / group.Count())
+            )
             .ToList();
         string mine = onHero.Count > 0 ? Key(onHero[0]) : null;
         if (mine != null && rates.Count >= 2 && rates.Any(rate => Same(rate.Key, mine)))
@@ -142,14 +147,18 @@ public static class PlayerHistoryMath
     }
 
     private static string Key(PlayerMatch match) =>
-        string.IsNullOrWhiteSpace(match.AttributeId) ? match.Hero?.Trim() : match.AttributeId.Trim();
+        string.IsNullOrWhiteSpace(match.AttributeId)
+            ? match.Hero?.Trim()
+            : match.AttributeId.Trim();
 
     private static bool Same(string left, string right) =>
         string.Equals(left, right, StringComparison.OrdinalIgnoreCase);
 
     private static bool SameHero(PlayerMatch match, string hero, string attributeId)
     {
-        if (!string.IsNullOrWhiteSpace(attributeId) && !string.IsNullOrWhiteSpace(match.AttributeId))
+        if (
+            !string.IsNullOrWhiteSpace(attributeId) && !string.IsNullOrWhiteSpace(match.AttributeId)
+        )
         {
             return Same(match.AttributeId.Trim(), attributeId.Trim());
         }
