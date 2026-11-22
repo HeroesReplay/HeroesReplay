@@ -122,6 +122,12 @@ public sealed class FocusCardPlayer
     /// <summary>The player's Heroes Profile record on this hero, once it has been looked up.</summary>
     public FocusStrength Strength { get; set; }
 
+    /// <summary>
+    /// The player's Storm League games before this match, summed up for title stories
+    /// (<c>YouTube:Titles:PlayerStories</c>), once they have been looked up.
+    /// </summary>
+    public PlayerHistory History { get; set; }
+
     /// <summary><c>Name#1234</c>, the form Heroes Profile and the requests take.</summary>
     [JsonIgnore]
     public string Player =>

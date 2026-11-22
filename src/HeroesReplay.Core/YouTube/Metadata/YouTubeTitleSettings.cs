@@ -58,6 +58,12 @@ public class YouTubeTitleSettings
     public StatHookSettings StatHooks { get; set; } = new StatHookSettings();
 
     /// <summary>
+    /// Stories from the players' Heroes Profile match history (<c>YouTube:Titles:PlayerStories</c>):
+    /// streaks, climbs, one-tricks, best and worst heroes lately. Off by default.
+    /// </summary>
+    public PlayerStorySettings PlayerStories { get; set; } = new PlayerStorySettings();
+
+    /// <summary>
     /// Match highlights from the replay's insights (<c>YouTube:Titles:Highlights</c>, #412): the
     /// title's lead and the description's insight lines. Off by default.
     /// </summary>

@@ -399,6 +399,55 @@ public class StatHookPickerTests
         );
     }
 
+    [Fact]
+    public void CommunityWording_RotatesSynonyms_AndPlainWordingStaysPut()
+    {
+        HeroStatsSnapshot stats = Snapshot(
+            Hero("Demo", "Valla", 5000, 10000, enemies: new[] { Pair("Alex", 248, 400) }),
+            Hero("Alex", "Alexstrasza", 5000, 10000)
+        );
+        var community = new StatHookSettings { Enabled = true, CommunityWording = true };
+
+        List<string> titles = Enumerable
+            .Range(0, 12)
+            .Select(seed =>
+                StatHookPicker
+                    .Pick(
+                        stats,
+                        null,
+                        new[] { Blue("Valla"), Red("Alexstrasza") },
+                        "Dragon Shire",
+                        Array.Empty<string>(),
+                        community,
+                        "Storm League",
+                        seed
+                    )
+                    .Title
+            )
+            .Distinct()
+            .ToList();
+
+        Assert.Equal(6, titles.Count);
+        Assert.Equal("Valla counters Alexstrasza", titles[0]);
+        Assert.All(titles, title => Assert.Contains("Valla", title));
+        Assert.All(titles, title => Assert.Contains("Alexstrasza", title));
+        Assert.Equal(
+            "Valla counters Alexstrasza",
+            StatHookPicker
+                .Pick(
+                    stats,
+                    null,
+                    new[] { Blue("Valla"), Red("Alexstrasza") },
+                    "Dragon Shire",
+                    Array.Empty<string>(),
+                    On,
+                    "Storm League",
+                    3
+                )
+                .Title
+        );
+    }
+
     private static StatHook Pick(HeroStatsSnapshot stats, params ReplayMediaPlayer[] roster) =>
         Pick(stats, "Dragon Shire", On, roster);
 

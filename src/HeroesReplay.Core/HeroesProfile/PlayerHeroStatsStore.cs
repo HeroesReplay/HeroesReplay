@@ -26,6 +26,9 @@ public sealed class PlayerHeroStatsStore
     public const string CallsFileName = "calls.json";
     public const string PrivacyFileName = "privacy.json";
 
+    /// <summary>The match-history lookups behind title stories, counted apart from the hero records.</summary>
+    public const string HistoryCallsFileName = "history-calls.json";
+
     internal static readonly HeroesProfileJsonContext Json = new(
         new JsonSerializerOptions
         {
@@ -201,15 +204,15 @@ public sealed class PlayerHeroStatsStore
         Read(battleTag, region)?.Status == PlayerHeroLookupStatus.Private;
 
     /// <summary>The lookups made in the 7 days before <paramref name="now"/>.</summary>
-    public int CallsThisWeek(DateTimeOffset now) =>
-        ReadFile(Path.Combine(Folder, CallsFileName), Json.ListDateTimeOffset)
+    public int CallsThisWeek(DateTimeOffset now, string fileName = CallsFileName) =>
+        ReadFile(Path.Combine(Folder, fileName), Json.ListDateTimeOffset)
             ?.Count(at => now - at < TimeSpan.FromDays(7))
         ?? 0;
 
     /// <summary>Counts one lookup, dropping the ones older than 7 days.</summary>
-    public void NoteCall(DateTimeOffset now)
+    public void NoteCall(DateTimeOffset now, string fileName = CallsFileName)
     {
-        string path = Path.Combine(Folder, CallsFileName);
+        string path = Path.Combine(Folder, fileName);
         List<DateTimeOffset> calls = (ReadFile(path, Json.ListDateTimeOffset) ?? new())
             .Where(at => now - at < TimeSpan.FromDays(7))
             .ToList();
@@ -268,6 +271,11 @@ public sealed class PlayerHeroStatsStore
         {
             if (
                 string.Equals(file.Name, CallsFileName, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(
+                    file.Name,
+                    HistoryCallsFileName,
+                    StringComparison.OrdinalIgnoreCase
+                )
                 || string.Equals(file.Name, PrivacyFileName, StringComparison.OrdinalIgnoreCase)
             )
             {

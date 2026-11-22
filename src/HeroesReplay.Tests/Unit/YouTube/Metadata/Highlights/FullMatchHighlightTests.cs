@@ -37,7 +37,7 @@ public class FullMatchHighlightTests
         );
         Assert.Contains("Deathless", metadata.Tags);
         Assert.Contains("Teleport Li-Ming", metadata.Tags);
-        Assert.Equal("10", metadata.TemplateVersion);
+        Assert.Equal("11", metadata.TemplateVersion);
     }
 
     [Fact]

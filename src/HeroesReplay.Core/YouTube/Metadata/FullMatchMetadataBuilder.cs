@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using HeroesReplay.Core.Analysis.Insights;
 using HeroesReplay.Core.Clips;
 using HeroesReplay.Core.HeroesProfile;
@@ -76,6 +77,12 @@ public sealed record FullMatchMetadataInput
     /// <c>YouTube:Titles:Highlights:Enabled</c> is true.
     /// </summary>
     public MatchInsights Insights { get; init; }
+
+    /// <summary>
+    /// The players' Heroes Profile histories before the match (from the focus card), or empty.
+    /// Used only when <c>YouTube:Titles:PlayerStories:Enabled</c> is true.
+    /// </summary>
+    public IReadOnlyList<PlayerStoryFacts> PlayerStories { get; init; }
 }
 
 public sealed class FullMatchMetadata
@@ -106,11 +113,17 @@ public sealed class FullMatchMetadata
 
     /// <summary>The highlight wording the title leads with (#412), or null.</summary>
     public string Highlight { get; init; }
+
+    /// <summary>
+    /// The player story picked from Heroes Profile match history, or null. Its <c>Story:</c> line
+    /// stays in the description even when the title leads with something else.
+    /// </summary>
+    public string PlayerStory { get; init; }
 }
 
 public static class FullMatchMetadataBuilder
 {
-    public const string TemplateVersion = "10";
+    public const string TemplateVersion = "11";
     public const int TitleMaxCharacters = 100;
     public const int DescriptionMaxCharacters = 5000;
     public const int TagMaxCharacters = 30;
@@ -212,6 +225,17 @@ public static class FullMatchMetadataBuilder
                 ? Hook(input, titles, map, mode, namedLead ? focus : null, featuredHero)
                 : null;
         string hookTitle = Clean(hook?.Title, 80);
+        PlayerStory story =
+            focusTitle == null && titles.PlayerStories?.Enabled == true
+                ? PlayerStoryPicker.Pick(
+                    input.PlayerStories,
+                    replayId,
+                    Named(namedLead ? focus : null, featuredHero),
+                    titles.PlayerStories
+                )
+                : null;
+        string storyTitle = Clean(story?.Title, 80);
+        string storyLine = storyTitle == null ? null : Clean(story.Line, 400);
         HighlightContext highlights =
             titles.Highlights?.Enabled == true && input.Insights != null
                 ? new HighlightContext(input.Insights, events, titles.Highlights)
@@ -250,11 +274,12 @@ public static class FullMatchMetadataBuilder
                 focus,
                 feature,
                 draft.Title ?? hookTitle,
-                replayText
+                replayText,
+                storyTitle
             );
 
         var lines = new List<string>();
-        if (hookTitle != null)
+        if (hookTitle != null || storyLine != null)
         {
             // Heroes Profile's terms: the attribution sits near the top, where YouTube shows it unfolded.
             lines.Add(StatHookPicker.Attribution);
@@ -277,6 +302,7 @@ public static class FullMatchMetadataBuilder
         AddLine(lines, draft.Line == null ? null : "Draft: " + draft.Line);
         AddLine(lines, featuredHero == null ? null : "Featuring: " + featuredHero);
         AddLine(lines, hookTitle == null ? null : Clean(hook.StatsLine, 400));
+        AddLine(lines, storyLine);
         AddLine(
             lines,
             highlights == null ? Highlights(events) : HighlightLines.Highlights(highlights, events)
@@ -334,6 +360,7 @@ public static class FullMatchMetadataBuilder
             IncludesSpoiler = resultLine != null && Has(description, resultLine),
             StatHook = hookTitle,
             Highlight = highlight == null ? null : title,
+            PlayerStory = storyTitle,
         };
     }
 
@@ -438,9 +465,13 @@ public static class FullMatchMetadataBuilder
             map,
             named,
             titles.StatHooks,
-            mode
+            mode,
+            input.ReplayId ?? 0
         );
     }
+
+    private static IReadOnlyCollection<string> Named(params string[] heroes) =>
+        heroes.Where(hero => !string.IsNullOrWhiteSpace(hero)).ToList();
 
     private static FullMatchMetadata Empty(string category)
     {
@@ -483,13 +514,15 @@ public static class FullMatchMetadataBuilder
         string hero,
         string feature,
         string draft,
-        string replayId
+        string replayId,
+        string story = null
     )
     {
         // A title never names the Twitch viewer. A reward that picked a player leads with that hero.
+        // Otherwise a player story leads (it names a hero, never a player).
         // The draft note sits just before the replay id, so it is the first part dropped at 100 characters.
         string lead =
-            namedPlayer && titles.NamedPlayerTitles && hero != null ? hero + " focus" : null;
+            namedPlayer && titles.NamedPlayerTitles && hero != null ? hero + " focus" : story;
         return ComposeTitle(budget, lead, feature, map, mode, rank, draft, replayId);
     }
 

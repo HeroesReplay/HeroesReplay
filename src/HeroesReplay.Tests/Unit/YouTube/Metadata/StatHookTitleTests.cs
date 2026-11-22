@@ -53,7 +53,7 @@ public sealed class StatHookTitleTests : IDisposable
             metadata.DescriptionLines
         );
         Assert.True(metadata.ClaimsFullMatch);
-        Assert.Equal("10", metadata.TemplateVersion);
+        Assert.Equal("11", metadata.TemplateVersion);
     }
 
     [Fact]
@@ -284,7 +284,7 @@ public sealed class StatHookTitleTests : IDisposable
     }
 
     [Fact]
-    public void AppSettings_ShipStatHooksOffEverywhere()
+    public void AppSettings_ShipStatHooksOnInDevAndProduction_OffInTheBase()
     {
         string basePath = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
         IConfigurationRoot baseConfig = new ConfigurationBuilder().AddJsonFile(basePath).Build();
@@ -320,15 +320,32 @@ public sealed class StatHookTitleTests : IDisposable
         Assert.Equal(TimeSpan.FromHours(72), heroStats.MaxAge);
         Assert.Equal(TimeSpan.FromSeconds(61), heroStats.GroupByMapSpacing);
 
-        foreach (string overlay in new[] { "appsettings.dev.json", "appsettings.prod.json" })
+        Assert.True(hooks.CommunityWording);
+
+        // Dev and production tell hooks and player stories; the base file leaves them off.
+        foreach (
+            (string overlay, bool on) in new[]
+            {
+                ("appsettings.dev.json", true),
+                ("appsettings.prod.json", true),
+            }
+        )
         {
             IConfigurationRoot merged = new ConfigurationBuilder()
                 .AddJsonFile(basePath)
                 .AddJsonFile(FindRepoFile(Path.Combine("src", "HeroesReplay.CLI", overlay)))
                 .Build();
-            Assert.False(merged.GetValue<bool>("YouTube:Titles:StatHooks:Enabled"), overlay);
+            Assert.Equal(on, merged.GetValue<bool>("YouTube:Titles:StatHooks:Enabled"));
             Assert.NotNull(merged.GetValue<string>("YouTube:Titles:StatHooks:Enabled"));
+            Assert.Equal(on, merged.GetValue<bool>("YouTube:Titles:PlayerStories:Enabled"));
         }
+
+        PlayerStorySettings stories = baseConfig
+            .GetSection("YouTube:Titles:PlayerStories")
+            .Get<PlayerStorySettings>();
+        Assert.False(stories.Enabled);
+        Assert.Equal(5, stories.StreakMinGames);
+        Assert.Equal(TimeSpan.FromHours(6), stories.RetryAfter);
     }
 
     private AppSettings Settings(bool enabled) =>

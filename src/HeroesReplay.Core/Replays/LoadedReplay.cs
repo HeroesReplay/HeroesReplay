@@ -1,8 +1,10 @@
+using System.Collections.Generic;
 using System.IO;
 using Heroes.ReplayParser;
 using HeroesReplay.Core.HeroesProfile;
 using HeroesReplay.Core.HeroFocus.Picking;
 using HeroesReplay.Core.Requests;
+using HeroesReplay.Core.YouTube.Metadata;
 
 /// <summary>
 /// The StormReplay is a wrapper which links a raw replay file on disk to an in-memory parsed version of that file
@@ -35,4 +37,11 @@ public class LoadedReplay
     /// request: a request's BattleTag decides its camera.
     /// </summary>
     public FocusPick FocusPick { get; set; }
+
+    /// <summary>
+    /// The players' Heroes Profile histories from the replay's focus card, read when it loads,
+    /// for title stories (<c>YouTube:Titles:PlayerStories</c>). Empty when off or unknown.
+    /// </summary>
+    public IReadOnlyList<PlayerStoryFacts> PlayerStories { get; set; } =
+        System.Array.Empty<PlayerStoryFacts>();
 }
