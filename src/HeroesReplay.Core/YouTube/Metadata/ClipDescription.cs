@@ -22,11 +22,6 @@ public static class ClipDescription
     /// <summary>The viewer lines, or the clip's own line when the clip is of no known kind.</summary>
     public static IReadOnlyList<string> Compose(TeamKillClip clip, string map, string replayId)
     {
-        if (clip == null)
-        {
-            return Array.Empty<string>();
-        }
-
         ClipTitle.Facts facts = ClipTitle.Facts.Of(clip);
         var context = new Context(facts, clip.NamesTeam, map);
         List<Line> eligible = Lines
