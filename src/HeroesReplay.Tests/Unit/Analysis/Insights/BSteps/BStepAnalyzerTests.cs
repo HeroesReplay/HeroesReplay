@@ -41,6 +41,44 @@ public class BStepAnalyzerTests
     }
 
     [Fact]
+    public void TheRival_IsTheHeroTheBstepperKilled_WithTheirEarlierKillsOnEachOther()
+    {
+        // Muradin had killed Sonya twice; Sonya had killed him once. Then she kills him and bsteps.
+        ReplaySnapshot snapshot = Snapshot(
+            Cycles(player: 0, from: 790, count: 5, gap: 0.25, cancel: 0.13),
+            new[]
+            {
+                new HeroDeath(5, 1, TimeSpan.FromSeconds(100), Fight, KillerIndex: 0),
+                new HeroDeath(0, 0, TimeSpan.FromSeconds(200), Fight, KillerIndex: 5),
+                new HeroDeath(0, 0, TimeSpan.FromSeconds(400), Fight, KillerIndex: 5),
+                new HeroDeath(0, 0, TimeSpan.FromSeconds(500), Fight, KillerIndex: 6),
+                new HeroDeath(5, 1, TimeSpan.FromSeconds(789.4), Fight, KillerIndex: 0),
+            }
+        );
+
+        BStep step = Assert.Single(new BStepAnalyzer(null).Analyze(snapshot).BSteps);
+
+        Assert.Equal(5, step.RivalIndex);
+        Assert.Equal("Muradin", step.Rival);
+        Assert.Equal(1, step.EarlierKillsOnRival);
+        Assert.Equal(2, step.EarlierDeathsToRival);
+    }
+
+    [Fact]
+    public void ABstepWithoutAKill_HasNoRival()
+    {
+        ReplaySnapshot snapshot = Snapshot(
+            Cycles(player: 0, from: 360, count: 6, gap: 0.2, cancel: 0.1),
+            new[] { new HeroDeath(0, 0, TimeSpan.FromSeconds(370), new MapPoint(10, 10), 5) }
+        );
+
+        BStep step = Assert.Single(new BStepAnalyzer(null).Analyze(snapshot).BSteps);
+
+        Assert.Equal(-1, step.RivalIndex);
+        Assert.Null(step.Rival);
+    }
+
+    [Fact]
     public void TheBstepperDyingSoonAfter_IsLinked_WhereverItHappened()
     {
         ReplaySnapshot snapshot = Snapshot(
