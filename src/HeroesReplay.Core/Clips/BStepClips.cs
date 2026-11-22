@@ -30,9 +30,9 @@ public static class BStepClips
     /// </summary>
     public const int MaxClips = 1;
 
-    public const int LeadSeconds = 4;
+    public const int LeadSeconds = 14;
 
-    public const int TailSeconds = 4;
+    public const int TailSeconds = 14;
 
     /// <summary>A clip shows at most this much before the bstep starts, or after it ends.</summary>
     public const int MaxReachSeconds = 15;
@@ -147,7 +147,7 @@ public static class BStepClips
             text += $", then {next.Hero} dies";
         }
 
-        return $"{text} ({step.Cycles} hearth cancels in {Math.Max(1, step.EndSecond - step.StartSecond)} s)";
+        return text;
     }
 
     private static string Join(IReadOnlyList<string> names) =>

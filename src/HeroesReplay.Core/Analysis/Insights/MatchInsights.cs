@@ -9,6 +9,7 @@ using HeroesReplay.Core.Analysis.Insights.Finish;
 using HeroesReplay.Core.Analysis.Insights.Focused;
 using HeroesReplay.Core.Analysis.Insights.Lanes;
 using HeroesReplay.Core.Analysis.Insights.Objectives;
+using HeroesReplay.Core.Analysis.Insights.Pirates;
 using HeroesReplay.Core.Analysis.Insights.Players;
 using HeroesReplay.Core.Analysis.Insights.Structures;
 
@@ -54,4 +55,7 @@ public sealed record MatchInsights
 
     /// <summary>Each bstep (Hearthstone started and cancelled by moves, over and over) and the deaths around it.</summary>
     public BStepInsights BSteps { get; set; } = new();
+
+    /// <summary>A Juice Pirates team: a carrier and repeated dives into an empty enemy base.</summary>
+    public PirateInsights Pirates { get; set; } = new();
 }

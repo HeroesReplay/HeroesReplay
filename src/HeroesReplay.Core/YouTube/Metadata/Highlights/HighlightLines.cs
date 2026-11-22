@@ -104,6 +104,15 @@ public static class HighlightLines
             parts.Add("insane comeback");
         }
 
+        if (context.Insights.Pirates?.Pirates == true)
+        {
+            parts.Add(
+                context.Insights.Pirates.Carrier == "Medivh"
+                    ? "Juice Pirates (Medivh portal backdoors)"
+                    : "Juice Pirates (Medivac backdoors)"
+            );
+        }
+
         return parts.Count == 0
             ? null
             : "Highlights: " + string.Join("; ", parts.Take(MaxHighlights));

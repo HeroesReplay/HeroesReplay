@@ -262,6 +262,24 @@ public class InsightsCommand : Command
                 parts.Add("core race");
             }
 
+            if (insights.Pirates.Carrier != null)
+            {
+                Count(games, "pirate carrier " + insights.Pirates.Carrier);
+                for (int dives = 1; dives <= Math.Min(insights.Pirates.Dives, 4); dives++)
+                {
+                    Count(games, "pirate dives >= " + dives);
+                }
+
+                if (insights.Pirates.Pirates)
+                {
+                    Count(games, "juice pirates");
+                }
+
+                parts.Add(
+                    $"{(insights.Pirates.Pirates ? "JUICE PIRATES" : "carrier")} {insights.Pirates.Carrier} dives {insights.Pirates.Dives}{(insights.Pirates.Sanctification ? " +sanct" : string.Empty)} [{string.Join(", ", insights.Pirates.Heroes)}]"
+                );
+            }
+
             for (
                 int deficit = 1;
                 deficit <= Math.Min(insights.Comeback.BuildingDeficit, 6);
