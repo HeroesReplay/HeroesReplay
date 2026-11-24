@@ -7,15 +7,25 @@ namespace HeroesReplay.Core.Analysis.Insights.Pirates;
 
 /// <summary>
 /// Finds a Juice Pirates game (<see cref="PirateInsights"/>). A team qualifies with a carrier (Lt.
-/// Morales who took Medivac Dropship, or Medivh) and at least
-/// <see cref="PirateInsightSettings.MinDives"/> base dives: from gates open, sampled every
-/// <see cref="PirateInsightSettings.SampleEvery"/>, at least <see cref="PirateInsightSettings.MinDivers"/>
-/// of its heroes within <see cref="PirateInsightSettings.Radius"/> of an enemy fort, keep (still
-/// standing) or core, with at most <see cref="PirateInsightSettings.MaxDefenders"/> enemy heroes
-/// there, for <see cref="PirateInsightSettings.MinDiveSamples"/> samples in a row. Dives closer than
+/// Morales who took Medivac Dropship, or Medivh), at least <see cref="PirateInsightSettings.MinRaids"/>
+/// raids, and a big share of the game's structure damage
+/// (<see cref="PirateInsightSettings.MinStructureDamageShare"/>).
+/// <para>
+/// A dive: from gates open, sampled every <see cref="PirateInsightSettings.SampleEvery"/>, at least
+/// <see cref="PirateInsightSettings.MinDivers"/> of the team's heroes within
+/// <see cref="PirateInsightSettings.Radius"/> of an enemy fort, keep (still standing) or core, with
+/// at most <see cref="PirateInsightSettings.MaxDefenders"/> enemy heroes there, for
+/// <see cref="PirateInsightSettings.MinDiveSamples"/> samples in a row. Diving samples closer than
 /// <see cref="PirateInsightSettings.DiveGap"/> are one dive. A normal late push brings defenders,
 /// and a push after a won fight finds the defenders dead, so a dive also needs at least
 /// <see cref="PirateInsightSettings.MinDefendersAlive"/> enemy heroes alive somewhere else.
+/// </para>
+/// <para>
+/// A raid: a dive with the carrier in it that destroys at least
+/// <see cref="PirateInsightSettings.MinRaidStructures"/> towers, forts or keeps. Three heroes
+/// pushing a fort while the enemy takes an objective is a dive too, and that alone named replay
+/// 66787940 (a Medivh game with no backdoor) Juice Pirates.
+/// </para>
 /// </summary>
 public sealed class PirateAnalyzer : IInsightAnalyzer<PirateInsights>
 {
@@ -45,30 +55,38 @@ public sealed class PirateAnalyzer : IInsightAnalyzer<PirateInsights>
             List<SnapshotPlayer> crew = snapshot
                 .Players.Where(player => player.Team == team)
                 .ToList();
-            string carrier = Carrier(crew);
+            SnapshotPlayer carrier = Carrier(crew);
             if (carrier == null)
             {
                 continue;
             }
 
-            int dives = Dives(snapshot, team);
-            if (best != null && best.Dives >= dives)
+            List<PirateDive> log = Dives(snapshot, team, carrier.Index);
+            int raids = log.Count(dive => dive.Raid);
+            if (
+                best != null
+                && (best.Raids > raids || (best.Raids == raids && best.Dives >= log.Count))
+            )
             {
                 continue;
             }
 
+            double share = StructureDamageShare(snapshot, team);
             best = new PirateInsights
             {
-                Pirates = dives >= settings.MinDives,
+                Pirates = raids >= settings.MinRaids && share >= settings.MinStructureDamageShare,
                 Team = team,
-                Carrier = carrier,
+                Carrier = carrier.Hero.Name,
                 Sanctification = crew.Any(player =>
                     Is(player, "Tyrael") && HasTalent(player, settings.SanctificationTalent)
                 ),
                 Heroes = crew.Select(player => player.Hero?.Name)
                     .Where(name => !string.IsNullOrWhiteSpace(name))
                     .ToArray(),
-                Dives = dives,
+                Dives = log.Count,
+                Raids = raids,
+                DiveLog = log,
+                StructureDamageShare = share,
                 Sunk = snapshot.CoreLostBy == 1 - team,
             };
         }
@@ -76,23 +94,29 @@ public sealed class PirateAnalyzer : IInsightAnalyzer<PirateInsights>
         return best ?? new PirateInsights();
     }
 
-    private string Carrier(IReadOnlyList<SnapshotPlayer> crew)
+    private SnapshotPlayer Carrier(IReadOnlyList<SnapshotPlayer> crew)
     {
         SnapshotPlayer morales = crew.FirstOrDefault(player =>
             Is(player, "Lt. Morales") && HasTalent(player, settings.MedivacTalent)
         );
         if (morales != null)
         {
-            return morales.Hero.Name;
+            return morales;
         }
 
-        SnapshotPlayer medivh = settings.Medivh
-            ? crew.FirstOrDefault(player => Is(player, "Medivh"))
-            : null;
-        return medivh?.Hero.Name;
+        return settings.Medivh ? crew.FirstOrDefault(player => Is(player, "Medivh")) : null;
     }
 
-    private int Dives(ReplaySnapshot snapshot, int team)
+    private static double StructureDamageShare(ReplaySnapshot snapshot, int team)
+    {
+        double ours = snapshot
+            .Players.Where(player => player.Team == team)
+            .Sum(player => (double)(player.Score?.StructureDamage ?? 0));
+        double all = snapshot.Players.Sum(player => (double)(player.Score?.StructureDamage ?? 0));
+        return all <= 0 ? 0 : ours / all;
+    }
+
+    private List<PirateDive> Dives(ReplaySnapshot snapshot, int team, int carrier)
     {
         int enemy = 1 - team;
         int[] attackers = snapshot
@@ -108,9 +132,9 @@ public sealed class PirateAnalyzer : IInsightAnalyzer<PirateInsights>
             .ToList();
         MapPoint core = snapshot.Cores[enemy];
 
-        int dives = 0;
+        var windows = new List<Window>();
+        Window open = null;
         int streak = 0;
-        TimeSpan? lastDive = null;
         TimeSpan step =
             settings.SampleEvery <= TimeSpan.Zero ? TimeSpan.FromSeconds(2) : settings.SampleEvery;
         for (TimeSpan time = snapshot.GatesOpen; time <= snapshot.End; time += step)
@@ -118,28 +142,90 @@ public sealed class PirateAnalyzer : IInsightAnalyzer<PirateInsights>
             // A push after a won fight also finds an empty base, but the defenders are dead. A
             // backdoor happens while they are alive and somewhere else.
             int alive = defenders.Count(index => snapshot.Positions.TryGet(index, time, out _));
-            bool diving =
+            MapPoint? target =
                 alive >= settings.MinDefendersAlive
-                && Targets(snapshot, towns, core, time)
-                    .Any(target =>
-                        Near(snapshot, attackers, target, time) >= settings.MinDivers
-                        && Near(snapshot, defenders, target, time) <= settings.MaxDefenders
-                    );
-            streak = diving ? streak + 1 : 0;
-            if (streak != settings.MinDiveSamples)
+                    ? Targets(snapshot, towns, core, time)
+                        .Cast<MapPoint?>()
+                        .FirstOrDefault(point =>
+                            Near(snapshot, attackers, point.Value, time, settings.Radius)
+                                >= settings.MinDivers
+                            && Near(snapshot, defenders, point.Value, time, settings.Radius)
+                                <= settings.MaxDefenders
+                        )
+                    : null;
+            if (target == null)
+            {
+                streak = 0;
+                continue;
+            }
+
+            streak++;
+            int divers = Near(snapshot, attackers, target.Value, time, settings.Radius);
+            bool carrierHere =
+                snapshot.Positions.TryGet(carrier, time, out MapPoint carrierAt)
+                && carrierAt.DistanceTo(target.Value) <= settings.StructureRadius;
+            if (open != null && time - open.End < settings.DiveGap)
+            {
+                // Still the same dive (or a new streak close enough to be part of it).
+                open.End = time;
+                open.Divers = Math.Max(open.Divers, divers);
+                open.Carrier |= carrierHere;
+                continue;
+            }
+
+            if (streak < settings.MinDiveSamples)
             {
                 continue;
             }
 
-            if (lastDive == null || time - lastDive.Value >= settings.DiveGap)
+            TimeSpan start = time - step * (settings.MinDiveSamples - 1);
+            open = new Window
             {
-                dives++;
-            }
-
-            lastDive = time;
+                Start = start,
+                End = time,
+                Divers = divers,
+                Carrier = carrierHere,
+            };
+            windows.Add(open);
         }
 
-        return dives;
+        return windows
+            .Select(window =>
+            {
+                int structures = Structures(snapshot, attackers, enemy, window);
+                bool raid =
+                    (window.Carrier || !settings.CarrierMustDive)
+                    && structures >= settings.MinRaidStructures;
+                return new PirateDive(
+                    window.Start,
+                    window.End,
+                    window.Divers,
+                    window.Carrier,
+                    structures,
+                    raid
+                );
+            })
+            .ToList();
+    }
+
+    /// <summary>
+    /// The enemy towers, forts and keeps that fell during the dive with a pirate hero close by and
+    /// no last hit from the defenders' side.
+    /// </summary>
+    private int Structures(ReplaySnapshot snapshot, int[] attackers, int enemy, Window window)
+    {
+        TimeSpan from = window.Start - settings.SampleEvery;
+        TimeSpan to = window.End + settings.RaidGrace;
+        return (snapshot.StructureLosses ?? Array.Empty<StructureLoss>()).Count(loss =>
+            loss.Team == enemy
+            && loss.Time >= from
+            && loss.Time <= to
+            && (loss.KillerIndex < 0 || attackers.Contains(loss.KillerIndex))
+            && (
+                attackers.Contains(loss.KillerIndex)
+                || Near(snapshot, attackers, loss.Point, loss.Time, settings.StructureRadius) > 0
+            )
+        );
     }
 
     private static IEnumerable<MapPoint> Targets(
@@ -163,15 +249,16 @@ public sealed class PirateAnalyzer : IInsightAnalyzer<PirateInsights>
         yield return core;
     }
 
-    private int Near(
+    private static int Near(
         ReplaySnapshot snapshot,
         IEnumerable<int> players,
         MapPoint target,
-        TimeSpan time
+        TimeSpan time,
+        double radius
     ) =>
         players.Count(index =>
             snapshot.Positions.TryGet(index, time, out MapPoint point)
-            && point.DistanceTo(target) <= settings.Radius
+            && point.DistanceTo(target) <= radius
         );
 
     private static bool Is(SnapshotPlayer player, string hero) =>
@@ -182,4 +269,12 @@ public sealed class PirateAnalyzer : IInsightAnalyzer<PirateInsights>
         && (player.Talents ?? Array.Empty<string>()).Any(name =>
             name != null && name.Contains(talent, StringComparison.OrdinalIgnoreCase)
         );
+
+    private sealed class Window
+    {
+        public TimeSpan Start { get; set; }
+        public TimeSpan End { get; set; }
+        public int Divers { get; set; }
+        public bool Carrier { get; set; }
+    }
 }
