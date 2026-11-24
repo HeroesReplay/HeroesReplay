@@ -42,8 +42,11 @@ public class InsightsSettings
 
 /// <summary>
 /// Juice Pirates (<c>Insights:Pirates</c>): a team that flies (Lt. Morales' Medivac Dropship) or
-/// portals (Medivh) into the enemy base and hits buildings while the defenders are elsewhere.
-/// Defaults are a first guess, not yet measured on the corpus.
+/// portals (Medivh) into the enemy base and goes structure to structure while the defenders are
+/// elsewhere. A dive (several pirates at an enemy fort, keep or core with nobody home) is only a
+/// raid when the carrier is there and the pirates destroy buildings during it: three heroes pushing
+/// a fort while the enemy takes an objective is ordinary macro, not a backdoor (replay
+/// 66787940 was called Juice Pirates for Medivh being in the game and such pushes).
 /// </summary>
 public class PirateInsightSettings
 {
@@ -79,8 +82,35 @@ public class PirateInsightSettings
     /// <summary>Dives closer together than this are one dive.</summary>
     public TimeSpan DiveGap { get; set; } = TimeSpan.FromSeconds(45);
 
-    /// <summary>One dive can be a lucky push; pirates do it again and again.</summary>
-    public int MinDives { get; set; } = 2;
+    /// <summary>
+    /// The carrier must be in the dive (within <see cref="StructureRadius"/> of the target at some
+    /// point of it): a Medivh in the game who never portals anyone in is not a carrier.
+    /// </summary>
+    public bool CarrierMustDive { get; set; } = true;
+
+    /// <summary>
+    /// A building counts for a dive when a pirate hero is this close to it as it falls, and no
+    /// enemy of the pirates landed the last hit (a pirate or a minion did).
+    /// </summary>
+    public double StructureRadius { get; set; } = 25;
+
+    /// <summary>Buildings that fall this long after the dive's last sample still count for it.</summary>
+    public TimeSpan RaidGrace { get; set; } = TimeSpan.FromSeconds(10);
+
+    /// <summary>
+    /// Structure to structure: a dive is a raid when the pirates destroy at least this many towers,
+    /// forts or keeps during it.
+    /// </summary>
+    public int MinRaidStructures { get; set; } = 2;
+
+    /// <summary>One raid can be a lucky push; pirates do it again and again.</summary>
+    public int MinRaids { get; set; } = 2;
+
+    /// <summary>
+    /// A building-damage team: the pirates' share of both teams' structure damage on the score
+    /// screen must be at least this.
+    /// </summary>
+    public double MinStructureDamageShare { get; set; } = 0.5;
 }
 
 /// <summary>

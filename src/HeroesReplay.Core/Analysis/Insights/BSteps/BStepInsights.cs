@@ -34,6 +34,21 @@ public sealed record BStep
     public double MedianGapSeconds { get; init; }
 
     public IReadOnlyList<BStepDeath> Deaths { get; set; } = Array.Empty<BStepDeath>();
+
+    /// <summary>
+    /// The enemy the bstep is over: the first hero the bstepper killed before or during it. -1
+    /// when the bstepper killed no one.
+    /// </summary>
+    public int RivalIndex { get; init; } = -1;
+
+    /// <summary>That enemy's hero in English, or null.</summary>
+    public string Rival { get; init; }
+
+    /// <summary>Kills the bstepper had on the rival earlier in the game, before this death.</summary>
+    public int EarlierKillsOnRival { get; init; }
+
+    /// <summary>Times the rival had killed the bstepper earlier in the game.</summary>
+    public int EarlierDeathsToRival { get; init; }
 }
 
 /// <summary>How a death relates to the bstepper.</summary>

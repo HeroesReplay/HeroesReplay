@@ -195,6 +195,15 @@ public static class ClipTitle
 
         public bool AllyBefore { get; init; }
 
+        /// <summary>The enemy hero the bstep is over, or null.</summary>
+        public string Rival { get; init; }
+
+        /// <summary>The bstepper's kills on <see cref="Rival"/> earlier in the game.</summary>
+        public int KillsOnRival { get; init; }
+
+        /// <summary>Times <see cref="Rival"/> had killed the bstepper earlier in the game.</summary>
+        public int DeathsToRival { get; init; }
+
         /// <summary>The capturing team (<c>Blue</c>), or for a defended boss the team that kept it.</summary>
         public string Team { get; init; }
 
@@ -291,6 +300,9 @@ public static class ClipTitle
                     death.Kind == BStepDeathKind.Bstepper && death.After
                 ),
                 AllyBefore = deaths.Any(death => death.Kind == BStepDeathKind.Ally && !death.After),
+                Rival = string.IsNullOrWhiteSpace(step.Rival) ? null : step.Rival.Trim(),
+                KillsOnRival = step.EarlierKillsOnRival,
+                DeathsToRival = step.EarlierDeathsToRival,
             };
         }
 

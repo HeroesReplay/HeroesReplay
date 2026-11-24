@@ -270,13 +270,18 @@ public class InsightsCommand : Command
                     Count(games, "pirate dives >= " + dives);
                 }
 
+                for (int raids = 1; raids <= Math.Min(insights.Pirates.Raids, 4); raids++)
+                {
+                    Count(games, "pirate raids >= " + raids);
+                }
+
                 if (insights.Pirates.Pirates)
                 {
                     Count(games, "juice pirates");
                 }
 
                 parts.Add(
-                    $"{(insights.Pirates.Pirates ? "JUICE PIRATES" : "carrier")} {insights.Pirates.Carrier} dives {insights.Pirates.Dives}{(insights.Pirates.Sanctification ? " +sanct" : string.Empty)} [{string.Join(", ", insights.Pirates.Heroes)}]"
+                    $"{(insights.Pirates.Pirates ? "JUICE PIRATES" : "carrier")} {insights.Pirates.Carrier} dives {insights.Pirates.Dives} raids {insights.Pirates.Raids} structure share {insights.Pirates.StructureDamageShare:P0}{(insights.Pirates.Sanctification ? " +sanct" : string.Empty)} [{string.Join(", ", insights.Pirates.Heroes)}] {{{string.Join("; ", insights.Pirates.DiveLog.Select(PirateDiveText))}}}"
                 );
             }
 
@@ -541,4 +546,11 @@ public class InsightsCommand : Command
         private static void Count(Dictionary<string, int> counts, string key) =>
             counts[key] = counts.GetValueOrDefault(key) + 1;
     }
+
+    /// <summary><c>12:04-12:40 x4 carrier 3 bldg RAID</c>: one dive of the pirate dive log.</summary>
+    private static string PirateDiveText(Core.Analysis.Insights.Pirates.PirateDive dive) =>
+        string.Create(
+            CultureInfo.InvariantCulture,
+            $"{dive.Start:mm\\:ss}-{dive.End:mm\\:ss} x{dive.Divers}{(dive.Carrier ? " carrier" : string.Empty)} {dive.Structures} bldg{(dive.Raid ? " RAID" : string.Empty)}"
+        );
 }
