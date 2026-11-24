@@ -21,7 +21,8 @@ namespace HeroesReplay.Core.Analysis.Insights.Pirates;
 /// <see cref="PirateInsightSettings.MinDefendersAlive"/> enemy heroes alive somewhere else.
 /// </para>
 /// <para>
-/// A raid: a dive with the carrier in it that destroys at least
+/// A raid: a dive with the carrier in it (for Lt. Morales, once her team has level 10 and the
+/// Medivac) that destroys at least
 /// <see cref="PirateInsightSettings.MinRaidStructures"/> towers, forts or keeps. Three heroes
 /// pushing a fort while the enemy takes an objective is a dive too, and that alone named replay
 /// 66787940 (a Medivh game with no backdoor) Juice Pirates.
@@ -61,7 +62,11 @@ public sealed class PirateAnalyzer : IInsightAnalyzer<PirateInsights>
                 continue;
             }
 
-            List<PirateDive> log = Dives(snapshot, team, carrier.Index);
+            // Medivac Dropship is Lt. Morales' heroic: before level 10 she cannot fly anyone in.
+            // Medivh's portal is a basic ability.
+            TimeSpan flying =
+                Is(carrier, "Lt. Morales") ? HeroicAt(snapshot, team) : snapshot.GatesOpen;
+            List<PirateDive> log = Dives(snapshot, team, carrier.Index, flying);
             int raids = log.Count(dive => dive.Raid);
             if (
                 best != null
@@ -116,7 +121,23 @@ public sealed class PirateAnalyzer : IInsightAnalyzer<PirateInsights>
         return all <= 0 ? 0 : ours / all;
     }
 
-    private List<PirateDive> Dives(ReplaySnapshot snapshot, int team, int carrier)
+    /// <summary>When the team reached level 10, or the end when it never did.</summary>
+    private static TimeSpan HeroicAt(ReplaySnapshot snapshot, int team) =>
+        snapshot.TeamLevels != null
+        && snapshot.TeamLevels.TryGetValue(team, out IReadOnlyDictionary<int, TimeSpan> levels)
+        && levels != null
+            ? levels.Where(level => level.Key >= 10)
+                .Select(level => level.Value)
+                .DefaultIfEmpty(snapshot.End)
+                .Min()
+            : snapshot.GatesOpen;
+
+    private List<PirateDive> Dives(
+        ReplaySnapshot snapshot,
+        int team,
+        int carrier,
+        TimeSpan flying
+    )
     {
         int enemy = 1 - team;
         int[] attackers = snapshot
@@ -194,7 +215,8 @@ public sealed class PirateAnalyzer : IInsightAnalyzer<PirateInsights>
             {
                 int structures = Structures(snapshot, attackers, enemy, window);
                 bool raid =
-                    (window.Carrier || !settings.CarrierMustDive)
+                    window.End >= flying
+                    && (window.Carrier || !settings.CarrierMustDive)
                     && structures >= settings.MinRaidStructures;
                 return new PirateDive(
                     window.Start,

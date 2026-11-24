@@ -118,6 +118,18 @@ public class PirateAnalyzerTests
         Assert.All(pirates.DiveLog, dive => Assert.False(dive.Carrier));
     }
 
+    /// <summary>Medivac Dropship is a heroic: the fixture's teams reach level 10 at six minutes.</summary>
+    [Fact]
+    public void MoralesDivesBeforeLevelTen_AreNotRaids()
+    {
+        PirateInsights pirates = Analyze(Crew(medivac: true), Dives(), defendersHome: false);
+
+        PirateDive early = Assert.Single(pirates.DiveLog, dive => dive.End < TimeSpan.FromMinutes(6));
+        Assert.True(early.Structures >= 2);
+        Assert.False(early.Raid);
+        Assert.Equal(pirates.Dives - 1, pirates.Raids);
+    }
+
     [Fact]
     public void RaidsByATeamWithLittleBuildingDamage_AreNotJuicePirates()
     {
