@@ -41,6 +41,13 @@ public sealed record ReplaySnapshot
     /// <summary>Towers destroyed (team, time): <c>TownCannonTower</c> structure units that died.</summary>
     public IReadOnlyList<TowerLoss> TowerLosses { get; init; } = Array.Empty<TowerLoss>();
 
+    /// <summary>
+    /// Towers, forts and keeps destroyed, in time order, where they stood and who landed the last
+    /// hit: the raw material of a Juice Pirates raid (<c>PirateAnalyzer</c>).
+    /// </summary>
+    public IReadOnlyList<StructureLoss> StructureLosses { get; init; } =
+        Array.Empty<StructureLoss>();
+
     /// <summary>Merc camps (<c>JungleCampInit</c>) and their positions.</summary>
     public IReadOnlyList<Camp> Camps { get; init; } = Array.Empty<Camp>();
 
@@ -102,6 +109,9 @@ public sealed record PlayerScore
     public int Takedowns { get; init; }
     public int HeroDamage { get; init; }
     public int SiegeDamage { get; init; }
+
+    /// <summary>Damage to towers, forts, keeps and the core (part of <see cref="SiegeDamage"/>).</summary>
+    public int StructureDamage { get; init; }
     public int MinionDamage { get; init; }
     public int Healing { get; init; }
     public int Experience { get; init; }
@@ -156,6 +166,13 @@ public sealed record TownLoss(int TownId, int Team, bool Keep, TimeSpan Time);
 
 /// <summary>A tower destroyed.</summary>
 public sealed record TowerLoss(int Team, TimeSpan Time);
+
+/// <summary>
+/// A tower, fort or keep of <see cref="Team"/> destroyed at <see cref="Point"/>.
+/// <see cref="KillerIndex"/> is the player whose unit landed the last hit, or -1 when no player
+/// did (a minion, a mercenary or a map objective).
+/// </summary>
+public sealed record StructureLoss(int Team, TimeSpan Time, MapPoint Point, int KillerIndex);
 
 public sealed record Camp(int Id, MapPoint Point);
 

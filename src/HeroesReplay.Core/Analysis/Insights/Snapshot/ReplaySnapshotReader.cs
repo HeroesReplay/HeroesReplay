@@ -22,6 +22,9 @@ public static class ReplaySnapshotReader
     private const string CampCaptured = "JungleCampCapture";
     private const string TowerPrefix = "TownCannonTower";
 
+    /// <summary>Forts (<c>TownTownHallL2</c>) and keeps (<c>TownTownHallL3</c>).</summary>
+    private const string TownHallPrefix = "TownTownHall";
+
     /// <summary>
     /// The boss dies at most this long before its camp's capture event (#528). The capture
     /// follows the death by 2 s at the median, but a contested circle holds it back: 25 of 1,275
@@ -100,6 +103,7 @@ public static class ReplaySnapshotReader
                 )
                 .Select(unit => new TowerLoss(unit.Team.Value, unit.TimeSpanDied.Value))
                 .ToArray(),
+            StructureLosses = StructureLosses(replay, players),
             Camps = camps,
             CampCaptures = captures,
             TeamLevels = TeamLevels(replay),
@@ -145,6 +149,7 @@ public static class ReplaySnapshotReader
                         Takedowns = score.Takedowns,
                         HeroDamage = score.HeroDamage,
                         SiegeDamage = score.SiegeDamage,
+                        StructureDamage = score.StructureDamage,
                         MinionDamage = score.MinionDamage,
                         Healing = score.Healing ?? 0,
                         Experience = score.ExperienceContribution,
@@ -408,6 +413,40 @@ public static class ReplaySnapshotReader
                 new MapPoint(stat.Int("PositionX") ?? 0, stat.Int("PositionY") ?? 0)
             ))
             .ToList();
+
+    private static StructureLoss[] StructureLosses(Replay replay, Player[] players)
+    {
+        var indexOf = new Dictionary<Player, int>();
+        for (int index = 0; index < players.Length; index++)
+        {
+            if (players[index] != null)
+            {
+                indexOf.TryAdd(players[index], index);
+            }
+        }
+
+        return (replay.Units ?? new List<Unit>())
+            .Where(unit =>
+                unit?.Team is 0 or 1
+                && unit.TimeSpanDied != null
+                && unit.PointBorn != null
+                && (
+                    unit.Name?.StartsWith(TowerPrefix, StringComparison.Ordinal) == true
+                    || unit.Name?.StartsWith(TownHallPrefix, StringComparison.Ordinal) == true
+                )
+            )
+            .Select(unit => new StructureLoss(
+                unit.Team.Value,
+                unit.TimeSpanDied.Value,
+                new MapPoint(unit.PointBorn.X, unit.PointBorn.Y),
+                unit.PlayerKilledBy != null
+                && indexOf.TryGetValue(unit.PlayerKilledBy, out int killer)
+                    ? killer
+                    : -1
+            ))
+            .OrderBy(loss => loss.Time)
+            .ToArray();
+    }
 
     private static TownLoss[] TownLosses(List<StatEvent> events, List<Town> towns)
     {
