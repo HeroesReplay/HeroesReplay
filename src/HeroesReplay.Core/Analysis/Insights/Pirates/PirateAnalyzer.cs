@@ -64,8 +64,9 @@ public sealed class PirateAnalyzer : IInsightAnalyzer<PirateInsights>
 
             // Medivac Dropship is Lt. Morales' heroic: before level 10 she cannot fly anyone in.
             // Medivh's portal is a basic ability.
-            TimeSpan flying =
-                Is(carrier, "Lt. Morales") ? HeroicAt(snapshot, team) : snapshot.GatesOpen;
+            TimeSpan flying = Is(carrier, "Lt. Morales")
+                ? HeroicAt(snapshot, team)
+                : snapshot.GatesOpen;
             List<PirateDive> log = Dives(snapshot, team, carrier.Index, flying);
             int raids = log.Count(dive => dive.Raid);
             if (
@@ -126,18 +127,14 @@ public sealed class PirateAnalyzer : IInsightAnalyzer<PirateInsights>
         snapshot.TeamLevels != null
         && snapshot.TeamLevels.TryGetValue(team, out IReadOnlyDictionary<int, TimeSpan> levels)
         && levels != null
-            ? levels.Where(level => level.Key >= 10)
+            ? levels
+                .Where(level => level.Key >= 10)
                 .Select(level => level.Value)
                 .DefaultIfEmpty(snapshot.End)
                 .Min()
             : snapshot.GatesOpen;
 
-    private List<PirateDive> Dives(
-        ReplaySnapshot snapshot,
-        int team,
-        int carrier,
-        TimeSpan flying
-    )
+    private List<PirateDive> Dives(ReplaySnapshot snapshot, int team, int carrier, TimeSpan flying)
     {
         int enemy = 1 - team;
         int[] attackers = snapshot

@@ -439,7 +439,8 @@ public static class ReplaySnapshotReader
                 unit.Team.Value,
                 unit.TimeSpanDied.Value,
                 new MapPoint(unit.PointBorn.X, unit.PointBorn.Y),
-                unit.PlayerKilledBy != null && indexOf.TryGetValue(unit.PlayerKilledBy, out int killer)
+                unit.PlayerKilledBy != null
+                && indexOf.TryGetValue(unit.PlayerKilledBy, out int killer)
                     ? killer
                     : -1
             ))

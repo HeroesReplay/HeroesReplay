@@ -94,7 +94,12 @@ public class PirateAnalyzerTests
     {
         SnapshotPlayer[] crew = Crew(medivac: false)
             .Select(player =>
-                player.Index == 0 ? InsightFixtures.Player(0, 0, "Medivh") with { Score = Siege } : player
+                player.Index == 0
+                    ? InsightFixtures.Player(0, 0, "Medivh") with
+                    {
+                        Score = Siege,
+                    }
+                    : player
             )
             .ToArray();
         var positions = new ScriptedPositions();
@@ -124,7 +129,9 @@ public class PirateAnalyzerTests
     {
         PirateInsights pirates = Analyze(Crew(medivac: true), Dives(), defendersHome: false);
 
-        PirateDive early = Assert.Single(pirates.DiveLog, dive => dive.End < TimeSpan.FromMinutes(6));
+        PirateDive early = Assert.Single(pirates.DiveLog, dive =>
+            dive.End < TimeSpan.FromMinutes(6)
+        );
         Assert.True(early.Structures >= 2);
         Assert.False(early.Raid);
         Assert.Equal(pirates.Dives - 1, pirates.Raids);
@@ -137,7 +144,10 @@ public class PirateAnalyzerTests
             .Select(player =>
                 player with
                 {
-                    Score = new PlayerScore { StructureDamage = player.Team == 0 ? 10_000 : 40_000 },
+                    Score = new PlayerScore
+                    {
+                        StructureDamage = player.Team == 0 ? 10_000 : 40_000,
+                    },
                 }
             )
             .ToArray();
