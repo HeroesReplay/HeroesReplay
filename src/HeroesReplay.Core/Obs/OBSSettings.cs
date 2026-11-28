@@ -149,8 +149,8 @@ public class OBSSettings
 
     public string InfoSourceName { get; set; }
 
-    /// <summary>How long current-replay stays on game-scene from the match clock. Default 45 seconds.</summary>
-    public TimeSpan InfoVisibleFor { get; set; } = TimeSpan.FromSeconds(45);
+    /// <summary>How long current-replay stays on game-scene from the match clock. Default 30 seconds.</summary>
+    public TimeSpan InfoVisibleFor { get; set; } = TimeSpan.FromSeconds(30);
     public string TierDivisionSourceName { get; set; } = "tier-division";
     public string TierRankPointsSourceName { get; set; } = "rank-points";
 }

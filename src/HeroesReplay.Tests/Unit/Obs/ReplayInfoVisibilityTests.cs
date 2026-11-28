@@ -9,14 +9,21 @@ public class ReplayInfoVisibilityTests
 {
     [Theory]
     [InlineData(0, true)]
-    [InlineData(44, true)]
-    [InlineData(45, false)]
+    [InlineData(29, true)]
+    [InlineData(30, false)]
     [InlineData(120, false)]
-    public void ShouldShow_KeepsTheCaptionForTheOpeningFortyFiveSeconds(int seconds, bool show)
+    public void ShouldShow_KeepsTheCaptionForTheOpeningThirtySeconds(int seconds, bool show)
     {
         Assert.Equal(
             show,
-            ReplayInfoVisibility.ShouldShow(TimeSpan.FromSeconds(seconds), TimeSpan.FromSeconds(45))
+            ReplayInfoVisibility.ShouldShow(TimeSpan.FromSeconds(seconds), TimeSpan.FromSeconds(30))
         );
+    }
+
+    [Fact]
+    public void ShouldShow_FallsBackToTheDefaultWhenUnset()
+    {
+        Assert.True(ReplayInfoVisibility.ShouldShow(TimeSpan.FromSeconds(29), TimeSpan.Zero));
+        Assert.False(ReplayInfoVisibility.ShouldShow(TimeSpan.FromSeconds(30), TimeSpan.Zero));
     }
 }

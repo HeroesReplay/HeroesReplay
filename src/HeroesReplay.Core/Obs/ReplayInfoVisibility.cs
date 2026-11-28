@@ -4,7 +4,7 @@ namespace HeroesReplay.Core.Obs;
 
 public static class ReplayInfoVisibility
 {
-    public static readonly TimeSpan Default = TimeSpan.FromSeconds(45);
+    public static readonly TimeSpan Default = TimeSpan.FromSeconds(30);
 
     public static bool ShouldShow(TimeSpan matchTime, TimeSpan visibleFor)
     {
