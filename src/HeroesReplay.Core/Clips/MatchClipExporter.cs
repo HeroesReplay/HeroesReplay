@@ -12,6 +12,8 @@ using HeroesReplay.Core.Analysis.Insights;
 using HeroesReplay.Core.Analysis.Insights.Bosses;
 using HeroesReplay.Core.Analysis.Insights.BSteps;
 using HeroesReplay.Core.Analysis.Insights.Snapshot;
+using HeroesReplay.Core.HeroesData;
+using HeroesReplay.Core.MediaPolicy;
 using HeroesReplay.Core.Obs.Recording;
 using HeroesReplay.Core.Shared;
 using HeroesReplay.Core.YouTube;
@@ -62,7 +64,8 @@ public static class MatchClipExporter
         FfmpegLocator ffmpeg = null,
         InsightsSettings insights = null,
         IReadOnlyDictionary<TimeSpan, Focus> camera = null,
-        ClipSettings settings = null
+        ClipSettings settings = null,
+        SkinCatalog skins = null
     )
     {
         if (
@@ -107,7 +110,8 @@ public static class MatchClipExporter
                 youtube,
                 entryFileName,
                 logger,
-                ffmpeg
+                ffmpeg,
+                skins
             )
             .ConfigureAwait(false);
         result = result with { NotOnCamera = notOnCamera };
@@ -261,7 +265,8 @@ public static class MatchClipExporter
         YouTubeSettings youtube,
         string entryFileName,
         ILogger logger,
-        FfmpegLocator ffmpeg = null
+        FfmpegLocator ffmpeg = null,
+        SkinCatalog skins = null
     )
     {
         if (clips == null || clips.Count == 0)
@@ -383,7 +388,7 @@ public static class MatchClipExporter
                 if (OnlyTheClip(folder))
                 {
                     // Cut whole, and the process died before its entry: the uploader never saw it.
-                    WriteEntry(folder, entryFileName, clip, replay, replayId, youtube);
+                    WriteEntry(folder, entryFileName, clip, replay, replayId, youtube, skins);
                     logger?.LogInformation(
                         "Wrote the missing entry of {Kind} {Hero}, cut earlier.",
                         clip.Kind,
@@ -406,7 +411,7 @@ public static class MatchClipExporter
             }
 
             File.Move(partial, output, overwrite: true);
-            WriteEntry(folder, entryFileName, clip, replay, replayId, youtube);
+            WriteEntry(folder, entryFileName, clip, replay, replayId, youtube, skins);
             written.Add(Row(clip, start, duration, output));
             result = result with { Cut = result.Cut + 1 };
             logger?.LogInformation(
@@ -490,7 +495,8 @@ public static class MatchClipExporter
         TeamKillClip clip,
         Replay replay,
         int? replayId,
-        YouTubeSettings youtube
+        YouTubeSettings youtube,
+        SkinCatalog skins
     )
     {
         string name = string.IsNullOrWhiteSpace(entryFileName)
@@ -514,6 +520,7 @@ public static class MatchClipExporter
             CategoryId = youtube?.CategoryId,
             DescriptionLines = new[] { $"clip:{id}:{clip.Kind}:{clip.Hero}" }
                 .Concat(ClipDescription.Compose(clip, map, id))
+                .Append(SkinLine(clip, replay, skins, youtube?.Titles?.Skins))
                 .Append(
                     id == null
                         ? string.Empty
@@ -528,6 +535,32 @@ public static class MatchClipExporter
             Path.Combine(folder, name),
             JsonSerializer.Serialize(entry, YouTubeJsonContext.Indented.YouTubeEntry)
         );
+    }
+
+    /// <summary>
+    /// <c>Skin: Holy Holstein Moophisto</c> when the clip's player wears a notable skin, else
+    /// null. A clip that names a team, or has no player, has no skin line.
+    /// </summary>
+    private static string SkinLine(
+        TeamKillClip clip,
+        Replay replay,
+        SkinCatalog skins,
+        SkinSettings settings
+    )
+    {
+        Player[] players = replay?.Players;
+        if (clip.NamesTeam || players == null || clip.Player < 0 || clip.Player >= players.Length)
+        {
+            return null;
+        }
+
+        Skin skin = SkinLines.Notable(
+            new ReplayMediaPlayer { Skin = players[clip.Player]?.SkinAndSkinTint },
+            skins,
+            replay.Timestamp,
+            settings
+        );
+        return skin == null ? null : "Skin: " + skin.Name;
     }
 
     /// <summary>

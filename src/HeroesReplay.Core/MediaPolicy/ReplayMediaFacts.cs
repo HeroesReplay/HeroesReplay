@@ -164,6 +164,9 @@ public static class ReplayMediaFacts
                     BattleTag = player.BattleTag,
                     IsAi = player.PlayerType == PlayerType.Computer,
                     Talents = Talents(player),
+                    Skin = string.IsNullOrWhiteSpace(player.SkinAndSkinTint)
+                        ? null
+                        : player.SkinAndSkinTint.Trim(),
                 }
             );
         }
