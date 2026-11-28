@@ -102,7 +102,8 @@ public class ContextFileManager : IContextFileManager
                 settings.YouTube,
                 isCompleteRecording: false,
                 gameData.Heroes,
-                StatHookSource.For(settings, loaded, DateTimeOffset.UtcNow)
+                StatHookSource.For(settings, loaded, DateTimeOffset.UtcNow),
+                skins: gameData.Skins
             );
 
             string file = Path.Combine(

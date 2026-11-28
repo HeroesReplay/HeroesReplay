@@ -52,6 +52,7 @@ public class GameData : IGameData
     public IReadOnlyCollection<string> CoreUnits { get; private set; }
     public IReadOnlyCollection<string> BossUnits { get; private set; }
     public IReadOnlyCollection<string> VehicleUnits { get; private set; }
+    public SkinCatalog Skins { get; private set; } = SkinCatalog.Empty;
 
     public GameData(ILogger<GameData> logger, AppSettings settings)
     {
@@ -358,6 +359,42 @@ public class GameData : IGameData
         catch (UnauthorizedAccessException)
         {
             return false;
+        }
+    }
+
+    /// <summary>
+    /// The skin catalog behind the skin lines of YouTube descriptions. Missing or unreadable
+    /// data leaves the catalog empty: videos then name no skins, nothing else changes.
+    /// </summary>
+    private async Task LoadSkinsAsync()
+    {
+        string skinFile = NewestDocument(settings.HeroesDataPath, "skindata_*.json", false);
+        string stringsFile = NewestDocument(
+            settings.HeroesDataPath,
+            "gamestrings_*_enus.json",
+            true
+        );
+        if (skinFile == null || stringsFile == null)
+        {
+            logger.LogWarning("No heroes-data2 skin data found. Videos name no skins.");
+            return;
+        }
+
+        try
+        {
+            Skins = SkinCatalog.Read(
+                await File.ReadAllTextAsync(skinFile).ConfigureAwait(false),
+                await File.ReadAllTextAsync(stringsFile).ConfigureAwait(false)
+            );
+            logger.LogInformation(
+                "Loaded {Count} skins from {File}.",
+                Skins.Count,
+                Path.GetFileName(skinFile)
+            );
+        }
+        catch (Exception e) when (e is IOException or JsonException)
+        {
+            logger.LogWarning(e, "Could not read heroes-data2 skin data. Videos name no skins.");
         }
     }
 
@@ -1063,9 +1100,11 @@ public class GameData : IGameData
             await LoadUnitsAsync().ConfigureAwait(false);
             await LoadMapsAsync().ConfigureAwait(false);
             await LoadHeroesAsync().ConfigureAwait(false);
+            await LoadSkinsAsync().ConfigureAwait(false);
         }
 
         activity?.SetTag("data.heroes", Heroes?.Count ?? 0);
         activity?.SetTag("data.maps", Maps?.Count ?? 0);
+        activity?.SetTag("data.skins", Skins.Count);
     }
 }

@@ -5,9 +5,9 @@ namespace HeroesReplay.Core.YouTube.Metadata;
 
 /// <summary>
 /// The title of a focus-hero video (#433), one player's whole match:
-/// <c>Teleport Li-Ming gameplay - 12/0/9 - Alterac Pass - Storm League - Diamond - [draft note] - ReplayId</c>.
-/// Over the limit, the draft note goes first, then the rank, then the score, then the build in
-/// the lead (<c>Li-Ming gameplay</c>). Null means even that does not fit.
+/// <c>Teleport Li-Ming gameplay - [new skin] - 12/0/9 - Alterac Pass - Storm League - Diamond - [draft note] - ReplayId</c>.
+/// Over the limit, the draft note goes first, then the rank, then the score, then the skin, then
+/// the build in the lead (<c>Li-Ming gameplay</c>). Null means even that does not fit.
 /// </summary>
 public static class FocusTitle
 {
@@ -28,7 +28,8 @@ public static class FocusTitle
         string mode,
         string rank,
         string draft,
-        string replayId
+        string replayId,
+        string skin = null
     )
     {
         if (string.IsNullOrWhiteSpace(hero))
@@ -40,11 +41,12 @@ public static class FocusTitle
         string plain = Lead(hero, null);
         IEnumerable<string[]> attempts = new[]
         {
-            new[] { full, kda, map, mode, rank, draft, replayId },
-            new[] { full, kda, map, mode, rank, null, replayId },
-            new[] { full, kda, map, mode, null, null, replayId },
-            new[] { full, null, map, mode, null, null, replayId },
-            new[] { plain, null, map, mode, null, null, replayId },
+            new[] { full, skin, kda, map, mode, rank, draft, replayId },
+            new[] { full, skin, kda, map, mode, rank, null, replayId },
+            new[] { full, skin, kda, map, mode, null, null, replayId },
+            new[] { full, skin, null, map, mode, null, null, replayId },
+            new[] { full, null, null, map, mode, null, null, replayId },
+            new[] { plain, null, null, map, mode, null, null, replayId },
         };
         foreach (string[] parts in attempts)
         {

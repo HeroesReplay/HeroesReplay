@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Heroes.ReplayParser;
 using HeroesReplay.Core.Analysis.Insights;
+using HeroesReplay.Core.HeroesData;
 using HeroesReplay.Core.HeroesProfile;
 using HeroesReplay.Core.MediaPolicy;
 using HeroesReplay.Core.Replays;
@@ -21,7 +22,8 @@ public static class YouTubeEntryBuilder
         bool isCompleteRecording,
         IReadOnlyList<Hero> heroCatalog = null,
         HeroStatsSnapshot heroStats = null,
-        MatchInsights insights = null
+        MatchInsights insights = null,
+        SkinCatalog skins = null
     )
     {
         ReplayMediaPolicyInput facts = ReplayMediaFacts.From(
@@ -58,6 +60,7 @@ public static class YouTubeEntryBuilder
             HeroStats = heroStats,
             Insights = insights,
             PlayerStories = loaded?.PlayerStories,
+            Skins = skins,
         };
         FullMatchMetadata metadata = FullMatchMetadataBuilder.Build(
             input,

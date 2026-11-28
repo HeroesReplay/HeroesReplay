@@ -53,7 +53,7 @@ public sealed class StatHookTitleTests : IDisposable
             metadata.DescriptionLines
         );
         Assert.True(metadata.ClaimsFullMatch);
-        Assert.Equal("11", metadata.TemplateVersion);
+        Assert.Equal("12", metadata.TemplateVersion);
     }
 
     [Fact]

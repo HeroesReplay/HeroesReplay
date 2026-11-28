@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Linq;
 using HeroesReplay.Core.Analysis.Insights;
 using HeroesReplay.Core.Clips;
+using HeroesReplay.Core.HeroesData;
 using HeroesReplay.Core.HeroesProfile;
 using HeroesReplay.Core.MediaPolicy;
 using HeroesReplay.Core.Shared;
@@ -83,6 +84,12 @@ public sealed record FullMatchMetadataInput
     /// Used only when <c>YouTube:Titles:PlayerStories:Enabled</c> is true.
     /// </summary>
     public IReadOnlyList<PlayerStoryFacts> PlayerStories { get; init; }
+
+    /// <summary>
+    /// The heroes-data2 skin catalog, or null. Notable skins are listed under the talent builds,
+    /// and a hero focus title names its hero's new skin (<c>YouTube:Titles:Skins</c>).
+    /// </summary>
+    public SkinCatalog Skins { get; init; }
 }
 
 public sealed class FullMatchMetadata
@@ -123,7 +130,7 @@ public sealed class FullMatchMetadata
 
 public static class FullMatchMetadataBuilder
 {
-    public const string TemplateVersion = "11";
+    public const string TemplateVersion = "12";
     public const int TitleMaxCharacters = 100;
     public const int DescriptionMaxCharacters = 5000;
     public const int TagMaxCharacters = 30;
@@ -192,6 +199,15 @@ public static class FullMatchMetadataBuilder
         string focusHero = Clean(heroFocus?.Hero, 40);
         string focusBuild = Clean(heroFocus?.Build, 60);
         string focusRole = Clean(heroFocus?.Role, 40);
+        SkinSettings skinSettings = titles.Skins ?? new SkinSettings();
+        ReplayMediaPlayer focusedPlayer =
+            focusHero == null ? null : Focused(input.Roster, input.HeroFocusPlayer, focusHero);
+        string focusSkin = SkinLines.FocusTitle(
+            focusedPlayer,
+            input.Skins,
+            input.GameDateUtc,
+            skinSettings
+        );
         string focusLabel =
             focusHero == null
                 ? null
@@ -208,7 +224,8 @@ public static class FullMatchMetadataBuilder
                     mode,
                     rank,
                     draft.Title,
-                    replayText
+                    replayText,
+                    focusSkin
                 );
         if (
             focusHero != null
@@ -318,6 +335,11 @@ public static class FullMatchMetadataBuilder
             lines.AddRange(HighlightLines.TalentBuilds(highlights));
         }
 
+        // Skins sit under the talent builds: they matter less, so they are cut first.
+        lines.AddRange(
+            SkinLines.Description(input.Roster, input.Skins, input.GameDateUtc, skinSettings)
+        );
+
         IReadOnlyList<string> kept = FitLines(lines);
         string description = string.Join("\n", kept);
         string[] tags = Tags(
@@ -328,6 +350,13 @@ public static class FullMatchMetadataBuilder
             focusHero == null
                 ? Array.Empty<string>()
                 : new[] { focusHero, FocusTitle.Lead(focusHero, null), focusLabel, focusRole },
+            SkinLines.Tags(
+                input.Roster,
+                focusedPlayer,
+                input.Skins,
+                input.GameDateUtc,
+                skinSettings
+            ),
             pentakill,
             teamWipe,
             replayId != null,
@@ -638,6 +667,45 @@ public static class FullMatchMetadataBuilder
         return teamName + ": " + string.Join(", ", parts);
     }
 
+    /// <summary>
+    /// The focus video's player: the roster entry with the pick's <c>Name#1234</c>, else the only
+    /// one on the focus hero.
+    /// </summary>
+    private static ReplayMediaPlayer Focused(
+        IReadOnlyList<ReplayMediaPlayer> roster,
+        string battleTag,
+        string hero
+    )
+    {
+        if (roster == null)
+        {
+            return null;
+        }
+
+        ReplayMediaPlayer onHero = null;
+        int heroCount = 0;
+        foreach (ReplayMediaPlayer player in roster)
+        {
+            if (player == null)
+            {
+                continue;
+            }
+
+            if (IsPlayer(player, battleTag))
+            {
+                return player;
+            }
+
+            if (HeroDraft.SameName(player.Hero, hero))
+            {
+                onHero = player;
+                heroCount++;
+            }
+        }
+
+        return heroCount == 1 ? onHero : null;
+    }
+
     /// <summary>The roster player is <paramref name="battleTag"/> (<c>Name#1234</c>).</summary>
     private static bool IsPlayer(ReplayMediaPlayer player, string battleTag) =>
         !string.IsNullOrWhiteSpace(battleTag)
@@ -682,6 +750,7 @@ public static class FullMatchMetadataBuilder
         string rank,
         string focus,
         IReadOnlyList<string> heroFocus,
+        IReadOnlyList<string> skins,
         bool pentakill,
         bool teamWipe,
         bool replayKnown,
@@ -697,6 +766,12 @@ public static class FullMatchMetadataBuilder
         {
             AddTag(tags, tag);
         }
+
+        foreach (string tag in skins)
+        {
+            AddTag(tags, tag);
+        }
+
         if (pentakill)
         {
             AddTag(tags, "Pentakill");
