@@ -13,6 +13,12 @@ public sealed class ReplayMediaPlayer
     public bool IsAi { get; init; }
 
     /// <summary>
+    /// The replay's skin id for the player (<c>MephistoMoophisto</c>), or null for the hero's
+    /// default look.
+    /// </summary>
+    public string Skin { get; init; }
+
+    /// <summary>
     /// Talent ids the player picked, such as <c>VarianTaunt</c>. Empty when the replay was parsed
     /// without game events and statistics.
     /// </summary>

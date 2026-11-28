@@ -160,7 +160,8 @@ public class PreviewCommand : Command
             isCompleteRecording: true,
             gameData.Heroes,
             heroStats: null,
-            insights
+            insights,
+            gameData.Skins
         );
         Print(entry, console);
         if (printInsights)

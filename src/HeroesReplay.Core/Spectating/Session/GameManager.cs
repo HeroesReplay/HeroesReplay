@@ -287,7 +287,8 @@ public class GameManager : IGameManager
                                 FfmpegLocator.From(settings.Clips, settings.Dependencies),
                                 settings.Insights,
                                 context.Current?.Players,
-                                settings.Clips
+                                settings.Clips,
+                                gameData.Skins
                             )
                             .ConfigureAwait(false);
                         RecordClipPass(clips, null);
@@ -1445,7 +1446,8 @@ public class GameManager : IGameManager
                 CancellationToken.None,
                 gameData.Heroes,
                 StatHookSource.For(settings, loadedReplay, DateTimeOffset.UtcNow),
-                insights
+                insights,
+                gameData.Skins
             )
             .ConfigureAwait(false);
         if (wrote)

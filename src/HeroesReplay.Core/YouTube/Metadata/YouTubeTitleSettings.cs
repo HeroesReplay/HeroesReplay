@@ -72,6 +72,9 @@ public class YouTubeTitleSettings
     /// <summary>Clip titles from the clip's own facts (<c>YouTube:Titles:Clips</c>).</summary>
     public ClipTitleSettings Clips { get; set; } = new ClipTitleSettings();
 
+    /// <summary>Notable hero skins in descriptions, tags and focus titles (<c>YouTube:Titles:Skins</c>).</summary>
+    public SkinSettings Skins { get; set; } = new SkinSettings();
+
     /// <summary>The game's name at the end of a title (<c>YouTube:Titles:GameName</c>).</summary>
     public GameNameSettings GameName { get; set; } = new GameNameSettings();
 }

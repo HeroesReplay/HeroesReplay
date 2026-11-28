@@ -21,5 +21,8 @@ public interface IGameData
 
     IReadOnlyList<Map> Maps { get; }
 
+    /// <summary>Hero skins by replay skin id. Empty until loaded, or without skin data.</summary>
+    SkinCatalog Skins => SkinCatalog.Empty;
+
     Task LoadDataAsync();
 }
