@@ -20,14 +20,52 @@ public class SkinMetadataTests
 
     private static readonly ReplayMediaPlayer[] Roster =
     {
-        new() { Team = 0, Hero = "Mephisto", Name = "Cow", BattleTag = 1111, Skin = "MephistoMoophistoVar1" },
-        new() { Team = 0, Hero = "Tyrael", Name = "Angel", BattleTag = 2222, Skin = "TyraelMecha" },
-        new() { Team = 0, Hero = "Abathur", Name = "Slug", BattleTag = 3333, Skin = "MephistoVar1" },
-        new() { Team = 1, Hero = "Valla", Name = "Hunter", BattleTag = 4444 },
-        new() { Team = 1, Hero = "Mephisto", Name = "Hate", BattleTag = 5555, Skin = "MephistoVar1" },
+        new()
+        {
+            Team = 0,
+            Hero = "Mephisto",
+            Name = "Cow",
+            BattleTag = 1111,
+            Skin = "MephistoMoophistoVar1",
+        },
+        new()
+        {
+            Team = 0,
+            Hero = "Tyrael",
+            Name = "Angel",
+            BattleTag = 2222,
+            Skin = "TyraelMecha",
+        },
+        new()
+        {
+            Team = 0,
+            Hero = "Abathur",
+            Name = "Slug",
+            BattleTag = 3333,
+            Skin = "MephistoVar1",
+        },
+        new()
+        {
+            Team = 1,
+            Hero = "Valla",
+            Name = "Hunter",
+            BattleTag = 4444,
+        },
+        new()
+        {
+            Team = 1,
+            Hero = "Mephisto",
+            Name = "Hate",
+            BattleTag = 5555,
+            Skin = "MephistoVar1",
+        },
     };
 
-    private static FullMatchMetadata Build(HeroFocusFacts focus, string focusPlayer, SkinSettings settings = null) =>
+    private static FullMatchMetadata Build(
+        HeroFocusFacts focus,
+        string focusPlayer,
+        SkinSettings settings = null
+    ) =>
         FullMatchMetadataBuilder.Build(
             new FullMatchMetadataInput
             {
@@ -115,8 +153,14 @@ public class SkinMetadataTests
     }
 
     [Theory]
-    [InlineData(105, "Lightning Nova Mephisto gameplay - Moophisto skin - Tomb of the Spider Queen - Storm League - 66812345")]
-    [InlineData(90, "Lightning Nova Mephisto gameplay - Tomb of the Spider Queen - Storm League - 66812345")]
+    [InlineData(
+        105,
+        "Lightning Nova Mephisto gameplay - Moophisto skin - Tomb of the Spider Queen - Storm League - 66812345"
+    )]
+    [InlineData(
+        90,
+        "Lightning Nova Mephisto gameplay - Tomb of the Spider Queen - Storm League - 66812345"
+    )]
     public void FocusTitle_DropsTheScoreThenTheSkinBeforeTheBuild(int max, string expected)
     {
         string title = FocusTitle.Compose(

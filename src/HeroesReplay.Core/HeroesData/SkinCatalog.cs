@@ -181,9 +181,10 @@ public sealed class SkinCatalog
         {
             foreach (JsonProperty entry in name.EnumerateObject())
             {
-                string value = entry.Value.ValueKind == JsonValueKind.String
-                    ? entry.Value.GetString()?.Trim()
-                    : null;
+                string value =
+                    entry.Value.ValueKind == JsonValueKind.String
+                        ? entry.Value.GetString()?.Trim()
+                        : null;
                 if (!string.IsNullOrEmpty(value))
                 {
                     names[entry.Name] = value;
@@ -210,7 +211,10 @@ public sealed class SkinCatalog
         var values = new List<string>();
         foreach (JsonElement value in array.EnumerateArray())
         {
-            if (value.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(value.GetString()))
+            if (
+                value.ValueKind == JsonValueKind.String
+                && !string.IsNullOrWhiteSpace(value.GetString())
+            )
             {
                 values.Add(value.GetString());
             }

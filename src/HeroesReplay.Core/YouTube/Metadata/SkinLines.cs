@@ -91,7 +91,11 @@ public static class SkinLines
             foreach (ReplayMediaPlayer player in roster)
             {
                 Skin skin = Notable(player, skins, played, settings);
-                if (skin != null && skin.IsNew(played, settings.NewSkinDays) && !tags.Contains(skin.BaseName))
+                if (
+                    skin != null
+                    && skin.IsNew(played, settings.NewSkinDays)
+                    && !tags.Contains(skin.BaseName)
+                )
                 {
                     tags.Add(skin.BaseName);
                 }
@@ -108,7 +112,8 @@ public static class SkinLines
     public static string Named(Skin skin, string hero)
     {
         string name = skin.Name;
-        return string.IsNullOrWhiteSpace(hero)
+        return
+            string.IsNullOrWhiteSpace(hero)
             || name.Contains(hero.Trim(), StringComparison.OrdinalIgnoreCase)
             ? name
             : name + " (" + hero.Trim() + ")";
